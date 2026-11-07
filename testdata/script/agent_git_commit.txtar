@@ -74,7 +74,7 @@ stderr '"action":"STOP"'
 
 # --- help
 exec gash agent_git_commit -h
-stdout 'agent_git_commit -m SUBJECT'
+stdout 'gash agent git-commit -m SUBJECT'
 
 -- home/.gitconfig --
 [user]

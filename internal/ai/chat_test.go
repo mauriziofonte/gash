@@ -226,7 +226,7 @@ func TestLedger_AI25(t *testing.T) {
 		return b.String()
 	}
 	si := page("ai_sysinfo")
-	for _, want := range []string{"  ai_sysinfo [claude|gemini] [--raw] [--no-color]\n"} {
+	for _, want := range []string{"  gash ai sysinfo [claude|gemini] [--raw] [--no-color]\n"} {
 		if !strings.Contains(si, want) {
 			t.Errorf("ai_sysinfo help lacks %q:\n%s", want, si)
 		}

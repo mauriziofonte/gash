@@ -71,7 +71,7 @@ func TestCompatHelp(t *testing.T) {
 	e := invoke.EnvMap(nil)
 	rc := h(&invoke.Call{Args: rest, Env: e, Stdout: &out, Stderr: &out, Term: term.Fixed(e, false, false, false)})
 	require.Equal(t, 0, rc)
-	require.Contains(t, out.String(), "  all_colors  (module: utils)\n")
+	require.Contains(t, out.String(), "  gash shell colors\n")
 
 	out.Reset()
 	rc = h(&invoke.Call{Args: []string{"mycommand"}, Env: e, Stdout: &out, Stderr: &out, Term: term.Fixed(e, false, false, false)})
@@ -79,28 +79,30 @@ func TestCompatHelp(t *testing.T) {
 	require.Empty(t, out.String())
 }
 
-func TestCardUnknownTopic(t *testing.T) {
+func TestCardUnknownCommand(t *testing.T) {
+	// A word that is no namespace is an unknown command: the envelope when
+	// stderr is not a terminal, with the way to the namespaces.
 	_, errOut, rc := run(t, "gash", map[string]string{"LANG": "C.UTF-8"}, false, "nope")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "Error: Unknown topic: nope. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
+	require.Equal(t, `{"error":"unknown_command","details":"Unknown command: gash nope","action":"RETRY","recoverable":true,"hint":"Run: gash (namespaces) or gash help --search WORD"}`+"\n", errOut)
 
-	_, errOut, rc = run(t, "gash", map[string]string{"LANG": "C.UTF-8"}, true, "--no-color", "x")
+	_, errOut, rc = run(t, "gash", map[string]string{"LANG": "C.UTF-8"}, true, "--no-color", "gti")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "✗ Error: Unknown topic: x. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
+	require.Contains(t, errOut, `"details":"Unknown command: gash gti","action":"RETRY","recoverable":true,"hint":"Did you mean gash git?"`)
 
-	_, errOut, rc = run(t, "gash", nil, true, "nope")
-	require.Equal(t, 1, rc)
-	require.Equal(t, "\x1b[38;5;196mx Error:\x1b[0m Unknown topic: nope. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
-
-	// Synonyms are topics.
+	// The former card topics open their namespace page.
 	out, errOut, rc := run(t, "gash", nil, false, "navigation")
 	require.Equal(t, 0, rc)
 	require.Empty(t, errOut)
-	require.Contains(t, out, "\n  NAV  Directory navigation and listings\n")
+	require.Contains(t, out, "\n  gash shell ")
 
 	out, _, rc = run(t, "gash", nil, false, "git", "-h")
 	require.Equal(t, 0, rc)
-	require.Contains(t, out, "\n  gash  (module: gash)\n")
+	require.Contains(t, out, "\n  gash git ")
+
+	out, _, rc = run(t, "gash", nil, false, "-h")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "FOR AI AGENTS")
 
 	_, errOut, rc = run(t, "gash", nil, false, "migrate", "--x")
 	require.Equal(t, 1, rc)

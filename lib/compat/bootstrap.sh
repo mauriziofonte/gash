@@ -362,6 +362,9 @@ __gash_export_state() {
 __gash_call() {
     local __gc_name="${1-}"
     shift
+    # A former flat name (files_largest) typed at the prompt: one tip per
+    # name and session (3.5); never from a function, a script or gash.
+    [[ -z "${FUNCNAME[2]-}" && -n "${__GASH_FORMER[$__gc_name]-}" ]] && __gash_former "$__gc_name"
     __gash_compat_ready || {
         __gash_missing "$__gc_name"
         return 1
@@ -377,6 +380,105 @@ __gash_call() {
         [[ "$__gc_name" == gash ]] && exec "$__GASH_BIN" "$@"
         exec "$__GASH_BIN" "$__gc_name" "$@"
     )
+}
+
+# 3.5: the gash function runs a canonical command through the shell
+# function of its handler (gash files largest is files_largest, a stub
+# override's shell steps included); a handler that has no function in this
+# shell (an interactive-only one, in headless mode) runs in the binary.
+# Usage: __gash_route HANDLER [ARG...]
+__gash_route() {
+    local __gr_name="$1"
+    shift
+    if declare -F "$__gr_name" >/dev/null; then
+        "$__gr_name" "$@"
+    else
+        __gash_call "$__gr_name" "$@"
+    fi
+}
+
+# The former flat names of 3.5 and what replaces them. They work through
+# Gash 3.x; typed at the prompt of an interactive shell, each one prints
+# a tip once per session (GASH_LEGACY_HINTS=0 turns the tips off).
+declare -gA __GASH_FORMER=(
+    [ai_ask]='gash ai ask (shortcut ask)'
+    [ai_query]='gash ai query'
+    [ai_sysinfo]='gash ai sysinfo (shortcut sysinfo_ai)'
+    [all_colors]='gash shell colors'
+    [archive_extract]='gash files extract (shortcut axe)'
+    [chrome_headless_update]='gash runtime upgrade chrome (shortcut chri)'
+    [dirs_find_large]='gash files big-dirs (shortcut dfl)'
+    [dirs_largest]='gash files largest-dirs (shortcut dld)'
+    [dirs_list_empty]='gash files empty-dirs (shortcut dle)'
+    [disk_usage]='gash system disks (shortcut du2)'
+    [docker_compose_check]='gash docker compose check (shortcut dcc)'
+    [docker_compose_scan]='gash docker compose scan (shortcut dcscan)'
+    [docker_compose_upgrade]='gash docker compose upgrade (shortcut dcup2)'
+    [docker_prune_all]='gash docker prune-all (shortcut dpa)'
+    [docker_start_all]='gash docker start-all (shortcut daa)'
+    [docker_stop_all]='gash docker stop-all (shortcut dsa)'
+    [file_backup]='gash files backup (shortcut fbk)'
+    [files_largest]='gash files largest (shortcut flf)'
+    [gash_ai_list]='gash ai providers'
+    [gash_db_list]='gash db list'
+    [gash_db_test]='gash db test'
+    [gash_doctor]='gash doctor (shortcut gdoctor)'
+    [gash_env_init]='gash config init'
+    [gash_help]='gash help'
+    [gash_inspiring_quote]='gash shell quote'
+    [gash_ssh_auto_unlock]='gash remote unlock-keys'
+    [gash_uninstall]='gash uninstall'
+    [gash_unload]='gash unload'
+    [gash_upgrade]='gash update'
+    [gash_username]='gash shell username'
+    [git_add_tag]='gash git tag add (shortcut gat)'
+    [git_apply_patch]='gash git patch (shortcut gpatch)'
+    [git_delete_tag]='gash git tag delete (shortcut gdt)'
+    [git_dump_revisions]='gash git revisions (shortcut gdr)'
+    [git_list_tags]='gash git tag list (shortcut glt)'
+    [git_repair]='gash git repair (shortcut gheal)'
+    [git_sync]='gash git sync (shortcut gsync)'
+    [gl]='gash git log'
+    [gla]='gash git log all'
+    [glf]='gash git log file'
+    [glg]='gash git log graph'
+    [glo]='gash git log oneline'
+    [gls]='gash git log stat'
+    [hgrep]='gash shell history-smart'
+    [history_grep]='gash shell history (shortcut hg)'
+    [ip_public]='gash system ip (shortcut myip)'
+    [mkdir_cd]='gash shell mkcd (shortcut mkcd)'
+    [node_detect_version]='gash runtime detect node'
+    [node_upgrade]='gash runtime upgrade node (shortcut nvmc)'
+    [nvm_prune_versions]='gash runtime prune node (shortcut nvmp)'
+    [php_detect_version]='gash runtime detect php'
+    [port_kill]='gash system port-kill (shortcut ptk)'
+    [process_find]='gash system ps (shortcut pf)'
+    [process_kill]='gash system kill (shortcut pk)'
+    [remote_exec]='gash remote exec (shortcut rex)'
+    [remote_hosts]='gash remote hosts (shortcut rh)'
+    [remote_pull]='gash remote pull (shortcut rpull)'
+    [remote_push]='gash remote push (shortcut rpush)'
+    [remote_sync_pull]='gash remote sync pull (shortcut rspull)'
+    [remote_sync_push]='gash remote sync push (shortcut rspush)'
+    [services_stop]='gash system stop-services (shortcut svs)'
+    [sudo_last]='gash shell sudo-last (shortcut plz)'
+    [sysinfo]='gash system info (shortcut si)'
+    [tree_stats]='gash files stats (shortcut tls)'
+    [wsl_compact]='gash wsl compact (shortcut wslc)'
+    [wsl_explorer]='gash win explorer (shortcut wex)'
+    [wsl_restart]='gash wsl restart (shortcut wr)'
+    [wsl_shutdown]='gash wsl shutdown (shortcut wsd)'
+    [wsl_taskmanager]='gash win taskmgr (shortcut wtm)'
+)
+declare -gA __GASH_FORMER_SEEN=()
+
+# Usage: __gash_former NAME
+__gash_former() {
+    [[ $- == *i* && -t 2 && "${GASH_LEGACY_HINTS-1}" != 0 && "${GASH_HEADLESS-}" != 1 ]] || return 0
+    [[ -z "${__GASH_FORMER_SEEN[$1]-}" ]] || return 0
+    __GASH_FORMER_SEEN[$1]=1
+    printf 'tip: %s is now %s\n' "$1" "${__GASH_FORMER[$1]}" >&2
 }
 
 # A hidden operation of the binary for the shims (gash __compat OP ...),

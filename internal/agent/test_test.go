@@ -149,7 +149,7 @@ func TestAgentTest(t *testing.T) {
 
 	// --help before -- is the help; after it, an argument of CMD.
 	r = runTest(t, d, env, "--help")
-	require.Contains(t, r.Stdout, "agent_test [--runner")
+	require.Contains(t, r.Stdout, "gash agent test [--runner")
 	for _, f := range []string{"--runner", "--fail-only", "--dry-run", "--max-lines", "--head", "--tail", "--width", "--timeout", "--relative", "--absolute"} {
 		require.Contains(t, r.Stdout, f)
 	}

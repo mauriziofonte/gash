@@ -63,8 +63,8 @@ node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
 nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
 
-alias nvmp='nvm_prune_versions'
-alias nvmc='node_upgrade'
+alias nvmp='gash runtime prune node'
+alias nvmc='gash runtime upgrade node'
 
 # Sourcing never fails: the status of this file is 0.
 true

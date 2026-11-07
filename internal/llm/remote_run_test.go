@@ -172,7 +172,7 @@ func TestRemoteRunQuotedGlobsAndHelp(t *testing.T) {
 	r = f.run(t, "web", "--", "echo", "-h")
 	require.Equal(t, "-h", rows(t, r.Stdout)[0]["out"], "-h after -- is the command's")
 	r = f.run(t, "web", "--step", "-h")
-	require.Contains(t, r.Stdout, "llm_remote_run HOST...")
+	require.Contains(t, r.Stdout, "gash llm remote-run HOST...")
 	for line, want := range map[string]string{
 		"ls *.log": "*.log", "cat a?b": "a?b", "ls [ab]x": "[ab]x", "cat ~/x": "~/x", "echo a~b": "", "[ -f x ]": "",
 		"echo '*'": "", `echo "*"`: "", `echo \*`: "", "grep -e x|wc -l": "", "x;ls *": "*", `echo "a\"*"`: "",

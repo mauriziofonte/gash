@@ -53,4 +53,10 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash_upgrade", m.upgrade)
 	t.Handle("gash_uninstall", m.uninstall)
 	t.HandleCommand("update", m.update)
+	t.Handle("gash_help", m.HelpCommand)
+	t.HandleCommand("help", m.HelpCommand)
+	t.HandleCommand("all", func(c *invoke.Call) int {
+		c.Args = append([]string{"all"}, c.Args...)
+		return m.card(c)
+	})
 }

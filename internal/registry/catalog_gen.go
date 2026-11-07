@@ -1120,39 +1120,41 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Gash reference card with all functions and aliases",
+			Short:   "The overview of Gash: namespaces, their commands and shortcuts",
 			Module:  "gash",
 			SeeAlso: "gash_help gash_doctor",
 			Body: "" +
 				"USAGE\n" +
-				"  gash [TOPIC|all] [--no-color]\n" +
-				"  gash migrate [...]   Same as gash_migrate (Gash 1.x configuration)\n" +
+				"  gash [NAMESPACE|all] [--no-color]\n" +
+				"  gash NAMESPACE COMMAND [ARGS...]\n" +
 				"\n" +
-				"  gash                 Overview: topics with function and alias counts\n" +
-				"  gash TOPIC           Functions (alias, usage, description) and aliases of a topic\n" +
-				"  gash all             The whole card, every topic\n" +
+				"  gash                 The overview: namespaces and Gash's own commands\n" +
+				"  gash NAMESPACE       Its commands (usage, shortcut, description) and shortcuts\n" +
+				"  gash all             Every namespace page\n" +
 				"\n" +
-				"TOPICS\n" +
-				"  files, system, nav, git, docker, remote, dev, llm, ai, gash\n" +
-				"  (navigation, management, php and node still work as old names)\n" +
+				"NAMESPACES\n" +
+				"  files, system, shell, git, docker, remote, db, runtime, ai,\n" +
+				"  hte, wsl, win, logs, llm, agent\n" +
+				"  (the former card topics nav, navigation, dev, php and node still open\n" +
+				"  their namespace page)\n" +
 				"\n" +
-				"  The card is built from the help registry and the alias files. In an\n" +
-				"  interactive shell it counts and lists only the aliases the shell\n" +
-				"  defines (one skipped because a program of that name exists, or a pack\n" +
-				"  whose tool is missing, is left out); headless it lists them all.\n" +
+				"  The pages are built from the command tree and the alias files. In an\n" +
+				"  interactive shell they list only the shortcuts the shell defines (one\n" +
+				"  skipped because a program of that name exists, or a pack whose tool is\n" +
+				"  missing, is left out); headless they list them all.\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Quick reminder of all git aliases\n" +
+				"  # The git commands and shortcuts\n" +
 				"  gash git\n" +
 				"\n" +
-				"  # See what Docker functions are available\n" +
+				"  # The Docker commands\n" +
 				"  gash docker\n" +
 				"\n" +
-				"  # See every function and alias in Gash, plain text for a file\n" +
-				"  gash all --no-color > gash-card.txt\n" +
+				"  # Every page, plain text for a file\n" +
+				"  gash all --no-color > gash-pages.txt\n" +
 				"\n" +
-				"  # Check AI-related functions\n" +
-				"  gash ai",
+				"  # Run a command by its canonical name\n" +
+				"  gash files largest --limit 5",
 		},
 		Settings:          []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
@@ -1392,37 +1394,39 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Help system with examples, search, and discovery",
+			Short:   "The page of a command, a namespace or a topic; search every page",
 			Module:  "gash",
 			SeeAlso: "gash",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_help                    Overview of all functions\n" +
-				"  gash_help FUNCTION           Detailed help with real-world examples\n" +
-				"  gash_help ALIAS              Lookup by short alias name\n" +
-				"  gash_help --list             List all functions grouped by module\n" +
-				"  gash_help --search KEYWORD   Search across all help text\n" +
-				"  gash_help --short FUNCTION   One-line description (for scripting)\n" +
-				"  gash_help --bash TOPIC       Bash builtin help (e.g. cd, export)\n" +
+				"  gash help                    The overview: namespaces and Gash's own commands\n" +
+				"  gash help NAME               The page of a command, shortcut or former name\n" +
+				"  gash help NAMESPACE          The commands of a namespace (gash help git)\n" +
+				"  gash help TOPIC              shortcuts, shell-defaults, scripting, migrate\n" +
+				"  gash help --list             Every command, by namespace\n" +
+				"  gash help --search WORD      Search every page\n" +
+				"  gash help --short NAME       One-line description (for scripting)\n" +
+				"  gash help --bash TOPIC       Bash builtin help (e.g. cd, export)\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Get detailed help for a function\n" +
-				"  gash_help ai_query\n" +
+				"  # The page of a command\n" +
+				"  gash help ai query\n" +
 				"\n" +
-				"  # Don't remember the long name? Use the alias\n" +
-				"  gash_help flf\n" +
+				"  # By its shortcut or its former name\n" +
+				"  gash help flf\n" +
+				"  gash help files_largest\n" +
 				"\n" +
-				"  # Find all Docker-related functions\n" +
-				"  gash_help --search docker\n" +
+				"  # Every command that mentions Docker\n" +
+				"  gash help --search docker\n" +
 				"\n" +
-				"  # Find functions that work with pipes\n" +
-				"  gash_help --search pipe\n" +
+				"  # Every shortcut this shell defines\n" +
+				"  gash help shortcuts\n" +
 				"\n" +
-				"  # Get just the description for scripting\n" +
-				"  gash_help --short files_largest\n" +
+				"  # Just the description, for scripting\n" +
+				"  gash help --short files largest\n" +
 				"\n" +
-				"  # Access bash builtin help\n" +
-				"  gash_help --bash cd",
+				"  # Bash builtin help\n" +
+				"  gash help --bash cd",
 		},
 		ShellVars:         []string{"GASH_VERSION"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "NO_COLOR"},

@@ -21,7 +21,7 @@ fi
 unset __gash_here
 
 # shellcheck disable=SC2120
-gash() { __gash_cold gash 355db300 && "${FUNCNAME[0]}" "$@"; }
+gash() { __gash_cold gash af7c1d56 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
 gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
@@ -45,7 +45,7 @@ gash_unload() { __gash_cold gash_unload 37b45b21 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 
-alias gdoctor='gash_doctor'
+alias gdoctor='gash doctor'
 
 # Sourcing never fails: the status of this file is 0.
 true

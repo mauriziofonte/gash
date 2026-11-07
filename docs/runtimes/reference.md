@@ -238,24 +238,36 @@ Loaded when `php` is on PATH. `phpX.Y` stands for the absolute path of that bina
 ### gash runtime
 
 ```text
-Usage: gash runtime php|node|composer|npm|npx VERSION [--path]
 
-Resolve a runtime version to its binary, without loading nvm.sh.
+  gash runtime · PHP and Node.js versions, headless Chrome
 
-  VERSION   a prefix: 24, 24.1, 8.4, 8 (the newest installed match), or
-            project: the version the project in this directory pins
-            (.nvmrc, .node-version, package.json engines.node;
-            .target-php-version, composer.json require.php), with
-            runtime_not_pinned (STOP) when it pins none
-  --path    print the path alone
+  COMMAND         USAGE                      SHORTCUT  DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────
+  which           php|node|composer|npm|np…            Resolve a php or node ve…
+  detect php      [project_dir] [--json|--…            Detect the PHP version a…
+  detect node     [project_dir] [--json|--…            Detect the Node.js versi…
+  upgrade node    [-y] [--dry-run]           nvmc      Upgrade each installed N…
+  upgrade chrome  [-y] [--dry-run]           chri      Install or upgrade chrom…
+  prune node      [-y|--yes|--force]         nvmp      Remove duplicate/older N…
 
-Prints {"runtime","request","path","version"} (composer adds "php", the
-binary it runs under). node comes from ${NVM_DIR:-~/.nvm}/versions/node,
-then PATH; php from /usr/bin/phpX.Y and /usr/local/bin/phpX.Y, then PATH.
-A version that is not installed is runtime_not_installed (STOP) with the
-installed list. Resolutions are cached in
-${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json until the nvm tree or
-/usr/bin/php* change. The JSON form for agents: llm_runtime.
+  SHORTCUTS  packs php · GASH_SHORTCUTS
+  phpXY                     phpX.Y
+  composerXY                phpX.Y composer
+  1composerXY               phpX.Y composer1
+  php                       phpX.Y
+  composer                  phpX.Y composer
+  composer-packages-update  composer global update
+  composer-self-update      sudo composer self-update
+  composer1-self-update     sudo composer1 self-update
+
+  phpXY: for each installed phpX.Y
+  composerXY: for each installed phpX.Y, with composer
+  1composerXY: for each installed phpX.Y up to 7.2, with composer1
+  php, composer: with GASH_REPLACE_TOOLS=1
+  composer-packages-update, composer-self-update: when composer is installed
+  composer1-self-update: when composer1 is installed
+
+  Details: gash runtime COMMAND --help · Guide: docs/runtimes/README.md
 ```
 
 ### gash run

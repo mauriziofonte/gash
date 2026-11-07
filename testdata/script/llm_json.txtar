@@ -54,7 +54,7 @@ stderr '"error":"missing_file"'
 
 # --- help without side effects
 exec gash llm_json --help
-stdout 'llm_json FILE\|- \[--path P\]'
+stdout 'gash llm json FILE\|- \[--path P\]'
 
 -- pkg.json --
 {

@@ -206,7 +206,7 @@ func TestReplaceHelp(t *testing.T) {
 	d := physDir(t)
 	r := runIn(t, d, "agent_replace", "--old", "-h")
 	require.Equal(t, 0, r.RC)
-	require.Contains(t, r.Stdout, "agent_replace FILE...")
+	require.Contains(t, r.Stdout, "gash agent replace FILE...")
 }
 
 func TestLineDelta(t *testing.T) {

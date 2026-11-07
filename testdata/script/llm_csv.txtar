@@ -42,7 +42,7 @@ stderr '"error":"secret_file_blocked"'
 
 # --- help without side effects
 exec gash llm_csv --help
-stdout 'llm_csv FILE \[--head N\]'
+stdout 'gash llm csv FILE \[--head N\]'
 
 -- data.csv --
 id,name,note

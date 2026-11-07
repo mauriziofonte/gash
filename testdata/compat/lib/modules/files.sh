@@ -28,13 +28,13 @@ file_backup() { __gash_call file_backup "$@"; }
 files_largest() { __gash_call files_largest "$@"; }
 tree_stats() { __gash_call tree_stats "$@"; }
 
-alias flf='files_largest'
-alias dld='dirs_largest'
-alias dfl='dirs_find_large'
-alias dle='dirs_list_empty'
-alias tls='tree_stats'
-alias axe='archive_extract'
-alias fbk='file_backup'
+alias flf='gash files largest'
+alias dld='gash files largest-dirs'
+alias dfl='gash files big-dirs'
+alias dle='gash files empty-dirs'
+alias tls='gash files stats'
+alias axe='gash files extract'
+alias fbk='gash files backup'
 
 # Sourcing never fails: the status of this file is 0.
 true

@@ -38,8 +38,8 @@ $ gash_help --search uninstall
 
   Search results for 'uninstall':
 
-  gash_uninstall                        Uninstall Gash and clean up configurations
-  nvm_prune_versions      (nvmp)        Remove duplicate/older NVM patch versions
+  gash runtime prune node  nvmp  Remove duplicate/older NVM patch versions
+  gash uninstall                 Uninstall Gash and clean up configurations
 ```
 
 `--short` prints the one-line description only, for scripts:

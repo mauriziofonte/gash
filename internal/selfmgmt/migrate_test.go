@@ -69,6 +69,6 @@ func TestSelfmgmt_MigratePointer(t *testing.T) {
 		out, errOut, rc := call(t, "gash_migrate", env, h)
 		require.Equal(t, 0, rc)
 		require.Empty(t, errOut)
-		require.Contains(t, out, "\n  gash_migrate  (module: gash)\n")
+		require.Contains(t, out, "\n  gash_migrate\n")
 	}
 }

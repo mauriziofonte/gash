@@ -52,4 +52,4 @@ stderr '"error":"invalid_signal"'
 
 # --- --help anywhere prints the help
 exec gash agent_kill x -h
-stdout 'agent_kill NAME\|PID\.\.\.'
+stdout 'gash agent kill NAME\|PID\.\.\.'

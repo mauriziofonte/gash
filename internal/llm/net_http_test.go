@@ -403,7 +403,7 @@ func TestHTTPArgumentErrors(t *testing.T) {
 	}
 	r := netRun(t, nil, "llm_http", "--help")
 	require.Equal(t, 0, r.RC)
-	require.Contains(t, r.Stdout, "llm_http URL...")
+	require.Contains(t, r.Stdout, "gash llm http URL...")
 }
 
 func TestHTTPFormats(t *testing.T) {

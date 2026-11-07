@@ -27,7 +27,7 @@ stdout '^agent_[a-z_]+ +write +'
 
 # --- every listed function runs as gash <fn>
 exec gash llm_runtime --help
-stdout 'llm_runtime php\|node'
+stdout 'gash llm runtime php\|node'
 
 ! exec gash agent-functions --yaml
 stderr '"error":"unknown_option"'

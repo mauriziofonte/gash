@@ -65,7 +65,7 @@ stderr '"error":"not_a_git_repo"'
 
 # --- help
 exec gash llm_git_show -h
-stdout 'llm_git_show REV:FILE'
+stdout 'gash llm git-show REV:FILE'
 
 # --- no program named by the repository's config runs
 exec bash no_exec.sh

@@ -63,7 +63,7 @@ stderr '"error":"auth_env_unset","details":"NO_SUCH_AUTH_VAR","action":"STOP"'
 
 # --- help, and an unknown option
 exec gash llm_http --help
-stdout 'llm_http URL\.\.\.'
+stdout 'gash llm http URL\.\.\.'
 ! exec gash llm_http http://api.test/ --bogus
 stderr '"error":"unknown_option"'
 

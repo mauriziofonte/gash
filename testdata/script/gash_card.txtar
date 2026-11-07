@@ -6,14 +6,14 @@
 # covers: gash_card_spec.sh:42
 # covers: gash_card_spec.sh:54
 #
-# The reference card, through the shim as 2.x drives it. :8/:20/:28 are
-# split rows whose internal probe (the help registry) is a Go unit; here the
-# observable card is asserted: `gash all` lists functions from every topic
-# with no internal (__gash_) leak, the overview's per-topic FUNCTION counts
-# sum to the total in the box, a topic shows its functions and its aliases
-# with expansions while identity aliases (ls->ls) are dropped. :42 is the
-# old section names, the unknown-topic error and --help; :54 is the plain
-# piped output (no escapes), the equal-width box and rows that fit COLUMNS.
+# The pages of 3.5 (they replace the 2.x reference card), through the shim
+# as 2.x drove the card. :8/:20/:28 are split rows whose internal probe (the
+# help registry) is a Go unit; here the observable pages are asserted:
+# `gash all` lists the commands of every namespace with no internal
+# (__gash_) leak, the overview names every namespace, a namespace page shows
+# its commands, their shortcuts and the shortcuts of its packs, identity
+# aliases (ls->ls) dropped. :42 is the old topic words, the unknown-command
+# error and --help; :54 is the plain piped output and rows that fit COLUMNS.
 
 env GASH_HEADLESS=1 LC_ALL=C COLUMNS=200
 exec bash card.sh
@@ -24,38 +24,42 @@ source "$GASH_SH"
 set -uo pipefail
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-# :8 every topic contributes functions to `gash all`; nothing internal leaks.
+# :8 every namespace contributes commands to `gash all`; nothing internal leaks.
 all="$(gash all --no-color)"
-for fn in files_largest tree_stats llm_tree llm_git_status ai_query gash_doctor git_add_tag docker_stop_all php_detect_version; do
-  grep -qE "^  $fn( |\$)" <<<"$all" || fail "8 missing $fn"
+for cmd in "largest" "stats" "read" "git-status" "query" "sync" "tag add" "stop-all" "detect php" "doctor"; do
+  grep -qE "^  $cmd( |\$)" <<<"$all" || fail "8 missing $cmd"
 done
 [[ "$all" != *"__gash_"* ]] || fail "8 internal leak"
 
-# :20 the overview per-topic FUNCTIONS counts add up to the box total.
+# :20 the overview names every namespace, by group.
 ov="$(gash --no-color)"
-sum=$(awk '/^  [a-z]+ +[0-9]+ +[0-9]+ /{s+=$2} END{print s}' <<<"$ov")
-total=$(grep -oE '[0-9]+ functions' <<<"$ov" | head -1 | grep -oE '[0-9]+')
-[[ -n "$sum" && "$sum" == "$total" ]] || fail "20 sum=$sum total=$total"
+for ns in files system shell git docker remote db runtime ai hte wsl win logs llm agent run; do
+  grep -qE "^    $ns +[A-Z]" <<<"$ov" || fail "20 missing $ns"
+done
+for g in EVERYDAY PLATFORM "FOR AI AGENTS" GASH; do
+  grep -q "^  $g\$" <<<"$ov" || fail "20 group $g"
+done
 
-# :28 a topic shows functions and aliases with their expansion.
+# :28 a namespace shows its commands, their shortcuts, and its pack shortcuts.
 git="$(gash git)"
-grep -qE "^  +git_add_tag +[^ ]" <<<"$git"             || fail "28 git_add_tag"
-grep -q "Aliases" <<<"$git"                            || fail "28 Aliases"
-grep -qE "(^|  )gl +Compact log with graph" <<<"$git"  || fail "28 gl expansion"
-# An identity alias (ls -> ls) is left out of a topic.
-if grep -qE "(^|  )ls +ls( |\$)" <<<"$(gash nav)"; then fail "28 identity ls present"; fi
+grep -qE "^  tag add +TAG_NAME .* gat +Create an annotated tag" <<<"$git" || fail "28 tag add"
+grep -q "SHORTCUTS" <<<"$git"                                     || fail "28 SHORTCUTS"
+grep -qE "(^|  )gst +git status( |\$)" <<<"$git"                  || fail "28 gst expansion"
+grep -qE "^  log all +gla" <<<"$git"                              || fail "28 log all"
+# An identity alias (ls -> ls) is left out of a page.
+if grep -qE "(^|  )ls +ls( |\$)" <<<"$(gash shell)"; then fail "28 identity ls present"; fi
 
-# :42 old section names, the unknown-topic refusal, and --help.
-[[ "$(gash navigation)" == *NAV* ]]              || fail "42 navigation"
-[[ "$(gash management)" == *GASH* ]]             || fail "42 management"
-[[ "$(gash php)" == *php_detect_version* ]]      || fail "42 php"
+# :42 old topic words, the unknown-command refusal, and --help.
+[[ "$(gash navigation)" == *"gash shell"* ]]       || fail "42 navigation"
+[[ "$(gash nav)" == *"gash shell"* ]]              || fail "42 nav"
+[[ "$(gash management)" == *"doctor"* ]]          || fail "42 management"
+[[ "$(gash php)" == *"detect php"* ]]              || fail "42 php"
 if gash bogus >/dev/null 2>&1; then fail "42 bogus returned 0"; fi
-[[ "$(gash bogus 2>&1)" == *"Topics: files system nav"* ]] || fail "42 topics list"
-[[ "$(gash --help)" == *TOPICS* ]]               || fail "42 --help"
+[[ "$(gash bogus 2>&1)" == *'"error":"unknown_command"'* ]] || fail "42 unknown_command"
+[[ "$(gash git tagg add 2>&1)" == *"Did you mean gash git tag add"* ]] || fail "42 suggestion"
+[[ "$(gash --help)" == *"FOR AI AGENTS"* ]]        || fail "42 --help"
 
-# :54 piped output is plain, the box lines line up, rows fit the terminal.
+# :54 piped output is plain and rows fit the terminal.
 if [[ "$(gash all)" == *$'\033'* ]]; then fail "54 escape bytes when piped"; fi
-widths=$(gash | sed -n '2,5p' | awk '{print length($0)}' | sort -u | wc -l)
-[[ "$widths" -eq 1 ]] || fail "54 box lines differ in width"
 over=$(COLUMNS=100 gash all | awk 'length($0) > 100' | wc -l)
 [[ "$over" -eq 0 ]] || fail "54 rows exceed COLUMNS"

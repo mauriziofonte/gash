@@ -63,7 +63,7 @@ stderr '"error":"unexpected_argument"'
 
 # --- --help anywhere prints the help
 exec gash llm_wait --timeout 1 -h
-stdout 'llm_wait --timeout S'
+stdout 'gash llm wait --timeout S'
 
 -- app.log --
 boot

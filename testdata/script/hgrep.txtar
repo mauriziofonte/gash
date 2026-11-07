@@ -71,7 +71,7 @@ stderr 'Missing'
 
 # --- hgrep_spec.sh:199 - shows help on -h
 exec bash -c 'source "$GASH_SH"; hgrep -h'
-stdout 'hgrep PATTERN'
+stdout 'gash shell history-smart PATTERN'
 stdout '--limit'
 stdout '--json'
 

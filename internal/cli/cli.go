@@ -72,6 +72,19 @@ func Run(p Process) int {
 	if p.Executable == nil {
 		p.Executable = os.Executable
 	}
+	// 3.5: a canonical command (gash files largest, gash git tag add,
+	// gash doctor) runs its handler directly, as its flat name does.
+	if len(p.Args) > 0 && !strings.HasPrefix(p.Args[0], "__") {
+		if c, rest, ok := registry.Resolve(p.Args); ok {
+			if status, done := p.runTree(c, rest); done {
+				return status
+			}
+		} else if delegatePage(p.Args) {
+			// gash wsl, gash win, gash runtime: the namespace page lists
+			// the commands of the tree with those of the 3.x command.
+			return p.call("gash", p.Args)
+		}
+	}
 	if len(p.Args) == 0 || !IsCommand(p.Args[0]) {
 		return p.call("gash", p.Args)
 	}
@@ -89,6 +102,58 @@ func Run(p Process) int {
 		return p.fail(usageEnvelope(err, p.Args))
 	}
 	return status
+}
+
+// delegatePage reports `gash NS` or `gash NS --help` for a namespace
+// whose 3.x command shares it with commands of the tree.
+func delegatePage(args []string) bool {
+	ns, ok := registry.NamespaceOf(args[0])
+	if !ok || ns.Delegate == "" || len(registry.CommandsUnder(ns.Name)) == 0 {
+		return false
+	}
+	return len(args) == 1 || len(args) == 2 && (args[1] == "--help" || args[1] == "-h")
+}
+
+// runTree runs a command of the 3.5 tree: its catalog function, or the
+// 3.x command it names (then done is false and p.Args is rewritten for
+// the cobra tree).
+func (p *Process) runTree(c *registry.Command, rest []string) (status int, done bool) {
+	if c.Handler != "" {
+		f, ok := registry.Lookup(c.Handler)
+		if ok && f.Delegated() {
+			return p.call(f.Name, append(append([]string(nil), c.Prefix...), rest...)), true
+		}
+		return p.fail(contract.New("shell_required", c.Name()+" runs in the shell that loaded Gash",
+			"Run it from a shell that sourced ~/.gash/gash.sh")), true
+	}
+	switch c.Command3x {
+	case "help":
+		// gash help update, gash help hte site create: the --help of a
+		// 3.x command, which its own tree prints.
+		if len(rest) > 0 {
+			if target, _, ok := registry.Resolve(rest); ok && target.Handler == "" && target.Command3x != "help" && target.Command3x != "all" {
+				p.Args = append(append([]string{target.Command3x}, target.Prefix...), "--help")
+				return 0, false
+			}
+			if _, _, ok := registry.Resolve(rest); !ok && len(rest) > 1 {
+				if ns, ok := registry.NamespaceOf(rest[0]); ok && ns.Delegate != "" {
+					p.Args = append(append([]string{ns.Delegate}, rest[1:]...), "--help")
+					return 0, false
+				}
+			}
+		}
+		fallthrough
+	case "all":
+		if h, ok := p.Table.LookupCommand(c.Command3x); ok {
+			return h(&invoke.Call{
+				Ctx: p.Ctx, Name: c.Command3x, Args: rest, Env: p.Env,
+				Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr, Term: p.Term, Handlers: p.Table,
+			}), true
+		}
+		return p.fail(invoke.NotPorted(c.Name())), true
+	}
+	p.Args = append(append([]string{c.Command3x}, c.Prefix...), rest...)
+	return 0, false
 }
 
 // call runs a 2.x function of the table.

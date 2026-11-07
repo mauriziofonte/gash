@@ -45,7 +45,7 @@ grep 'DB_PASSWORD=x' .env
 
 # --- --help anywhere prints the help
 exec gash agent_replace --old -h
-stdout 'agent_replace FILE\.\.\.'
+stdout 'gash agent replace FILE\.\.\.'
 
 -- a.php --
 <?php class OldName {}

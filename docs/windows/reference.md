@@ -180,340 +180,49 @@ See also: [`wsl_explorer`](../windows/reference.md#wsl_explorer), [`process_find
 ### gash wsl
 
 ```text
-Inspect and repair the WSL distribution and convert paths
 
-Usage:
-  gash wsl [flags]
-  gash wsl [command]
+  gash wsl · The WSL distribution: info, doctor, paths, restart, compact
 
-Available Commands:
-  config      Show the effective wsl.conf and .wslconfig settings
-  doctor      Check WSL, interop, drives, networking and configuration
-  info        A quick summary of the WSL environment
-  interop     Report the Windows interop of this shell
-  path        Convert a path between its Linux and Windows forms
+  COMMAND   USAGE            SHORTCUT  DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────
+  restart   [-y]             wr        Restart WSL (saves history, runs wsl --s…
+  shutdown  [-y]             wsd       Shutdown WSL (saves history, runs wsl --…
+  compact   [--status] [-y]  wslc      Fix Windows interop on a WSL2 VM with fr…
+  config                               Show the effective wsl.conf and .wslconf…
+  doctor                               Check WSL, interop, drives, networking a…
+  info                                 A quick summary of the WSL environment
+  interop                              Report the Windows interop of this shell
+  path                                 Convert a path between its Linux and Win…
 
-Flags:
-  -h, --help   help for wsl
-
-Use "gash wsl [command] --help" for more information about a command.
-```
-
-### gash wsl config
-
-```text
-Show the effective wsl.conf and .wslconfig settings
-
-Usage:
-  gash wsl config [FILE] [flags]
-
-Flags:
-  -h, --help   help for config
-      --json   one JSON object on stdout
-```
-
-### gash wsl doctor
-
-```text
-Check WSL, interop, drives, networking and configuration
-
-Usage:
-  gash wsl doctor [flags]
-
-Flags:
-  -h, --help   help for doctor
-      --json   one JSON object on stdout
-```
-
-### gash wsl info
-
-```text
-A quick summary of the WSL environment
-
-Usage:
-  gash wsl info [flags]
-
-Flags:
-  -h, --help   help for info
-      --json   one JSON object on stdout
-```
-
-### gash wsl interop
-
-```text
-Report the Windows interop of this shell
-
-Usage:
-  gash wsl interop [flags]
-
-Flags:
-      --export export WSL_INTEROP=…   print only export WSL_INTEROP=… for eval
-  -h, --help                            help for interop
-      --json                            one JSON object on stdout
-```
-
-### gash wsl path
-
-```text
-Convert a path between its Linux and Windows forms
-
-Usage:
-  gash wsl path PATH [flags]
-
-Flags:
-  -h, --help      help for path
-      --json      one JSON object on stdout
-      --linux     force the Linux form (/mnt/c/Users/me)
-      --mixed     force the Windows form with forward slashes (C:/Users/me)
-      --windows   force the Windows form (C:\Users\me)
+  Details: gash wsl COMMAND --help · Guide: docs/windows/README.md
 ```
 
 ### gash win
 
 ```text
-Inspect the Windows host from WSL (read-only)
 
-Usage:
-  gash win [flags]
-  gash win [command]
-
-Available Commands:
-  apps        Installed programs (optionally filtered)
-  defender    Microsoft Defender status
-  disk        Fixed drives with size and free space
-  doctor      A composed health check of the Windows host
-  events      Windows event log entries
-  file        A file's metadata, owner, ACL and signature
-  fix         Apply an elevated Windows correction (human-only, asks for UAC)
-  hosts       The Windows hosts file
-  info        Windows build, edition, host, user and elevation
-  net         Network adapters, DNS and proxy
-  policy      Where policy is set (registry roots) and the device join
-  ports       Listening and established TCP ports with the owning process
-  procs       Top processes by memory (optionally filtered)
-  reg         Query a registry key (HKLM\…, HKCU\…)
-  services    Windows services (optionally filtered by name)
-  updates     Installed hotfixes and pending reboot
-
-Flags:
-  -h, --help   help for win
-
-Use "gash win [command] --help" for more information about a command.
-```
-
-### gash win apps
-
-```text
-Installed programs (optionally filtered)
-
-Usage:
-  gash win apps [FILTER] [flags]
-
-Flags:
-  -h, --help   help for apps
-      --json   one JSON object on stdout
-```
-
-### gash win defender
-
-```text
-Microsoft Defender status
-
-Usage:
-  gash win defender [flags]
-
-Flags:
-  -h, --help   help for defender
-      --json   one JSON object on stdout
-```
-
-### gash win disk
-
-```text
-Fixed drives with size and free space
-
-Usage:
-  gash win disk [flags]
-
-Flags:
-  -h, --help   help for disk
-      --json   one JSON object on stdout
-```
-
-### gash win doctor
-
-```text
-A composed health check of the Windows host
-
-Usage:
-  gash win doctor [flags]
-
-Flags:
-  -h, --help   help for doctor
-      --json   one JSON object on stdout
-```
-
-### gash win events
-
-```text
-Windows event log entries
-
-Usage:
-  gash win events [flags]
-
-Flags:
-  -h, --help           help for events
-      --json           one JSON object on stdout
-      --level string   error, warning, information or critical
-  -n, --limit int      maximum entries (default 50)
-      --log string     the log name (System, Application, Security, …) (default "System")
-      --since string   only entries newer than this (e.g. 1h, 24h, 7d)
-```
-
-### gash win file
-
-```text
-A file's metadata, owner, ACL and signature
-
-Usage:
-  gash win file PATH [flags]
-
-Flags:
-  -h, --help        help for file
-      --json        one JSON object on stdout
-  -n, --limit int
-```
-
-### gash win fix
-
-```text
-Apply an elevated Windows correction (human-only, asks for UAC)
-
-Usage:
-  gash win fix [ACTION] [ARGS...] [flags]
-
-Flags:
-      --dry-run   print the exact elevated command without running it
-  -h, --help      help for fix
-      --json      with --dry-run, emit the command as JSON
-      --yes       skip the in-shell question (Windows still asks for UAC)
-```
-
-### gash win hosts
-
-```text
-The Windows hosts file
-
-Usage:
-  gash win hosts [flags]
-
-Flags:
-  -h, --help   help for hosts
-      --json   one JSON object on stdout
-```
-
-### gash win info
-
-```text
-Windows build, edition, host, user and elevation
-
-Usage:
-  gash win info [flags]
-
-Flags:
-  -h, --help   help for info
-      --json   one JSON object on stdout
-```
-
-### gash win net
-
-```text
-Network adapters, DNS and proxy
-
-Usage:
-  gash win net [flags]
-
-Flags:
-  -h, --help   help for net
-      --json   one JSON object on stdout
-```
-
-### gash win policy
-
-```text
-Where policy is set (registry roots) and the device join
-
-Usage:
-  gash win policy [flags]
-
-Flags:
-  -h, --help   help for policy
-      --json   one JSON object on stdout
-```
-
-### gash win ports
-
-```text
-Listening and established TCP ports with the owning process
-
-Usage:
-  gash win ports [flags]
-
-Flags:
-  -h, --help       help for ports
-      --json       one JSON object on stdout
-      --port int   only this local port
-```
-
-### gash win procs
-
-```text
-Top processes by memory (optionally filtered)
-
-Usage:
-  gash win procs [FILTER] [flags]
-
-Flags:
-  -h, --help   help for procs
-      --json   one JSON object on stdout
-```
-
-### gash win reg
-
-```text
-Query a registry key (HKLM\…, HKCU\…)
-
-Usage:
-  gash win reg KEY [flags]
-
-Flags:
-  -h, --help           help for reg
-      --json           one JSON object on stdout
-      --value string   read only this value
-```
-
-### gash win services
-
-```text
-Windows services (optionally filtered by name)
-
-Usage:
-  gash win services [FILTER] [flags]
-
-Flags:
-  -h, --help   help for services
-      --json   one JSON object on stdout
-```
-
-### gash win updates
-
-```text
-Installed hotfixes and pending reboot
-
-Usage:
-  gash win updates [flags]
-
-Flags:
-  -h, --help   help for updates
-      --json   one JSON object on stdout
+  gash win · The Windows host, read from WSL; Explorer, Task Manager
+
+  COMMAND   USAGE   SHORTCUT  DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────
+  explorer  [PATH]  wex       Open Windows Explorer from WSL
+  taskmgr           wtm       Open Windows Task Manager from WSL
+  apps                        Installed programs (optionally filtered)
+  defender                    Microsoft Defender status
+  disk                        Fixed drives with size and free space
+  doctor                      A composed health check of the Windows host
+  events                      Windows event log entries
+  file                        A file's metadata, owner, ACL and signature
+  fix                         Apply an elevated Windows correction (human-only,…
+  hosts                       The Windows hosts file
+  info                        Windows build, edition, host, user and elevation
+  net                         Network adapters, DNS and proxy
+  policy                      Where policy is set (registry roots) and the devi…
+  ports                       Listening and established TCP ports with the owni…
+  procs                       Top processes by memory (optionally filtered)
+  reg                         Query a registry key (HKLM\…, HKCU\…)
+  services                    Windows services (optionally filtered by name)
+  updates                     Installed hotfixes and pending reboot
+
+  Details: gash win COMMAND --help · Guide: docs/windows/README.md
 ```

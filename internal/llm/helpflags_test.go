@@ -230,5 +230,5 @@ func TestLedger_LLM30(t *testing.T) {
 	require.Equal(t, result{"{\n  \"ZZ_LLM30\": \"1\"\n}\n", "", 0}, r)
 	r = runGo(t, m, d, env, "llm_grep", "x", "--ext", "-h")
 	require.Equal(t, 0, r.RC)
-	require.Contains(t, r.Stdout, "llm_grep PATTERN")
+	require.Contains(t, r.Stdout, "gash llm grep PATTERN")
 }

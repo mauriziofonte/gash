@@ -45,7 +45,7 @@ stderr '"error":"secret_file_blocked"'
 
 # --- help without side effects
 exec gash llm_config --help
-stdout 'llm_config FILE \[--max-bytes N\] \[--path P\]'
+stdout 'gash llm config FILE \[--max-bytes N\] \[--path P\]'
 
 -- pyproject.toml --
 [project]

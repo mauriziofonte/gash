@@ -27,4 +27,4 @@ stderr '"error":"unexpected_argument"'
 
 # --- --help anywhere prints the help
 exec gash llm_sysinfo -h
-stdout 'llm_sysinfo \[--mount PATH\]'
+stdout 'gash llm sysinfo \[--mount PATH\]'

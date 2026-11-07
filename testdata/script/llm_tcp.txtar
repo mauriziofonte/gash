@@ -30,7 +30,7 @@ stderr '"error":"invalid_target","details":"db.local"'
 ! exec gash llm_tcp db.local:99999
 stderr '"error":"invalid_target"'
 exec gash llm_tcp --help
-stdout 'llm_tcp HOST:PORT\.\.\.'
+stdout 'gash llm tcp HOST:PORT\.\.\.'
 
 -- start.sh --
 # OPEN is httpsfake's listener (stopped when the calling shell exits);

@@ -22,7 +22,7 @@ exec bash ai.sh
 
 env GASH_BANNER=0
 exec bash -i ask_alias.sh
-stdout 'ai_ask'
+stdout 'gash ai ask'
 
 -- ai.sh --
 export GASH_HEADLESS=1

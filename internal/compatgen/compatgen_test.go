@@ -650,7 +650,8 @@ var (
 // gashAllowed are the other __GASH_* names a generated file may set at
 // load time: the palette and screen sequences, the load bookkeeping that
 // gash_unload, gash_doctor --timing and completion read (the per-shell
-// server's state is __GASH_SRV_*).
+// server's state is __GASH_SRV_*), and the former flat names of 3.5 with
+// the tips this shell already showed.
 var gashAllowed = map[string]bool{
 	"__GASH_AWK": true, "__GASH_RED": true, "__GASH_GREEN": true, "__GASH_YELLOW": true, "__GASH_BLUE": true,
 	"__GASH_CYAN": true, "__GASH_WHITE": true, "__GASH_DIM": true, "__GASH_UNDERLINE": true,
@@ -659,6 +660,7 @@ var gashAllowed = map[string]bool{
 	"__GASH_SETTINGS_KNOWN": true, "__GASH_T0": true, "__GASH_T1": true, "__GASH_TIMING": true,
 	"__GASH_USER_ALIASES": true, "__GASH_PRE_SYMBOLS": true, "__GASH_POST_SYMBOLS": true,
 	"__GASH_COMPLETE_NAMES": true, "__GASH_SNAPSHOT2": true,
+	"__GASH_FORMER": true, "__GASH_FORMER_SEEN": true,
 }
 
 // LEDGER SHELL-10: loading leaves no BASH_REMATCH and nothing readonly in

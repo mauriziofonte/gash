@@ -8,10 +8,10 @@ Help, the doctor, prerequisites, settings, updates and removal. The guide is [RE
 
 | Function | Alias | Description |
 |---|---|---|
-| [`gash`](#gash) |  | Gash reference card with all functions and aliases |
+| [`gash`](#gash) |  | The overview of Gash: namespaces, their commands and shortcuts |
 | [`gash_doctor`](#gash_doctor) | `gdoctor` | Run health checks on the Gash installation |
 | [`gash_env_init`](#gash_env_init) |  | Create ~/.gash_env configuration template |
-| [`gash_help`](#gash_help) |  | Help system with examples, search, and discovery |
+| [`gash_help`](#gash_help) |  | The page of a command, a namespace or a topic; search every page |
 | [`gash_migrate`](#gash_migrate) |  | Shows how to migrate a Gash 1.x configuration |
 | [`gash_uninstall`](#gash_uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash_unload`](#gash_unload) |  | Restore shell state to before Gash was loaded |
@@ -20,45 +20,47 @@ Help, the doctor, prerequisites, settings, updates and removal. The guide is [RE
 
 ### gash
 
-Gash reference card with all functions and aliases.
+The overview of Gash: namespaces, their commands and shortcuts.
 
 #### Usage
 
 ```text
-gash [TOPIC|all] [--no-color]
-gash migrate [...]   Same as gash_migrate (Gash 1.x configuration)
+gash [NAMESPACE|all] [--no-color]
+gash NAMESPACE COMMAND [ARGS...]
 
-gash                 Overview: topics with function and alias counts
-gash TOPIC           Functions (alias, usage, description) and aliases of a topic
-gash all             The whole card, every topic
+gash                 The overview: namespaces and Gash's own commands
+gash NAMESPACE       Its commands (usage, shortcut, description) and shortcuts
+gash all             Every namespace page
 ```
 
-#### Topics
+#### Namespaces
 
 ```text
-files, system, nav, git, docker, remote, dev, llm, ai, gash
-(navigation, management, php and node still work as old names)
+files, system, shell, git, docker, remote, db, runtime, ai,
+hte, wsl, win, logs, llm, agent
+(the former card topics nav, navigation, dev, php and node still open
+their namespace page)
 
-The card is built from the help registry and the alias files. In an
-interactive shell it counts and lists only the aliases the shell
-defines (one skipped because a program of that name exists, or a pack
-whose tool is missing, is left out); headless it lists them all.
+The pages are built from the command tree and the alias files. In an
+interactive shell they list only the shortcuts the shell defines (one
+skipped because a program of that name exists, or a pack whose tool is
+missing, is left out); headless they list them all.
 ```
 
 #### Examples
 
 ```bash
-# Quick reminder of all git aliases
+# The git commands and shortcuts
 gash git
 
-# See what Docker functions are available
+# The Docker commands
 gash docker
 
-# See every function and alias in Gash, plain text for a file
-gash all --no-color > gash-card.txt
+# Every page, plain text for a file
+gash all --no-color > gash-pages.txt
 
-# Check AI-related functions
-gash ai
+# Run a command by its canonical name
+gash files largest --limit 5
 ```
 
 See also: [`gash_help`](../gash/reference.md#gash_help), [`gash_doctor`](../gash/reference.md#gash_doctor)
@@ -167,40 +169,42 @@ See also: [`gash_db_list`](../databases/reference.md#gash_db_list), [`gash_ai_li
 
 ### gash_help
 
-Help system with examples, search, and discovery.
+The page of a command, a namespace or a topic; search every page.
 
 #### Usage
 
 ```text
-gash_help                    Overview of all functions
-gash_help FUNCTION           Detailed help with real-world examples
-gash_help ALIAS              Lookup by short alias name
-gash_help --list             List all functions grouped by module
-gash_help --search KEYWORD   Search across all help text
-gash_help --short FUNCTION   One-line description (for scripting)
-gash_help --bash TOPIC       Bash builtin help (e.g. cd, export)
+gash help                    The overview: namespaces and Gash's own commands
+gash help NAME               The page of a command, shortcut or former name
+gash help NAMESPACE          The commands of a namespace (gash help git)
+gash help TOPIC              shortcuts, shell-defaults, scripting, migrate
+gash help --list             Every command, by namespace
+gash help --search WORD      Search every page
+gash help --short NAME       One-line description (for scripting)
+gash help --bash TOPIC       Bash builtin help (e.g. cd, export)
 ```
 
 #### Examples
 
 ```bash
-# Get detailed help for a function
-gash_help ai_query
+# The page of a command
+gash help ai query
 
-# Don't remember the long name? Use the alias
-gash_help flf
+# By its shortcut or its former name
+gash help flf
+gash help files_largest
 
-# Find all Docker-related functions
-gash_help --search docker
+# Every command that mentions Docker
+gash help --search docker
 
-# Find functions that work with pipes
-gash_help --search pipe
+# Every shortcut this shell defines
+gash help shortcuts
 
-# Get just the description for scripting
-gash_help --short files_largest
+# Just the description, for scripting
+gash help --short files largest
 
-# Access bash builtin help
-gash_help --bash cd
+# Bash builtin help
+gash help --bash cd
 ```
 
 See also: [`gash`](../gash/reference.md#gash)

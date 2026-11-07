@@ -177,30 +177,39 @@ mask: [0-9]+ +[0-9]+ {2}
 ```console
 $ gash
 
-╭───────────────────────────────────────────────────╮
-│  Gash 3.4.2 · Bash for humans and AI agents       │
-│  121 functions · gash <topic> · gash_help <name>  │
-╰───────────────────────────────────────────────────╯
+  Gash 3.4.2 · Bash for humans and AI agents
 
-  TOPIC   FUNCTIONS  ALIASES  WHAT
-  ────────────────────────────────────────────────────────────────────────────────────
-  files           7        0  Largest files and folders, tree stats, archives, backups
-  system         18       12  Processes, ports, services, disks, history, WSL
-  nav             0       17  Directory navigation and listings
-  git             7       38  Sync, tags, patches, repository repair, git shortcuts
-  docker          7       19  Containers and Compose stacks
-  remote          7        0  Hosts from ~/.gash_env: exec, push, pull, sync
-  dev             5        4  PHP and Node.js versions, headless Chrome
-  llm            48        0  Read-only JSON tools for AI agents
-  agent           6        0  Write tools for AI agents
-  ai              3        0  Ask Claude or Gemini from the terminal
-  gash           13        0  Help, doctor, configuration, upgrade
+  EVERYDAY
+    files    Largest files and folders, tree stats, archives, backups
+    system   Processes, ports, services, disks, public IP
+    shell    History search, mkcd, sudo-last, colors, navigation
+    git      Sync, tags, patches, repair, log views
+    docker   Containers and Compose stacks
+    remote   Hosts of ~/.gash_env: exec, copy, sync, SSH keys
+    db       Database connections of ~/.gash_env: list and test
+    runtime  PHP and Node.js versions, headless Chrome
+    ai       Ask Claude or Gemini from the terminal
 
-  gash <topic>        functions and aliases of a topic, e.g. gash git
-  gash all            the whole card
-  gash_help <name>    full help with examples, e.g. gash_help flf
-  gash_help --search  search every help page
-  gash_doctor         check the installation
+  PLATFORM
+    hte   Local Apache and PHP-FPM sites with HTTPS
+    wsl   The WSL distribution: info, doctor, paths, restart, compact
+    win   The Windows host, read from WSL; Explorer, Task Manager
+    logs  Find and reclaim disk space from log files
+
+  FOR AI AGENTS
+    llm    Read-only JSON tools for AI agents (also llm_*)
+    agent  Write tools for AI agents, --dry-run first (also agent_*)
+    run    Run a command with its output shaped and its exit status kept
+
+  GASH
+    help  doctor  update  version  uninstall  unload  init  config
+
+  gash NAMESPACE           its commands and shortcuts, e.g. gash git
+  gash help NAME           a command, a shortcut or a former name, e.g. gash help flf
+  gash help --search WORD  search every page
+  gash help shortcuts      every shortcut, the short aliases of the commands
+  gash all                 every namespace page
+  TAB                      completes namespaces, commands, options and their values
 ```
 
 `gash git` shows the functions of one topic with their short alias and usage,

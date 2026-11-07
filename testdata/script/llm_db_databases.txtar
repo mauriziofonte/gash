@@ -39,7 +39,7 @@ stderr '"error":"unknown_option","details":"--bogus"'
 
 # --- help without side effects
 exec gash llm_db_databases --help
-stdout 'llm_db_databases \[-c CONNECTION'
+stdout 'gash llm db-databases \[-c CONNECTION'
 
 -- tsv.golden --
 name

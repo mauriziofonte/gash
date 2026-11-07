@@ -41,6 +41,6 @@ stdout '"total_found":4'
 
 # --- docker_compose_spec.sh:672 - docker compose aliases are defined
 exec bash -c 'source "$GASH_SH"; alias dcc && alias dcup2 && alias dcscan'
-stdout 'dcc=.docker_compose_check.'
-stdout 'dcup2=.docker_compose_upgrade.'
-stdout 'dcscan=.docker_compose_scan.'
+stdout 'dcc=.gash docker compose check.'
+stdout 'dcup2=.gash docker compose upgrade.'
+stdout 'dcscan=.gash docker compose scan.'

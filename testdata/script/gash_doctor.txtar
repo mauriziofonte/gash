@@ -22,7 +22,7 @@ exec bash doctor54.sh
 
 env GASH_BANNER=0
 exec bash -i gdoctor_alias.sh
-stdout 'gash_doctor'
+stdout 'gash doctor'
 
 -- doctor.sh --
 export GASH_HEADLESS=1

@@ -36,7 +36,7 @@ stderr '"error":"invalid_since"'
 ! exec gash llm_docker_logs web --grep '('
 stderr '"error":"invalid_regex"'
 exec gash llm_docker_logs web -h
-stdout 'llm_docker_logs CTR'
+stdout 'gash llm docker-logs CTR'
 
 -- stub/docker --
 #!/bin/sh

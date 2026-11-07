@@ -150,6 +150,8 @@ func parse(fsys fs.FS) (*template.Template, error) {
 	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
 		"stub":    stub,
 		"loadenv": func() string { return LoadEnvLine },
+		"gashRoute": GashRoute,
+		"formerTable": FormerTable,
 		"join":    strings.Join,
 		"indent":  indent,
 		// cardAliasNames is the names of the card entries as shell words,
@@ -302,6 +304,7 @@ func buildData() Data {
 		if !ok {
 			continue
 		}
+		a.Definition = shortcutDefinition(a)
 		d.ModuleAliases = append(d.ModuleAliases, a)
 		m := strings.TrimSuffix(strings.TrimPrefix(f.StubFile, "lib/modules/"), ".sh")
 		if modules[m] != nil {

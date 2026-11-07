@@ -440,7 +440,7 @@ func TestOptionsAndTools(t *testing.T) {
 
 	r, rc = fx.call(t, nil, "--help")
 	require.Equal(t, 0, rc)
-	require.Contains(t, r.out, "chrome_headless_update [-y] [--dry-run]")
+	require.Contains(t, r.out, "gash runtime upgrade chrome [-y] [--dry-run]")
 
 	// 3.4: the prerequisite report ("chrome_headless_update needs 'ldd'."
 	// before).

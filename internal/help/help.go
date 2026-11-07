@@ -23,9 +23,11 @@ var (
 	commentRe = lazyre.MustCompile(`^[ \t\n\v\f\r]*#`)
 )
 
-// Display writes the help page of f as __gash_help_display did, to w
-// (stdout). It returns false when f has no registered help. color is the
-// runtime gate (__gash_use_color).
+// Display writes the help page of f to w (stdout): since 3.5 the page of
+// its canonical command (gash files largest), with the text of its
+// registered help rewritten for the canonical names
+// (registry.CanonicalHelp), then its shortcut and its other names. It
+// returns false when f has no registered help. color is the runtime gate.
 func Display(w io.Writer, color bool, f *registry.Function) bool {
 	if f == nil || !f.HasHelp {
 		return false
@@ -34,17 +36,19 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 	if color {
 		a, b, m, r = term.SeqAccent, term.SeqBold, term.SeqMuted, term.SeqOff
 	}
+	cmd, hasCmd := registry.CommandOf(f.Name)
 	h := f.Help
+	title := f.Name
+	if hasCmd {
+		h = registry.CanonicalHelp(f)
+		title = cmd.Name()
+	}
 	var sb strings.Builder
 	line := func(s string) { sb.WriteString(s); sb.WriteByte('\n') }
 	heading := func(title string) { ui.Heading(&sb, color, 2, "", title) }
 
 	line("")
-	if h.Module != "" {
-		line("  " + a + f.Name + r + m + "  (module: " + h.Module + ")" + r)
-	} else {
-		line("  " + a + f.Name + r)
-	}
+	line("  " + a + title + r)
 	if h.Short != "" {
 		line("")
 		line("  " + b + h.Short + r)
@@ -61,7 +65,7 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 			}
 		}
 	}
-	if h.Aliases != "" {
+	if !hasCmd && h.Aliases != "" {
 		line("")
 		heading("ALIASES")
 		var list []string
@@ -85,11 +89,30 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 			}
 		}
 	}
+	if hasCmd {
+		if cmd.Shortcut != "" {
+			line("")
+			heading("SHORTCUT")
+			line("    " + a + cmd.Shortcut + r)
+		}
+		if cmd.Permanent() {
+			line("")
+			heading("FUNCTION")
+			line("    " + a + f.Name + r + m + "  the same tool, a stable name for agents and scripts" + r)
+		} else if former := cmd.FormerNames(); len(former) > 0 {
+			line("")
+			heading("FORMER NAME")
+			line("    " + a + strings.Join(former, ", ") + r + m + "  works through Gash 3.x" + r)
+		}
+	}
 	if h.SeeAlso != "" {
 		line("")
 		heading("SEE ALSO")
 		var list []string
-		for _, s := range strings.Fields(h.SeeAlso) {
+		for _, s := range strings.FieldsFunc(h.SeeAlso, func(r rune) bool { return r == '\n' || (!hasCmd && r == ' ') }) {
+			if c, ok := registry.Canonical(s); ok && !hasCmd {
+				s = c // a script helper's page names the commands too
+			}
 			list = append(list, a+s+r)
 		}
 		line("    " + strings.Join(list, ", "))

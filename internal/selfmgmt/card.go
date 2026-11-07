@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -39,100 +38,12 @@ func (m *Module) card(c *invoke.Call) int {
 			Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr, Term: c.Term,
 		})
 	}
-	noColor, topic := false, ""
-	for _, a := range c.Args {
-		switch a {
-		case "--no-color":
-			noColor = true
-		case "-h", "--help":
-			topic = "--help"
-		default:
-			topic = a
-		}
-	}
+	// gash -h and gash NS --help are the pages themselves.
+	words, noColor, _ := pageWords(c.Args)
 	color := c.Term.WantColors(noColor)
-	w := c.Stdout
-	if topic == "--help" {
-		if f, ok := registry.Lookup("gash"); ok {
-			help.Display(w, color, f)
-		}
-		return 0
-	}
-	switch topic {
-	case "navigation":
-		topic = "nav"
-	case "management":
-		topic = "gash"
-	case "php", "node":
-		topic = "dev"
-	}
-	topics := registry.Topics()
-	var chosen registry.Topic
-	if topic != "" && topic != "all" {
-		var names []string
-		known := false
-		for _, t := range topics {
-			names = append(names, t.Name)
-			if t.Name == topic && !known {
-				chosen, known = t, true
-			}
-		}
-		if !known {
-			ui.NewPrinter(c.Stderr, c.Term, noColor).
-				Error("Unknown topic: " + topic + ". Topics: " + strings.Join(names, " ") + ", all")
-			return 1
-		}
-	}
-
-	// __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS".
 	s := ui.StyleOf(c.Term, !color)
-	k := cardOf(s, w, liveAliases(c.Env.Get(CardAliasesVar)), c.Env.Get(CardLiveVar) == "1")
-	p, b, mu, r := "", "", "", ""
-	if s.Color {
-		p, b, mu, r = s.P.Primary, s.P.Bold, s.P.Muted, s.P.Off
-	}
-	dot := s.G.Dot
-	k.nl()
-	s.Box(w, p,
-		b+"Gash"+r+" "+c.Env.Get("GASH_VERSION")+" "+mu+dot+" Bash for humans and AI agents"+r,
-		mu+strconv.Itoa(len(help.Registered()))+" functions "+dot+" gash <topic> "+dot+" gash_help <name>"+r)
-
-	switch topic {
-	case "":
-	case "all":
-		for _, t := range topics {
-			k.topic(t)
-		}
-		k.nl()
-		return 0
-	default:
-		k.topic(chosen)
-		k.nl()
-		return 0
-	}
-
-	// Overview: one row per topic, then where to go next.
-	k.nl()
-	var rows strings.Builder
-	rows.WriteString("TOPIC\tFUNCTIONS\tALIASES\tWHAT\n")
-	for _, t := range topics {
-		na := 0
-		for _, f := range t.AliasFiles {
-			na += nonEmptyLines(k.aliasLines(f))
-		}
-		rows.WriteString(t.Name + "\t" + strconv.Itoa(len(cardFunctions(t.Modules))) + "\t" + strconv.Itoa(na) + "\t" + t.Description + "\n")
-	}
-	s.Table(w, ui.ReadRows(strings.NewReader(rows.String())), "--indent", "2", "--right", "2,3", "--fit", "--color", "1:accent")
-	k.nl()
-	s.Table(w, []string{
-		"gash <topic>\tfunctions and aliases of a topic, e.g. gash git",
-		"gash all\tthe whole card",
-		"gash_help <name>\tfull help with examples, e.g. gash_help flf",
-		"gash_help --search\tsearch every help page",
-		"gash_doctor\tcheck the installation",
-	}, "--no-header", "--indent", "2", "--color", "1:accent")
-	k.nl()
-	return 0
+	k := cardOf(s, c.Stdout, liveAliases(c.Env.Get(CardAliasesVar)), c.Env.Get(CardLiveVar) == "1")
+	return m.pages(c, k, words)
 }
 
 // cardWriter renders the card of one call.
@@ -263,93 +174,11 @@ func (k cardWriter) aliasNotes(files []string) []string {
 	return out
 }
 
-// nonEmptyLines is ... | grep -c .
-func nonEmptyLines(text string) int {
-	n := 0
-	for _, l := range strings.Split(text, "\n") {
-		if l != "" {
-			n++
-		}
-	}
-	return n
-}
-
-// cardFunctions is __gash_card_functions MODULES: the functions whose
-// help module is one of modules, sorted by bytes (LEDGER SELF-11).
-func cardFunctions(modules []string) []*registry.Function {
-	var out []*registry.Function
-	for _, f := range help.Registered() {
-		if f.Help.Module != "" && slices.Contains(modules, f.Help.Module) {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// cardUsage is __gash_card_usage FUNCTION: the first non-empty line after
-// the USAGE line of the help text, without its indentation and without
-// the function name in front.
-func cardUsage(f *registry.Function) string {
-	found := false
-	for _, line := range strings.Split(f.Help.Body, "\n") {
-		if found {
-			line = strings.TrimLeft(line, " \t\n\v\f\r")
-			if line == "" {
-				continue
-			}
-			if rest, ok := strings.CutPrefix(line, f.Name); ok {
-				line = strings.TrimPrefix(rest, " ")
-			}
-			return line
-		}
-		if strings.HasPrefix(line, "USAGE") {
-			found = true
-		}
-	}
-	return ""
-}
-
-// topic is __gash_card_topic: the heading, the functions table, then the
-// alias grid.
-func (k cardWriter) topic(t registry.Topic) {
+// grid writes alias entries (NAME<TAB>VALUE) as many pairs per row as
+// the terminal holds, names accent, expansions muted (cut at 26
+// characters), then the conditions of the files' entries.
+func (k cardWriter) grid(entries, files []string) {
 	s, w := k.s, k.w
-	k.nl()
-	s.Heading(w, "--indent", "2", "--note", t.Description, strings.ToUpper(t.Name))
-	k.nl()
-
-	fns := cardFunctions(t.Modules)
-	if len(fns) > 0 {
-		var rows strings.Builder
-		rows.WriteString("FUNCTION\tALIAS\tUSAGE\tDESCRIPTION\n")
-		for _, f := range fns {
-			usage := cardUsage(f)
-			if ui.Len(usage) > 30 {
-				usage = ui.Sub(usage, 0, 29) + s.G.Ellipsis
-			}
-			rows.WriteString(f.Name + "\t" + strings.ReplaceAll(f.Help.Aliases, " ", ", ") + "\t" + usage + "\t" + f.Help.Short + "\n")
-		}
-		s.Table(w, ui.ReadRows(strings.NewReader(rows.String())),
-			"--indent", "2", "--fit", "--color", "1:accent", "--color", "2:accent", "--color", "3:muted")
-	}
-
-	var entries []string
-	for _, f := range t.AliasFiles {
-		text := strings.TrimSuffix(k.aliasLines(f), "\n")
-		if text == "" {
-			continue
-		}
-		for _, line := range strings.Split(text, "\n") {
-			if name, value := readTab(line); name != "" {
-				entries = append(entries, name+"\t"+value)
-			}
-		}
-	}
-	if len(entries) == 0 {
-		return
-	}
-
-	// Grid: as many "name  expansion" pairs per row as the terminal holds,
-	// names accent, expansions muted (cut at 26 characters).
 	namew, valw := 0, 0
 	for _, e := range entries {
 		name, value, _ := strings.Cut(e, "\t")
@@ -359,11 +188,6 @@ func (k cardWriter) topic(t registry.Topic) {
 	valw = min(valw, 26)
 	cols := (s.Width - 2) / (namew + 2 + valw + 3)
 	cols = max(min(cols, 3), 1)
-
-	if len(fns) > 0 {
-		k.nl()
-	}
-	s.Heading(w, "--indent", "2", "Aliases")
 	// Pairs are columns 1-2, 4-5, 7-8; 3 and 6 stay empty, as spacers.
 	opts := []string{"--no-header", "--indent", "2"}
 	for c := 0; c < cols; c++ {
@@ -383,7 +207,7 @@ func (k cardWriter) topic(t registry.Topic) {
 		}
 	}
 	s.Table(w, ui.ReadRows(strings.NewReader(rows.String())), opts...)
-	if notes := k.aliasNotes(t.AliasFiles); len(notes) > 0 {
+	if notes := k.aliasNotes(files); len(notes) > 0 {
 		k.nl()
 		for _, note := range notes {
 			s.Print(w, "muted", "  "+note)
