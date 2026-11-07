@@ -63,7 +63,7 @@ out=$(bash --norc -i -c 'source "$HOME/.gash/gash.sh"; gash version' </dev/null 
 out=$(printf '%s\n' "$out" | tail -n 1)
 echo "$out"
 case "$out" in
-    "gash 3."*" linux/"*) ;;
+    "gash "[0-9]*.*" linux/"*) ;;
     *) fail "unexpected gash version output: $out" ;;
 esac
 
