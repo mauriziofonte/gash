@@ -6,7 +6,9 @@
 # terminal, prints one tip naming its command and shortcut, once per name
 # and session; GASH_LEGACY_HINTS=0 turns it off. script(1) gives the shell
 # its terminal (util-linux, Linux only); the lines arrive as typed, since
-# a former name in a script prints nothing.
+# a former name in a script prints nothing. 4.0: the former names exist
+# with GASH_LEGACY_NAMES=1 (this suite's default); gash hte, the former
+# word of gash localweb, prints its tip in any case.
 
 [!linux] skip 'script(1) of util-linux'
 [!exec:script] skip 'no script(1)'
@@ -17,6 +19,15 @@ stdin drive.sh
 exec script -qec 'bash --norc --noprofile -i' /dev/null
 stdout -count=1 'tip: files_largest is now gash files largest \(shortcut flf\)'
 ! stdout 'tip: .*gash files stats'
+stdout -count=1 'tip: gash hte is now gash localweb'
+
+# Without GASH_LEGACY_NAMES the former name is not defined.
+env GASH_LEGACY_NAMES=
+stdin drive.sh
+exec script -qec 'bash --norc --noprofile -i' /dev/null
+stdout 'files_largest: command not found'
+stdout -count=1 'tip: gash hte is now gash localweb'
+env GASH_LEGACY_NAMES=1
 
 env GASH_LEGACY_HINTS=0
 stdin drive.sh
@@ -29,4 +40,7 @@ files_largest d >/dev/null
 files_largest d >/dev/null
 gash files stats d >/dev/null
 flf d >/dev/null
+gash hte --help >/dev/null
+gash hte --help >/dev/null
+gash localweb --help >/dev/null
 exit

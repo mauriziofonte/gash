@@ -158,7 +158,7 @@ $ gash run --max-lines 3 -- seq 10
 - `--safe`: run the command under the read-only rules of `llm_exec`: a
   command that could write is refused.
 
-The command may be a Gash function: `gash run --max-lines 20 -- files_largest .`.
+The command may be a Gash command: `gash run --max-lines 20 -- gash files largest .`.
 See [`gash runtime`](reference.md#gash-runtime) and
 [`gash run`](reference.md#gash-run). Agents use the JSON form,
 [`llm_runtime`](../agents/reference.md#gash-llm-runtime).

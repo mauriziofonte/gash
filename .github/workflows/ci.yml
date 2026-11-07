@@ -228,7 +228,7 @@ jobs:
           CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
           version="$(GASH_BIN="$RUNNER_TEMP/gash" GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; gash version --json')"
           echo "$version"
-          bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
+          bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash >/dev/null && gash doctor --no-color' </dev/null
 
   distro-smoke:
     # Gash on the distros it supports, on both architectures the release

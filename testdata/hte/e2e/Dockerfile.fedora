@@ -1,5 +1,5 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
-# The Fedora image of the gash hte end-to-end test (run.sh fedora): the
+# The Fedora image of the gash localweb end-to-end test (run.sh fedora): the
 # distro httpd (mod_ssl and mod_http2 are packages of their own) and
 # php-fpm, PHP-FPM 8.3 from the Remi repository side by side
 # (/opt/remi/php83, /etc/opt/remi/php83), openssl and sudo, nothing of

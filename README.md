@@ -9,11 +9,11 @@
 
 ![Gash at a terminal: the overview, gash files largest, gash files stats and gash system info overview](docs/assets/demo.gif)
 
-Gash adds 121 functions and 155 aliases to Bash, for the jobs that
+Gash adds 121 commands and 155 aliases to Bash, for the jobs that
 otherwise take a pipeline or a search: find what fills a disk, see what
 holds a port, tag a release, upgrade a Compose stack, copy files to a
 server, query a database read-only, run local HTTPS sites, look after WSL
-and Windows. Every function has `--help` with examples. For AI coding
+and Windows. Every command has `--help` with examples. For AI coding
 agents it adds read-only `llm_*` functions and guarded `agent_*` write
 functions that answer in JSON, with a documented error contract.
 
@@ -46,7 +46,7 @@ CI installs Gash on each of these systems at every change, from the bare
 image, and checks every package Gash can install there:
 
 <!-- BEGIN generated: systems (go test ./internal/docgen -update) -->
-| System | Version | amd64 | arm64 | Local sites (`gash hte`) |
+| System | Version | amd64 | arm64 | Local sites (`gash localweb`) |
 |---|---|---|---|---|
 | Rocky Linux | 8 | tested | tested | not tested |
 | Rocky Linux | 9 (minimal image) | tested | tested | not tested |
@@ -86,9 +86,10 @@ gash doctor                   # check the install, and what this system lacks
 Shortcuts save typing in an interactive shell: `flf` is
 `gash files largest`, `gst` is `git status`, and `gash help shortcuts`
 lists them all (`GASH_SHORTCUTS` picks the packs you want). The flat names
-of 3.4 (`files_largest`) keep working through 3.x and print a one-line
-tip with the new name, once per session; [migration](docs/migration-3.5.md)
-has the table.
+of Gash 3.x (`files_largest`) are gone from a new shell since 4.0:
+`GASH_LEGACY_NAMES=1` brings them back, `gash doctor --legacy` finds the
+ones your files still call, and [migration](docs/migration-4.0.md) has the
+table.
 
 ![Finding things: gash git, Tab completion with descriptions, gash help --search tag, gash help on a shortcut](docs/assets/help.gif)
 
@@ -140,13 +141,16 @@ locally or on a remote host. Guides: [Docker](docs/docker/README.md),
 
 `gash runtime detect php` and `gash runtime detect node` read which version a
 project wants; `gash run --runtime node:project -- npm test` runs a
-command under it. `gash hte` runs local Apache and PHP-FPM sites with HTTPS, one
+command under it. `gash localweb` runs local Apache and PHP-FPM sites with HTTPS, one
 pool per PHP version, as your own user; installing it needs `sudo` once,
-for a few system steps it lists first.
+for a few system steps it lists first. It was `gash hte` until 4.0: HTE,
+*homelab test environment*, is the name of hte-cli, the standalone PHP tool
+it began as, and stays for historical reasons in its folders and files
+(`~/.config/gash/hte`); `gash hte` still runs it through 4.x.
 Guides: [runtimes](docs/runtimes/README.md),
 [local sites](docs/hte/README.md)
 
-![gash hte install, site create, curl https://shop.test, site list, service status](docs/assets/hte.gif)
+![gash localweb install, site create, curl https://shop.test, site list, service status](docs/assets/hte.gif)
 
 ### Windows and WSL, logs
 
@@ -236,7 +240,7 @@ setting and how to undo each one.
 ## Security
 
 Gash runs as you and changes nothing as root, except the steps of
-`gash hte install` that it lists before asking for `sudo`. Release
+`gash localweb install` that it lists before asking for `sudo`. Release
 binaries are pinned by SHA-256 in the release tag, and the release
 workflow signs each release with Sigstore. The guardrails of the agent functions (read-only
 database sessions, secret files, protected paths, an allowlist for
@@ -261,7 +265,7 @@ the shell:
 | [Remote hosts](docs/remote/README.md) | Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. | [reference](docs/remote/reference.md) |
 | [Databases](docs/databases/README.md) | The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. | [reference](docs/databases/reference.md) |
 | [PHP, Node.js and Chrome](docs/runtimes/README.md) | Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. | [reference](docs/runtimes/reference.md) |
-| [Local web stack (HTE)](docs/hte/README.md) | gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](docs/hte/reference.md) |
+| [Local web stack (localweb)](docs/hte/README.md) | gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](docs/hte/reference.md) |
 | [Windows and WSL](docs/windows/README.md) | Inspect and repair WSL, and read the Windows host from inside it. | [reference](docs/windows/reference.md) |
 | [Logs](docs/logs/README.md) | gash logs: find the log files that fill a disk and reclaim the space safely. | [reference](docs/logs/reference.md) |
 | [AI assistants](docs/ai/README.md) | Ask Claude or Gemini from the terminal, with the context of this system. | [reference](docs/ai/reference.md) |
@@ -280,7 +284,7 @@ Also: [install, update, remove](docs/install.md) ·
 Bug reports, ideas and pull requests are welcome: see
 [CONTRIBUTING.md](CONTRIBUTING.md). `go test ./...` runs the suite. CI runs
 it on Linux (amd64 and arm64) and macOS, checks the generated Bash on Bash
-4.4 to 5.3, installs Gash on the systems above, and runs `gash hte` end to
+4.4 to 5.3, installs Gash on the systems above, and runs `gash localweb` end to
 end. The GIFs are recorded from [dev/tapes](dev/tapes/README.md).
 
 ## License

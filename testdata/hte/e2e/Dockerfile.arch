@@ -1,5 +1,5 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
-# The Arch image of the gash hte end-to-end test (run.sh arch): the
+# The Arch image of the gash localweb end-to-end test (run.sh arch): the
 # distro apache (httpd), php-fpm and php-legacy-fpm side by side, openssl
 # and sudo, nothing of gash (run.sh mounts the binaries). As a fresh
 # install leaves them, nothing is enabled or started.

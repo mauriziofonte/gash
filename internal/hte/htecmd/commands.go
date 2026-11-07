@@ -27,9 +27,9 @@ func (r *run) tree() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "localweb",
 		Aliases: []string{"hte"},
-		Short: "Manage the local Apache and PHP-FPM test environment",
-		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Short:   "Manage the local Apache and PHP-FPM test environment",
+		Args:    cobra.NoArgs,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	root.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return err })

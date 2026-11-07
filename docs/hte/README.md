@@ -1,8 +1,16 @@
-# Local web stack (HTE)
+# Local web stack (localweb)
 
-`gash hte` runs local websites on Apache and PHP-FPM as your own user, with
+`gash localweb` runs local websites on Apache and PHP-FPM as your own user, with
 HTTPS, a name for each site in `/etc/hosts`, and its own PHP settings for
-each site. It replaces the PHP tool hte-cli. One `sudo` at install does the
+each site. It replaces the PHP tool hte-cli.
+
+Why "hte" still shows up: HTE stands for *homelab test environment*, the
+name of hte-cli, the standalone PHP tool this stack began as. The command
+was `gash hte` until Gash 4.0, and `gash hte` still runs it through 4.x.
+The name stays, for historical reasons, in this page's folder
+(`docs/hte`), in the directories of your files (`~/.config/gash/hte` and
+the others below), in `hte.toml`, in the markers of the hosts file and in
+the error codes (`hte_not_installed`). One `sudo` at install does the
 few system steps (the hosts helper and its sudoers line, the low ports,
 autostart); every other command runs without root. Apache and PHP-FPM are
 the ones your system's packages provide: Gash installs and compiles
@@ -15,10 +23,10 @@ distributions. Other systems (openSUSE, Alpine) get `platform_unsupported`.
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [sudo](../requirements.md#tool-sudo) (feature), for `gash hte`
-- [apache](../requirements.md#tool-apache) (feature), for `gash hte`
-- [php-fpm](../requirements.md#tool-php-fpm) (feature), for `gash hte` (PHP sites)
-- [openssl](../requirements.md#tool-openssl) (feature), for `gash hte`
+- [sudo](../requirements.md#tool-sudo) (feature), for `gash localweb`
+- [apache](../requirements.md#tool-apache) (feature), for `gash localweb`
+- [php-fpm](../requirements.md#tool-php-fpm) (feature), for `gash localweb` (PHP sites)
+- [openssl](../requirements.md#tool-openssl) (feature), for `gash localweb`
 <!-- END generated: prerequisites -->
 
 Every command takes `--json` (one JSON object on stdout) and `--help`.
@@ -44,10 +52,10 @@ terminal nothing prompts: a missing required flag fails with
 ## Install the stack
 
 Install Apache, PHP-FPM and openssl with your package manager first
-(`gash hte doctor` names what is missing), then, in a terminal:
+(`gash localweb doctor` names what is missing), then, in a terminal:
 
 ```bash
-gash hte install
+gash localweb install
 ```
 
 `install` prints its plan, runs the system steps in one `sudo` (which asks
@@ -78,13 +86,13 @@ nor excluded (on a fresh Debian or Ubuntu the stock `000-default.conf`, on
 Fedora mod_ssl's `ssl.conf`), install leaves the stack stopped and names
 the `--exclude` to add: see [Move sites from hte-cli](#move-sites-from-hte-cli).
 
-See [`gash hte install`](reference.md#gash-hte-install).
+See [`gash localweb install`](reference.md#gash-localweb-install).
 
 ## Create a site
 
 ```bash
 cd ~/projects/shop
-gash hte site create --domain shop.test --docroot public
+gash localweb site create --domain shop.test --docroot public
 curl -k https://shop.test/
 ```
 
@@ -98,7 +106,7 @@ the managed block of `/etc/hosts` at once.
 
 | Flag | Effect |
 |---|---|
-| `--php X.Y` | The PHP version (`gash hte php versions` lists them) |
+| `--php X.Y` | The PHP version (`gash localweb php versions` lists them) |
 | `--profile dev\|staging\|hardened` | The pool's limits: `dev` has few restrictions and high memory limits; `staging` adds `open_basedir` and session hardening; `hardened` also disables `exec`, `proc_open` and the like, which can break Laravel, Composer or PHPUnit |
 | `--https`, `--no-https` | Serve HTTPS |
 | `--force-https`, `--no-force-https` | Redirect HTTP to HTTPS, with status 307 |
@@ -108,17 +116,17 @@ the managed block of `/etc/hosts` at once.
 | `--extra-http-port N`, `--extra-https-port N` | One more loopback port for the site (repeatable) |
 
 With `--ports high`, the URL carries the port: `https://shop.test:8443/`.
-See [`gash hte site create`](reference.md#gash-hte-site-create).
+See [`gash localweb site create`](reference.md#gash-localweb-site-create).
 
 ## Change, disable and remove sites
 
 ```bash
-gash hte site list                                   # domain, PHP, HTTPS, enabled, document root
-gash hte site show --domain shop.test                # settings, aliases, ports, php.ini values, certificate
-gash hte site modify --domain shop.test --php 8.3    # only the flags you pass change
-gash hte site disable --domain shop.test             # stop serving it, keep everything
-gash hte site enable --domain shop.test
-gash hte site remove --domain shop.test --yes
+gash localweb site list                                   # domain, PHP, HTTPS, enabled, document root
+gash localweb site show --domain shop.test                # settings, aliases, ports, php.ini values, certificate
+gash localweb site modify --domain shop.test --php 8.3    # only the flags you pass change
+gash localweb site disable --domain shop.test             # stop serving it, keep everything
+gash localweb site enable --domain shop.test
+gash localweb site remove --domain shop.test --yes
 ```
 
 `site modify` takes the flags of `site create`. Changing the aliases makes
@@ -130,22 +138,22 @@ document root, the site's overlay file or its logs.
 Hand edits go in overlay files, which Gash includes and never rewrites:
 `~/.config/gash/hte/sites/DOMAIN.apache.conf` for one site, and
 `~/.config/gash/hte/apache.conf` for the whole server
-(`gash hte apache config path` prints it). Run `gash hte service reload`
-after editing them. `gash hte apache modules list` shows the modules the
+(`gash localweb apache config path` prints it). Run `gash localweb service reload`
+after editing them. `gash localweb apache modules list` shows the modules the
 stack loads; `enable NAME` and `disable NAME` add or drop one from the
 system module directory.
 
-See [`gash hte site`](reference.md#gash-hte-site) and
-[`gash hte apache`](reference.md#gash-hte-apache).
+See [`gash localweb site`](reference.md#gash-localweb-site) and
+[`gash localweb apache`](reference.md#gash-localweb-apache).
 
 ## Set PHP versions and php.ini values
 
 ```bash
-gash hte php versions                                              # the PHP-FPM versions found
-gash hte php ini set memory_limit 512M --domain shop.test          # one site
-gash hte php ini get memory_limit --domain shop.test
-gash hte php global set upload_max_filesize 64M --version 8.3      # every site on PHP 8.3
-gash hte php global unset upload_max_filesize --version 8.3
+gash localweb php versions                                              # the PHP-FPM versions found
+gash localweb php ini set memory_limit 512M --domain shop.test          # one site
+gash localweb php ini get memory_limit --domain shop.test
+gash localweb php global set upload_max_filesize 64M --version 8.3      # every site on PHP 8.3
+gash localweb php global unset upload_max_filesize --version 8.3
 ```
 
 `php ini` values belong to one site and are written into its pool.
@@ -157,33 +165,33 @@ packages install: Debian's `php-fpmX.Y` (also from the sury/ondrej
 repositories), Fedora's and Remi's, Arch's (and the AUR ones), and
 Homebrew's `php@X.Y`.
 
-See [`gash hte php`](reference.md#gash-hte-php).
+See [`gash localweb php`](reference.md#gash-localweb-php).
 
 ## Run the stack
 
 ```bash
-gash hte service status                  # the masters, and whether each site answers
-gash hte service start
-gash hte service stop
-gash hte service restart
-gash hte service reload                  # render, test, reload; the old configuration comes back on failure
-gash hte service logs --site shop.test   # that site's access, error and PHP logs
+gash localweb service status                  # the masters, and whether each site answers
+gash localweb service start
+gash localweb service stop
+gash localweb service restart
+gash localweb service reload                  # render, test, reload; the old configuration comes back on failure
+gash localweb service logs --site shop.test   # that site's access, error and PHP logs
 ```
 
 With the systemd user unit, start, stop and restart go through the unit.
 `service logs` prints the last lines (`--lines N`, default 20) and has no
 follow mode.
 
-See [`gash hte service`](reference.md#gash-hte-service).
+See [`gash localweb service`](reference.md#gash-localweb-service).
 
 ## Certificates and site names
 
 ```bash
-gash hte cert show --domain shop.test    # names, validity, fingerprint
-gash hte cert renew --domain shop.test   # a new certificate, then a reload
-gash hte hosts list                      # the managed block of /etc/hosts
-gash hte hosts check                     # exit 1 when the block and the sites differ
-gash hte hosts apply                     # write the block again
+gash localweb cert show --domain shop.test    # names, validity, fingerprint
+gash localweb cert renew --domain shop.test   # a new certificate, then a reload
+gash localweb hosts list                      # the managed block of /etc/hosts
+gash localweb hosts check                     # exit 1 when the block and the sites differ
+gash localweb hosts apply                     # write the block again
 ```
 
 The names live in `/etc/hosts` between `# >>> gash hte >>>` and
@@ -193,13 +201,13 @@ block again when it drifted. They do it through the hosts helper, the one
 program install lets your user run as root: it writes only that block of
 `/etc/hosts`, and only loopback addresses and plain host names.
 
-See [`gash hte cert`](reference.md#gash-hte-cert) and
-[`gash hte hosts`](reference.md#gash-hte-hosts).
+See [`gash localweb cert`](reference.md#gash-localweb-cert) and
+[`gash localweb hosts`](reference.md#gash-localweb-hosts).
 
 ## Check everything
 
 ```bash
-gash hte doctor
+gash localweb doctor
 ```
 
 `doctor` checks the platform, Apache and its modules, the PHP versions,
@@ -215,8 +223,8 @@ is written again. It exits 1 when a check fails.
 Apache. Without `--apply` it only prints the plan:
 
 ```bash
-gash hte migrate                      # the plan: what moves, what is skipped and why
-gash hte migrate --apply --yes        # move the sites, stop the system Apache
+gash localweb migrate                      # the plan: what moves, what is skipped and why
+gash localweb migrate --apply --yes        # move the sites, stop the system Apache
 ```
 
 `--site D` migrates only that domain and `--exclude D|PATH` leaves a domain
@@ -226,23 +234,23 @@ instead; `cert renew` replaces a copied pair later), and
 `--keep-pool-values` keeps the PHP values of the old pool.
 
 When `install` stopped because of a system vhost you do not need,
-`gash hte migrate --apply --exclude PATH --yes` stops and disables the
+`gash localweb migrate --apply --exclude PATH --yes` stops and disables the
 system Apache and starts the stack on 80 and 443, also when there is
 nothing to import. The excluded file stays as it is, and
-`gash hte uninstall` starts the system Apache again.
+`gash localweb uninstall` starts the system Apache again.
 
 There is no `hte-cli` compatibility command. The old commands map as
 follows:
 
-| hte-cli 1.1 | gash hte |
+| hte-cli 1.1 | gash localweb |
 |---|---|
-| `sudo hte-cli create --domain=D --docroot=P --phpver=X.Y --ssl=y --forcessl=n --profile=dev` | `gash hte site create --domain D --docroot P --php X.Y --https --no-force-https --profile dev` |
-| `sudo hte-cli modify --domain=D ...` | `gash hte site modify --domain D ...` (only the flags you pass change) |
-| `sudo hte-cli remove --domain=D --force` | `gash hte site remove --domain D --yes` |
-| `sudo hte-cli details [--domain=D]` | `gash hte site list`, `gash hte site show --domain D` |
-| `sudo hte-cli fix [--domain=D] [--dry-run]` | `gash hte migrate`, then `gash hte migrate --apply --yes` (imported sites already have the fixed configuration) |
-| `sudo hte-cli hosts list` | `gash hte hosts list` |
-| `sudo hte-cli hosts sync` | `gash hte hosts apply` |
+| `sudo hte-cli create --domain=D --docroot=P --phpver=X.Y --ssl=y --forcessl=n --profile=dev` | `gash localweb site create --domain D --docroot P --php X.Y --https --no-force-https --profile dev` |
+| `sudo hte-cli modify --domain=D ...` | `gash localweb site modify --domain D ...` (only the flags you pass change) |
+| `sudo hte-cli remove --domain=D --force` | `gash localweb site remove --domain D --yes` |
+| `sudo hte-cli details [--domain=D]` | `gash localweb site list`, `gash localweb site show --domain D` |
+| `sudo hte-cli fix [--domain=D] [--dry-run]` | `gash localweb migrate`, then `gash localweb migrate --apply --yes` (imported sites already have the fixed configuration) |
+| `sudo hte-cli hosts list` | `gash localweb hosts list` |
+| `sudo hte-cli hosts sync` | `gash localweb hosts apply` |
 | `sudo hte-cli hosts add\|remove --domain=D` | None: the block always holds the names of the enabled sites |
 | `--hosts=no` | None: every site's names go in the managed block |
 | `--interactive`, `--no-normalize`, `-n` | Not needed: a terminal is asked only for a missing required flag |
@@ -258,12 +266,12 @@ What changes after the move:
   and every alias. `doctor` notes a pair copied from hte-cli.
 - Your old `# hte-cli` lines in `/etc/hosts` stay as they are.
 
-See [`gash hte migrate`](reference.md#gash-hte-migrate).
+See [`gash localweb migrate`](reference.md#gash-localweb-migrate).
 
 ## Uninstall the stack
 
 ```bash
-gash hte uninstall --yes
+gash localweb uninstall --yes
 ```
 
 `uninstall` stops the stack, removes autostart, and restores what install
@@ -274,7 +282,7 @@ Your sites, their certificates and settings move to an
 (`--restore-stage PATH` names one, `--no-restore` skips it). Document roots
 are never touched. Run it before `gash uninstall` when you remove Gash.
 
-See [`gash hte uninstall`](reference.md#gash-hte-uninstall).
+See [`gash localweb uninstall`](reference.md#gash-localweb-uninstall).
 
 ## macOS
 
@@ -282,7 +290,7 @@ Apache and PHP-FPM come from Homebrew:
 
 ```bash
 brew install httpd php
-gash hte install
+gash localweb install
 ```
 
 On the standard ports, install binds 80 and 443 directly when macOS allows
@@ -294,7 +302,7 @@ checked with `pfctl -n` first and loaded at boot by a LaunchDaemon
 
 ## WSL
 
-On WSL 2 `gash hte` runs inside the Linux distribution as on Linux, with
+On WSL 2 `gash localweb` runs inside the Linux distribution as on Linux, with
 these differences:
 
 - **Autostart.** When WSL boots with systemd (`[boot] systemd=true` in
@@ -306,7 +314,7 @@ these differences:
   Linux.
 - **Names.** WSL writes `/etc/hosts` again at every boot; `service start`
   and `doctor` put the Gash block back. Windows has its own hosts file,
-  which Gash never edits: `gash hte hosts windows` prints the lines to add
+  which Gash never edits: `gash localweb hosts windows` prints the lines to add
   to `C:\Windows\System32\drivers\etc\hosts` for the names Windows cannot
   resolve (asked through `powershell.exe` when interop is available), and
   `doctor` warns about those names.
@@ -316,42 +324,42 @@ these differences:
 
 A check after install:
 
-1. `gash hte doctor` reports no failure.
-2. `gash hte site create --domain shop.test --docroot public`, then
+1. `gash localweb doctor` reports no failure.
+2. `gash localweb site create --domain shop.test --docroot public`, then
    `curl -k https://shop.test/` inside WSL answers.
-3. `gash hte hosts windows`: add the lines it prints to the Windows hosts
+3. `gash localweb hosts windows`: add the lines it prints to the Windows hosts
    file (as administrator), then open `https://shop.test/` in a Windows
    browser (it warns about the self-signed certificate).
 4. Run `wsl --shutdown` in Windows and open WSL again. With systemd the
    stack is up; with `--autostart shell` it starts with the first shell.
-   `gash hte hosts check` exits 0.
+   `gash localweb hosts check` exits 0.
 
 ## When something goes wrong
 
-Start with `gash hte doctor`: it names the remedy of each failure. The
+Start with `gash localweb doctor`: it names the remedy of each failure. The
 errors you are likely to meet:
 
 | Error | Meaning and fix |
 |---|---|
-| `hte_not_installed` | Run `gash hte install` first. |
-| `root_not_allowed` | `gash hte` runs as your own user and asks for `sudo` itself when a step needs root. Run it without `sudo` (only `install`, `uninstall`, `migrate` without `--apply`, and `doctor` accept root). |
+| `hte_not_installed` | Run `gash localweb install` first. |
+| `root_not_allowed` | `gash localweb` runs as your own user and asks for `sudo` itself when a step needs root. Run it without `sudo` (only `install`, `uninstall`, `migrate` without `--apply`, and `doctor` accept root). |
 | `apache_not_found` | Apache, its module directory or `mime.types` is missing. The hint gives the install command (`sudo apt install apache2`, `sudo dnf install httpd mod_ssl mod_http2`, `sudo pacman -S apache`, `brew install httpd`). |
-| `php_version_not_installed` | The site asks for a PHP version that has no PHP-FPM here. `gash hte php versions` lists what is installed; install it, or `gash hte site modify --domain D --php X.Y`. |
+| `php_version_not_installed` | The site asks for a PHP version that has no PHP-FPM here. `gash localweb php versions` lists what is installed; install it, or `gash localweb site modify --domain D --php X.Y`. |
 | `openssl_not_found` | Install openssl with your package manager. |
-| `port_in_use` | Another program holds port 80 or 443 (often the system Apache or nginx). `gash hte doctor` names the process. Stop it, migrate its sites, or reinstall with `--ports high`. |
-| `privileged_step_required` | A root step did not run: the hosts helper or its sudoers line is missing (run `gash hte install` again), or `sudo` was refused. |
-| `config_test_failed`, `reload_failed` | The new Apache or PHP configuration did not pass its test, often because of an overlay file; the previous configuration is still in use. `gash hte service logs` shows why. |
+| `port_in_use` | Another program holds port 80 or 443 (often the system Apache or nginx). `gash localweb doctor` names the process. Stop it, migrate its sites, or reinstall with `--ports high`. |
+| `privileged_step_required` | A root step did not run: the hosts helper or its sudoers line is missing (run `gash localweb install` again), or `sudo` was refused. |
+| `config_test_failed`, `reload_failed` | The new Apache or PHP configuration did not pass its test, often because of an overlay file; the previous configuration is still in use. `gash localweb service logs` shows why. |
 | `confirmation_required` | Add `--yes` to `site remove`, `uninstall`, `migrate --apply` or an `install` that stops the system Apache. |
 | `conflicting_options` | Both forms of a flag were given, such as `--https` and `--no-https`. |
-| `lock_timeout` | Another `gash hte` command is running; retry when it ends. |
+| `lock_timeout` | Another `gash localweb` command is running; retry when it ends. |
 | `invalid_state` | A site file or `hte.toml` does not parse or holds a value Gash refuses. The message names the file to fix by hand. |
 | `platform_unsupported` | This system is not one of the supported ones, or a step exists only elsewhere (`hosts windows` outside WSL). |
 
 ## See also
 
-- [reference.md](reference.md): every `gash hte` command with all its
+- [reference.md](reference.md): every `gash localweb` command with all its
   flags.
-- [security.md](../security.md#gash-hte): what install changes as root and
+- [security.md](../security.md#gash-localweb): what install changes as root and
   what the hosts helper accepts.
 - [Windows and WSL](../windows/README.md): `gash win` and the other WSL
   helpers.

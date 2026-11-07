@@ -2,7 +2,7 @@
 
 //go:build hte_e2e
 
-// Package e2e proves gash hte on a real system Apache and PHP-FPM, inside
+// Package e2e proves gash localweb on a real system Apache and PHP-FPM, inside
 // the disposable container of testdata/hte/e2e/run.sh: it runs there as
 // the unprivileged user dev, and as root only through sudo, as the root
 // step (`<binary> hte __root`). It refuses to run anywhere else.
@@ -236,7 +236,7 @@ func TestE2E(t *testing.T) {
 		}
 		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
 		// HTE-75: exit 0, started false, next names migrate.
-		if res.Started || res.Next != "gash hte migrate" {
+		if res.Started || res.Next != "gash localweb migrate" {
 			t.Errorf("started %v, next %q: the system Apache holds 80 and 443", res.Started, res.Next)
 		}
 		for _, p := range append([]string{defaultVhost}, legacyVhosts...) {

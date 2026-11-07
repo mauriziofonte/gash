@@ -418,7 +418,7 @@ and `gash runtime upgrade node` also accept `--force` as a synonym of `-y`.
 | `gash shell sudo-last` (no argument) | Shows the command and asks | Refused |
 | `gash runtime prune node` | Lists what it would remove and changes nothing; `-y`, `--yes` or `--force` removes | The same |
 | `gash logs clean` | Shows what it would free and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` (`confirmation_required`) |
-| `gash hte site remove`, `gash hte uninstall`, and `gash hte install` or `gash hte migrate --apply` when they stop the system Apache | Refused unless `--yes` (`confirmation_required`): no question is asked | The same |
+| `gash localweb site remove`, `gash localweb uninstall`, and `gash localweb install` or `gash localweb migrate --apply` when they stop the system Apache | Refused unless `--yes` (`confirmation_required`): no question is asked | The same |
 | `gash doctor --install` | Shows the packages and the command, and asks; `--yes` skips | Refused (`install_needs_confirmation`, with the command to show the user) |
 | `gash uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
@@ -484,7 +484,7 @@ A new install is cloned and checked in a temporary directory next to the
 install location and moved into place only when it passes, so a refusal leaves
 nothing behind. `GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
 
-The binary (`gash`, and `gash-hosts-helper`, which `gash hte install` makes a
+The binary (`gash`, and `gash-hosts-helper`, which `gash localweb install` makes a
 root-owned sudo target) is verified before it is installed: against the
 SHA-256 the tagged tree pins in `release/SHA256SUMS`, so a signed tag covers
 the binaries too, else against the release's `checksums.txt`. With
@@ -525,9 +525,9 @@ gh attestation verify "gash_${v}_linux_amd64.tar.gz" --repo mauriziofonte/gash
 The installer and `gash update` do the first check themselves (see Install
 and upgrade), adding the commit the tag points at.
 
-## gash hte
+## gash localweb
 
-`gash hte` runs Apache and PHP-FPM as your user. Root is used in two
+`gash localweb` runs Apache and PHP-FPM as your user. Root is used in two
 places only.
 
 **At install, uninstall and migrate**, through one `sudo` call that runs

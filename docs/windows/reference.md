@@ -18,7 +18,7 @@ Inspect and repair WSL, and read the Windows host from inside it. The guide is [
 
 Open Windows Explorer from WSL.
 
-Shortcut: `wex`. Former name: `wsl_explorer` (works through 3.x).
+Shortcut: `wex`. Former name: `wsl_explorer` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -52,7 +52,7 @@ See also: [`gash win taskmgr`](../windows/reference.md#gash-win-taskmgr)
 
 Open Windows Task Manager from WSL.
 
-Shortcut: `wtm`. Former name: `wsl_taskmanager` (works through 3.x).
+Shortcut: `wtm`. Former name: `wsl_taskmanager` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -81,7 +81,7 @@ See also: [`gash win explorer`](../windows/reference.md#gash-win-explorer), [`ga
 
 Fix Windows interop on a WSL2 VM with fragmented memory.
 
-Shortcut: `wslc`. Former name: `wsl_compact` (works through 3.x).
+Shortcut: `wslc`. Former name: `wsl_compact` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -119,7 +119,7 @@ See also: [`gash wsl restart`](../windows/reference.md#gash-wsl-restart), [`gash
 
 Restart WSL (saves history, runs wsl --shutdown).
 
-Shortcut: `wr`. Former name: `wsl_restart` (works through 3.x).
+Shortcut: `wr`. Former name: `wsl_restart` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -151,7 +151,7 @@ See also: [`gash wsl shutdown`](../windows/reference.md#gash-wsl-shutdown)
 
 Shutdown WSL (saves history, runs wsl --shutdown).
 
-Shortcut: `wsd`. Former name: `wsl_shutdown` (works through 3.x).
+Shortcut: `wsd`. Former name: `wsl_shutdown` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

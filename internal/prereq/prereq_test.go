@@ -384,8 +384,8 @@ func TestRequirementsDoc(t *testing.T) {
 	require.Equal(t, got, string(want), "docs/requirements.md is stale: go test ./internal/prereq -update")
 }
 
-// The gash hte daemons are found where gash hte finds them, off PATH and
-// under versioned names, and only on the systems gash hte runs on.
+// The gash localweb daemons are found where gash localweb finds them, off PATH and
+// under versioned names, and only on the systems gash localweb runs on.
 func TestLocateHTE(t *testing.T) {
 	sysroot := func(t *testing.T, release string, execs, dirs, files []string) *System {
 		dir := t.TempDir()
@@ -420,14 +420,14 @@ func TestLocateHTE(t *testing.T) {
 
 	s = sysroot(t, ubuntu2404, []string{"usr/sbin/apache2"}, nil, nil)
 	_, ok = s.Find(must(t, "apache"))
-	require.False(t, ok, "an Apache without its modules does not serve gash hte")
+	require.False(t, ok, "an Apache without its modules does not serve gash localweb")
 
 	s = sysroot(t, rocky9, nil, nil, nil)
 	require.Equal(t, "sudo dnf install -y httpd mod_ssl mod_http2", s.Report("apache", "").Install())
 
 	s = sysroot(t, alpine, []string{"usr/sbin/php-fpm83", "usr/sbin/httpd"}, nil, nil)
 	_, ok = s.Find(must(t, "php-fpm"))
-	require.False(t, ok, "gash hte does not run on Alpine")
+	require.False(t, ok, "gash localweb does not run on Alpine")
 	r := s.Report("php-fpm", "")
 	require.Empty(t, r.Install())
 	require.Equal(t, hteNote, r.Advice())

@@ -19,7 +19,7 @@ The prompt, navigation, history search, shortcuts, colors, Tab completion and th
 
 Display all 256 terminal colors.
 
-Former name: `all_colors` (works through 3.x).
+Former name: `all_colors` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -45,7 +45,7 @@ the color names alone.
 
 Search command history with colored output.
 
-Shortcut: `hg`. Former name: `history_grep` (works through 3.x).
+Shortcut: `hg`. Former name: `history_grep` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -83,7 +83,7 @@ See also: [`gash shell history-smart`](../shell/reference.md#gash-shell-history-
 
 Smart history search with timestamps and deduplication.
 
-Former name: `hgrep` (works through 3.x).
+Former name: `hgrep` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -164,7 +164,7 @@ See also: [`gash shell history`](../shell/reference.md#gash-shell-history)
 
 Create a directory and cd into it.
 
-Shortcut: `mkcd`. Former name: `mkdir_cd` (works through 3.x).
+Shortcut: `mkcd`. Former name: `mkdir_cd` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -193,7 +193,7 @@ Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates
 
 Display a random quote, optionally with its source.
 
-Former name: `gash_inspiring_quote` (works through 3.x).
+Former name: `gash_inspiring_quote` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

@@ -20,7 +20,7 @@ Start, stop and prune containers, and check and upgrade Compose stacks. The guid
 
 Check for available Docker Compose image updates.
 
-Shortcut: `dcc`. Former name: `docker_compose_check` (works through 3.x).
+Shortcut: `dcc`. Former name: `docker_compose_check` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -92,7 +92,7 @@ See also: [`gash docker compose upgrade`](../docker/reference.md#gash-docker-com
 
 Scan directories for Docker Compose projects.
 
-Shortcut: `dcscan`. Former name: `docker_compose_scan` (works through 3.x).
+Shortcut: `dcscan`. Former name: `docker_compose_scan` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -139,7 +139,7 @@ See also: [`gash docker compose check`](../docker/reference.md#gash-docker-compo
 
 Upgrade Docker Compose services to latest images.
 
-Shortcut: `dcup2`. Former name: `docker_compose_upgrade` (works through 3.x).
+Shortcut: `dcup2`. Former name: `docker_compose_upgrade` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -192,7 +192,7 @@ See also: [`gash docker compose check`](../docker/reference.md#gash-docker-compo
 
 Remove ALL Docker containers, images, volumes, and networks.
 
-Shortcut: `dpa`. Former name: `docker_prune_all` (works through 3.x).
+Shortcut: `dpa`. Former name: `docker_prune_all` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -230,7 +230,7 @@ See also: [`gash docker stop-all`](../docker/reference.md#gash-docker-stop-all)
 
 Start all stopped Docker containers.
 
-Shortcut: `daa`. Former name: `docker_start_all` (works through 3.x).
+Shortcut: `daa`. Former name: `docker_start_all` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -262,7 +262,7 @@ See also: [`gash docker stop-all`](../docker/reference.md#gash-docker-stop-all)
 
 Stop all running Docker containers.
 
-Shortcut: `dsa`. Former name: `docker_stop_all` (works through 3.x).
+Shortcut: `dsa`. Former name: `docker_stop_all` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

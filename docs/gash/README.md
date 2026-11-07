@@ -228,7 +228,7 @@ $ type -t gash
 function
 $ gash unload
 $ type -t gash || echo "not defined"
-not defined
+file
 ```
 
 `gash unload` works in an interactive shell only. See
@@ -236,7 +236,7 @@ not defined
 
 ## Remove Gash
 
-If you installed `gash hte`, run `gash hte uninstall --yes` first: it stops
+If you installed `gash localweb`, run `gash localweb uninstall --yes` first: it stops
 the stack and restores the system files it changed (see the
 [HTE guide](../hte/README.md)). Then:
 

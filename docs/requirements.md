@@ -136,7 +136,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 
 ## System
 
-- <a id="tool-sudo"></a>**sudo** (feature) runs the privileged steps of some functions. Needed by `gash ai sysinfo` (the privileged sections), `gash hte`, `gash logs` (clean --sudo), `gash system stop-services`, `gash shell sudo-last`, `gash system info` (the privileged sections) and `gash wsl compact`.
+- <a id="tool-sudo"></a>**sudo** (feature) runs the privileged steps of some functions. Needed by `gash ai sysinfo` (the privileged sections), `gash localweb`, `gash logs` (clean --sudo), `gash system stop-services`, `gash shell sudo-last`, `gash system info` (the privileged sections) and `gash wsl compact`.
 - <a id="tool-systemctl"></a>**systemctl** (feature) reads and controls systemd services. Only on Linux. Needed by `gash ai sysinfo` (questions), `llm_service` and `gash system stop-services`. It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf.
 - <a id="tool-journalctl"></a>**journalctl** (optional) adds the service journal to llm_service --log. Only on Linux. Needed by `gash ai sysinfo` (questions) and `llm_service` (--log). It comes with systemd.
 - <a id="tool-fzf"></a>**fzf** (optional) picks an entry from a list. Needed by `gash shell history-smart` (--pick).
@@ -152,11 +152,11 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 | ldd | `libc-bin` | `glibc-common` | `glibc` | `glibc` | `musl-utils` | — |
 | bc | `bc` | `bc` | `bc` | `bc` | `bc` | built in |
 
-## Local web stack (gash hte)
+## Local web stack (gash localweb)
 
-- <a id="tool-apache"></a>**apache** (feature) serves the gash hte sites. Any of: `apache2`, `httpd`. Needed by `gash hte`. Gash hte runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
-- <a id="tool-php-fpm"></a>**php-fpm** (feature) runs PHP for the gash hte sites: one master per PHP version, one pool per site. Needed by `gash hte` (PHP sites). Gash hte runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
-- <a id="tool-openssl"></a>**openssl** (feature) makes the self-signed certificate of each gash hte site. Needed by `gash hte`.
+- <a id="tool-apache"></a>**apache** (feature) serves the gash localweb sites. Any of: `apache2`, `httpd`. Needed by `gash localweb`. Gash localweb runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
+- <a id="tool-php-fpm"></a>**php-fpm** (feature) runs PHP for the gash localweb sites: one master per PHP version, one pool per site. Needed by `gash localweb` (PHP sites). Gash localweb runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
+- <a id="tool-openssl"></a>**openssl** (feature) makes the self-signed certificate of each gash localweb site. Needed by `gash localweb`.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |

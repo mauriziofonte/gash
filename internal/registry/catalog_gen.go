@@ -1288,6 +1288,7 @@ var baseFunctions = []Function{
 				"USAGE\n" +
 				"  gash_doctor [--timing] [--no-color] [--prereqs] [--json]\n" +
 				"  gash_doctor --install [--yes] [--all] [TOOL...]\n" +
+				"  gash_doctor --legacy [--json] [FILE...]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --timing    What each file and step costs when a shell starts\n" +
@@ -1298,6 +1299,10 @@ var baseFunctions = []Function{
 				"              system's package manager, after asking\n" +
 				"  --yes, -y   With --install: do not ask\n" +
 				"  --all       With --install: the optional tools too\n" +
+				"  --legacy    The former flat names of Gash 3.x (files_largest) that the\n" +
+				"              FILEs call, with the command that replaces each; without\n" +
+				"              FILE, the startup files of your home (~/.bashrc,\n" +
+				"              ~/.bash_local and the others)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Run a full health check\n" +
@@ -1311,6 +1316,9 @@ var baseFunctions = []Function{
 				"\n" +
 				"  # Find what makes new shells slow\n" +
 				"  gash_doctor --timing\n" +
+				"\n" +
+				"  # Which lines of a script still call a Gash 3.x name\n" +
+				"  gash_doctor --legacy ~/bin/backup.sh\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Checks: core files, modules, the binary and gash-hosts-helper\n" +
@@ -1333,9 +1341,15 @@ var baseFunctions = []Function{
 				"  then times whole new shells: with your ~/.bashrc, and bash alone,\n" +
 				"  3 times each (a line says first that your ~/.bashrc runs 3 times).\n" +
 				"  Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps\n" +
-				"  the same figures in its __GASH_LOAD_TIMES array.",
+				"  the same figures in its __GASH_LOAD_TIMES array.\n" +
+				"\n" +
+				"  --legacy reads text, not Bash: a name in a string counts, a\n" +
+				"  comment line does not. It returns 1 when it finds a name or\n" +
+				"  cannot read a FILE. Gash 4 defines the former names only with\n" +
+				"  GASH_LEGACY_NAMES=1; an interactive shell whose startup files\n" +
+				"  call one says so on stderr, at most once a day.",
 		},
-		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]]", Description: "Run health checks on your Gash installation and its prerequisites (--install: install the missing tools)."},
+		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]]", Description: "Run health checks on your Gash installation and its prerequisites (--install: install the missing tools)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
 		ShellVars:         []string{"BASH", "BASH_VERSION", "GASH_VERSION", "HOME"},
 		Env:               []string{"BASH", "BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},

@@ -33,7 +33,7 @@ if [ "$(stat -c %a /etc/shadow)" = 0 ]; then
 fi
 install -m 0755 /e2e/gash-e2e /usr/local/bin/gash-e2e
 install -m 0755 /e2e/gash-hosts-helper /usr/local/bin/gash-hosts-helper
-# The test binary is also the root step (gash hte __root).
+# The test binary is also the root step (gash localweb __root).
 printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e hte __root\n' >/etc/sudoers.d/e2e
 chmod 0440 /etc/sudoers.d/e2e
 visudo -c >/dev/null

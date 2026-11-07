@@ -177,7 +177,7 @@ mask: [0-9]+ +[0-9]+ {2}
 ```console
 $ gash
 
-  Gash 3.5.0 · Bash for humans and AI agents
+  Gash 4.0.0 · Bash for humans and AI agents
 
   EVERYDAY
     files    Largest files and folders, tree stats, archives, backups
@@ -191,10 +191,10 @@ $ gash
     ai       Ask Claude or Gemini from the terminal
 
   PLATFORM
-    hte   Local Apache and PHP-FPM sites with HTTPS
-    wsl   The WSL distribution: info, doctor, paths, restart, compact
-    win   The Windows host, read from WSL; Explorer, Task Manager
-    logs  Find and reclaim disk space from log files
+    localweb  Local Apache and PHP-FPM sites with HTTPS
+    wsl       The WSL distribution: info, doctor, paths, restart, compact
+    win       The Windows host, read from WSL; Explorer, Task Manager
+    logs      Find and reclaim disk space from log files
 
   FOR AI AGENTS
     llm    Read-only JSON tools for AI agents (also llm_*)
@@ -242,10 +242,12 @@ picks the ones you want: `commands` (the shortcuts of the commands),
 `git` (`gst`, `gcm`, `gpf`...), `docker`, `navigation` (the `ls` and `cd`
 shortcuts) and `php`; `all` is the default and `none` turns them all off.
 A program of the same name on `PATH`, or an alias you defined before Gash
-loaded, wins over a shortcut. The flat names of 3.4
-(`files_largest`) still run, and print a one-line tip with their new name
-the first time you type each one in a session (`GASH_LEGACY_HINTS=0`
-turns the tip off): see [the migration guide](../migration-3.5.md).
+loaded, wins over a shortcut. The flat names of Gash 3.x
+(`files_largest`) are defined only with `GASH_LEGACY_NAMES=1`, and then
+print a one-line tip with their command the first time you type each one
+in a session (`GASH_LEGACY_HINTS=0` turns the tip off). `gash doctor
+--legacy` finds the ones your files still call: see [the migration
+guide](../migration-4.0.md).
 
 ### Give your own functions the same help
 

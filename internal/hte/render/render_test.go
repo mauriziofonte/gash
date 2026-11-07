@@ -758,7 +758,7 @@ func TestLedger_HTE34(t *testing.T) {
 			}
 		}
 		for d, v := range managedVhosts(in, g) {
-			if !strings.Contains(v, "    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay named below.\n") {
+			if !strings.Contains(v, "    # Managed by gash hte. Edit the site with `gash localweb site modify`, or add directives to the overlay named below.\n") {
 				t.Errorf("%s: no managed header", d)
 			}
 		}

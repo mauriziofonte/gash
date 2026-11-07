@@ -101,7 +101,7 @@ func TestCommandLines(t *testing.T) {
 
 func TestRelays(t *testing.T) {
 	env := Env{}
-	require.Equal(t, []string{"hte", "site", ""}, ask(t, env, "hte site ").Relay)
+	require.Equal(t, []string{"localweb", "site", ""}, ask(t, env, "localweb site ").Relay)
 	require.Equal(t, []string{"update", "--r"}, ask(t, env, "update --r").Relay)
 	require.Equal(t, []string{"runtime", "php", ""}, ask(t, env, "runtime which php ").Relay)
 	// A delegate namespace merges its 3.x words with the tree's.

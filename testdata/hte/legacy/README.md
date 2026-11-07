@@ -1,6 +1,6 @@
 <!-- Gash 3.0 test fixtures: legacy hte-cli trees. Author: Maurizio Fonte <fonte.maurizio@gmail.com> -->
 
-# Legacy hte-cli fixtures (`gash hte migrate`)
+# Legacy hte-cli fixtures (`gash localweb migrate`)
 
 Fake filesystem roots with the vhosts, pools, certificates and hosts files
 that hte-cli wrote, one per legacy format of PRD 6.6:

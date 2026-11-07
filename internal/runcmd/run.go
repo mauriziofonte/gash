@@ -44,7 +44,7 @@ Run CMD and return its exit status unchanged.
 
 Options come before -- (or before the first word that is not an option);
 every word after it belongs to CMD. CMD may be a gash function
-(gash run --max-lines 20 -- files_largest .). Without a budget flag or
+(gash run --max-lines 20 -- gash files largest .). Without a budget flag or
 --plain CMD's output passes through untouched. gash's own errors (a bad option, a
 program not found, a --safe refusal, a runtime not installed) are JSON
 envelopes on stderr.
@@ -156,12 +156,18 @@ func (m *Module) runMain(c *invoke.Call) int {
 
 	t0 := time.Now()
 	var rc int
-	sub := &invoke.Call{Ctx: c.Ctx, Name: cmd[0], Args: cmd[1:], Env: env, Stdin: stdin, Stdout: out, Stderr: errw,
+	name, args := cmd[0], cmd[1:]
+	if t, rest, ok := canonical(cmd); ok {
+		// gash run -- gash files largest .: the command's handler, in
+		// process, as its 3.x flat name (files_largest) runs.
+		name, args = t.Handler, append(append([]string(nil), t.Prefix...), rest...)
+	}
+	sub := &invoke.Call{Ctx: c.Ctx, Name: name, Args: args, Env: env, Stdin: stdin, Stdout: out, Stderr: errw,
 		Term: c.Term, Handlers: c.Handlers}
 	if sub.Stdin == nil {
 		sub.Stdin = bytes.NewReader(nil)
 	}
-	switch h, inProc := gashFunction(c, cmd[0]); {
+	switch h, inProc := gashFunction(c, name); {
 	case safe:
 		// The refusal goes to the caller's stderr, never shaped.
 		guard := *sub
@@ -189,6 +195,19 @@ func (m *Module) runMain(c *invoke.Call) int {
 			Duration: time.Since(t0), Cwd: llm.LogicalCwd(c)})
 	}
 	return rc
+}
+
+// canonical reports a CMD that is a canonical command of a catalog
+// function (gash files largest): the command and the words after it.
+func canonical(cmd []string) (*registry.Command, []string, bool) {
+	if len(cmd) < 2 || cmd[0] != "gash" {
+		return nil, nil, false
+	}
+	t, rest, ok := registry.Resolve(cmd[1:])
+	if !ok || t.Handler == "" {
+		return nil, nil, false
+	}
+	return t, rest, true
 }
 
 // gashFunction is the handler of a gash function CMD names (one the

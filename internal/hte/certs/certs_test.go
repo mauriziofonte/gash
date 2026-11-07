@@ -456,7 +456,7 @@ func TestLedger_HTE67(t *testing.T) {
 	if len(h.Problems) != 0 || h.Info == nil || !h.Info.Legacy || !strings.HasPrefix(h.Info.Algorithm, "RSA") {
 		t.Fatalf("legacy pair: %+v %+v", h, h.Info)
 	}
-	if !slices.ContainsFunc(h.Warnings, func(w string) bool { return strings.Contains(w, "gash hte cert renew") }) {
+	if !slices.ContainsFunc(h.Warnings, func(w string) bool { return strings.Contains(w, "gash localweb cert renew") }) {
 		t.Fatalf("no cert renew note: %v", h.Warnings)
 	}
 	// A pair gash made is not legacy.

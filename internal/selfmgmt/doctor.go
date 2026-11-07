@@ -36,6 +36,7 @@ const (
 var DoctorCoreFiles = []string{
 	"gash.sh",
 	"lib/compat/bootstrap.sh",
+	"lib/compat/legacy.sh",
 	"lib/core/output.sh",
 	"lib/core/utils.sh",
 	"lib/core/validation.sh",

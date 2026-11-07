@@ -66,7 +66,7 @@ func TestDoctorNotInstalled(t *testing.T) {
 		t.Error("doctor OK before install")
 	}
 	i := slices.IndexFunc(res.Checks, func(c Check) bool { return c.Name == "install" })
-	if i < 0 || res.Checks[i].Status != CheckFail || res.Checks[i].Remedy != "run gash hte install" {
+	if i < 0 || res.Checks[i].Status != CheckFail || res.Checks[i].Remedy != "run gash localweb install" {
 		t.Errorf("install check: %+v", res.Checks)
 	}
 	if i := slices.IndexFunc(res.Checks, func(c Check) bool { return c.Name == "php" }); i < 0 || res.Checks[i].Status != CheckOK {

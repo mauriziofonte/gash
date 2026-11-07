@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// TestLedger_HTE53: the command tree and the flags of gash hte are the
+// TestLedger_HTE53: the command tree and the flags of gash localweb are the
 // table of design/hte.md 9, with no compatibility layer for hte-cli
 // (option a): no fix command, no --hosts, --interactive, --no-normalize
 // or --dry-run. Every command takes --json and --help. 3.0: F-01 fixed:
@@ -165,7 +165,7 @@ func TestFollowup_F01(t *testing.T) {
 	}
 }
 
-// TestFollowup_F02: every visible command of gash hte has its long help,
+// TestFollowup_F02: every visible command of gash localweb has its long help,
 // every help text belongs to a command, and a flag a text names is one
 // the command, its parents or its subcommands have.
 func TestFollowup_F02(t *testing.T) {

@@ -95,7 +95,7 @@ func join(list []string) string {
 	return strings.Join(list[:len(list)-1], ", ") + " and " + list[len(list)-1]
 }
 
-// Migration is the generated table of docs/migration-3.5.md: every former
+// Migration is the generated table of docs/migration-4.0.md: every former
 // flat name with its canonical command and shortcut, by former name.
 func Migration() string {
 	type row struct{ former, canon, shortcut string }

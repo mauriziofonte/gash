@@ -104,7 +104,7 @@ func TestBlocks(t *testing.T) {
 		block(t, filepath.Join(docs, a.Key, "README.md"), "prerequisites", Prerequisites(a))
 	}
 	block(t, filepath.Join(docs, "README.md"), "areas", Index(""))
-	block(t, filepath.Join(docs, "migration-3.5.md"), "names", Migration())
+	block(t, filepath.Join(docs, "migration-4.0.md"), "names", Migration())
 	if src, err := os.ReadFile(filepath.Join("..", "..", "README.md")); err == nil && strings.Contains(string(src), "BEGIN generated: areas") {
 		block(t, filepath.Join("..", "..", "README.md"), "areas", Index("docs/"))
 	}

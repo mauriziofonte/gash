@@ -46,7 +46,7 @@ func TestMigrateSwitchOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	if ins.Started || ins.Next != "gash hte migrate" || !slices.Equal(ins.Blocking, []string{stock}) {
+	if ins.Started || ins.Next != "gash localweb migrate" || !slices.Equal(ins.Blocking, []string{stock}) {
 		t.Fatalf("install: started %v, next %q, blocking %v", ins.Started, ins.Next, ins.Blocking)
 	}
 

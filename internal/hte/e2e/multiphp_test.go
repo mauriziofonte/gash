@@ -124,7 +124,7 @@ func TestE2EMultiPHP(t *testing.T) {
 
 	step("migrate moves each site to a master of its version", func(t *testing.T) {
 		ins, err := e.Install(ctx, hte.InstallOptions{Yes: true})
-		if err != nil || ins.Next != "gash hte migrate" {
+		if err != nil || ins.Next != "gash localweb migrate" {
 			t.Fatalf("install: %+v %v", ins, err)
 		}
 		res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Exclude: []string{defaultVhost}, Yes: true})

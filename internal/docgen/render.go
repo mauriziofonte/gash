@@ -4,6 +4,7 @@ package docgen
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -186,8 +187,10 @@ func function(w func(...string), f registry.Function) {
 		switch {
 		case c.Permanent():
 			names = append(names, "Also `"+f.Name+"`, the name agents call")
+		case len(c.FormerNames()) > 0 && slices.Contains(registry.Kept, c.FormerNames()[0]):
+			names = append(names, "Also `"+f.Name+"`, a function prompts and scripts call")
 		case len(c.FormerNames()) > 0:
-			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (works through 3.x)")
+			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (with `GASH_LEGACY_NAMES=1`)")
 		}
 	}
 	if len(names) > 0 {

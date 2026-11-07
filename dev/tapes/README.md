@@ -16,7 +16,7 @@ them as the `demo-gifs` artifact.
 | `system.tape` | `system.gif` | `gash system ps`, `gash system port-kill`, `gash shell history-smart` |
 | `help.tape` | `help.gif` | `gash git`, Tab completion with descriptions, `gash help --search`, `gash help` on a shortcut |
 | `agents.tape` | `agents.gif` | Headless `llm_*` calls piped to `jq`, and the refusals |
-| `hte.tape` | `hte.gif` | `gash hte install`, `site create`, `curl`, `site list`, `service status` |
+| `hte.tape` | `hte.gif` | `gash localweb install`, `site create`, `curl`, `site list`, `service status` |
 
 ## How a tape runs
 
@@ -48,7 +48,7 @@ dev/tapes/render.sh files git      # only these
 It needs Go, vhs (with ttyd and ffmpeg), git, jq and sqlite3. Running as
 root, set `VHS_NO_SANDBOX=true` for vhs's Chromium.
 
-`hte.tape` runs `gash hte install`, which changes the machine: a sudoers
+`hte.tape` runs `gash localweb install`, which changes the machine: a sudoers
 drop-in, the hosts helper, `net.ipv4.ip_unprivileged_port_start`, a block in
 `/etc/hosts`. Its hidden tail removes the site and uninstalls again, but
 record it only on a disposable machine with Apache, PHP-FPM, free ports 80

@@ -169,8 +169,8 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		return s[:i] + PrivatePrefix + s[i:], nil
 	}
 	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
-		"stub":        shellStub,
-		"publicStub":  stub,
+		"stub":       shellStub,
+		"publicStub": stub,
 		// coreStub is the stub of a core shim: sourced alone (a 2.x
 		// harness, no gash.sh), the shim keeps the 2.x name of a legacy
 		// function too.

@@ -67,11 +67,11 @@ case "$out" in
     *) fail "unexpected gash version output: $out" ;;
 esac
 
-doctor=$(bash --norc -i -c 'source "$HOME/.gash/gash.sh"; gash_doctor --no-color' </dev/null 2>&1) || true
+doctor=$(bash --norc -i -c 'source "$HOME/.gash/gash.sh"; gash doctor --no-color' </dev/null 2>&1) || true
 echo "$doctor" | grep -E '^(OK|Error|Warning): +(bash|gash|linux_|gash-hosts-helper)' || true
-echo "$doctor" | grep -q "matches release/SHA256SUMS" || fail "gash_doctor did not verify the binary: $doctor"
+echo "$doctor" | grep -q "matches release/SHA256SUMS" || fail "gash doctor did not verify the binary: $doctor"
 if echo "$doctor" | grep -q '^Error:'; then
-    fail "gash_doctor reports an error: $doctor"
+    fail "gash doctor reports an error: $doctor"
 fi
 
 # A few reads, through the sourced shell as an agent calls them.
@@ -91,14 +91,14 @@ echo "$reads" | grep -q '"error":"not_a_git_repo"' || fail "llm_git_status: $rea
 # Every package of the catalog for this distro.
 version=$(cat "$HOME/.gash/VERSION")
 bin="$HOME/.local/share/gash/versions/$version/gash"
-echo "== gash_doctor --install --all --yes"
+echo "== gash doctor --install --all --yes"
 # The Tumbleweed image ships busybox-gawk, which zypper will not replace
 # without being told to.
 if [ "$ID" = opensuse-tumbleweed ]; then
     zypper --non-interactive install --force-resolution gawk >/dev/null
 fi
-"$bin" gash_doctor --install --all --yes --no-color </dev/null || true
-json=$("$bin" gash_doctor --json) || true
+"$bin" doctor --install --all --yes --no-color </dev/null || true
+json=$("$bin" doctor --json) || true
 # One tool per line; the ones still missing that had an install command
 # (a non-free one may need a repository the image does not enable).
 bad=$(printf '%s\n' "$json" | sed 's/},{/}\n{/g' | grep '"found":false' | grep '"install":' | grep -v '"non_free":true' || true)

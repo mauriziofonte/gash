@@ -1,0 +1,69 @@
+# Gash 4.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (4.0 names)
+#
+# A Gash 4.0 shell, headless or interactive, defines the canonical
+# commands, the shortcuts, the agent functions, the script helpers and
+# gash_username, and none of the former flat names of 3.x; their functions
+# live on as __gash_fn_NAME, which the gash function runs.
+# GASH_LEGACY_NAMES=1, from the environment or ~/.gash_env, defines them
+# again with the same output. gash hte still runs gash localweb.
+
+env GASH_BANNER=0 GASH_LEGACY_NAMES=
+mkdir d/sub
+exec sh -c 'head -c 3000 /dev/zero >d/a.bin'
+
+# Headless, the default.
+env GASH_HEADLESS=1
+exec bash --norc --noprofile names.sh
+stdout '^files_largest=no git_sync=no gash_migrate=no sysinfo=no$'
+stdout '^gash=function llm_read=function needs_help=function path_add=function gash_username=function$'
+stdout '^private=function$'
+stdout '^canonical rc=0$'
+grep 'a\.bin' canonical.out
+! stderr .
+
+# Headless, GASH_LEGACY_NAMES=1 in the environment.
+env GASH_LEGACY_NAMES=1
+exec bash --norc --noprofile names.sh
+stdout '^files_largest=function git_sync=function gash_migrate=function sysinfo=function$'
+exec bash --norc --noprofile -c 'source "$GASH_SH"; files_largest d --limit 5'
+cmp stdout canonical.out
+! stderr .
+
+# Headless, GASH_LEGACY_NAMES=1 in ~/.gash_env; the environment wins.
+env GASH_LEGACY_NAMES=
+exec sh -c 'printf "GASH_LEGACY_NAMES=1\n" >$HOME/.gash_env; chmod 600 $HOME/.gash_env'
+exec env -u GASH_LEGACY_NAMES bash --norc --noprofile names.sh
+stdout '^files_largest=function '
+exec env GASH_LEGACY_NAMES=0 bash --norc --noprofile names.sh
+stdout '^files_largest=no '
+rm $HOME/.gash_env
+
+# Interactive, the default: completion only for what is defined.
+env GASH_HEADLESS=
+exec bash --norc --noprofile -i names.sh
+stdout '^files_largest=no git_sync=no gash_migrate=no sysinfo=no$'
+stdout '^shortcut flf=alias$'
+stdout '^complete flf=yes files_largest=no$'
+
+# The binary: gash hte is gash localweb.
+exec gash hte --help
+stdout '^  gash localweb \[command\]$'
+exec gash localweb site --help
+stdout '^  gash localweb site \[command\]$'
+
+-- names.sh --
+source "$GASH_SH" >/dev/null 2>&1
+[[ $- == *i* ]] && source "$GASH_STAGE/bash_completion"
+t() { local v; v=$(type -t "$1") || v=no; printf '%s=%s' "$1" "$v"; }
+echo "$(t files_largest) $(t git_sync) $(t gash_migrate) $(t sysinfo)"
+echo "$(t gash) $(t llm_read) $(t needs_help) $(t path_add) $(t gash_username)"
+echo "private=$(type -t __gash_fn_files_largest)"
+gash files largest d --limit 5 >canonical.out
+echo "canonical rc=$?"
+if [[ $- == *i* ]]; then
+    echo "shortcut $(t flf)"
+    c() { complete -p "$1" >/dev/null 2>&1 && printf '%s=yes' "$1" || printf '%s=no' "$1"; }
+    echo "complete $(c flf) $(c files_largest)"
+fi

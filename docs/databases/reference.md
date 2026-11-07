@@ -15,7 +15,7 @@ The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test
 
 List configured database connections.
 
-Former name: `gash_db_list` (works through 3.x).
+Former name: `gash_db_list` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -45,7 +45,7 @@ See also: [`gash db test`](../databases/reference.md#gash-db-test), [`gash confi
 
 Test a database connection.
 
-Former name: `gash_db_test` (works through 3.x).
+Former name: `gash_db_test` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
