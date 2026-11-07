@@ -2,9 +2,9 @@
 
 # Logs: reference
 
-gash logs: find the log files that fill a disk and reclaim the space safely. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+gash logs: find the log files that fill a disk and reclaim the space safely. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Commands
+## Command trees
 
 ### gash logs
 

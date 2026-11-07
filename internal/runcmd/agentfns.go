@@ -20,14 +20,16 @@ List the agent functions: every llm_* (read-only, family "read") and
 agent_* (family "write") function. Each runs as gash <fn> args, with the
 output of the sourced function.
 
-  --json   one JSON array: [{"name","family","short","usage","flags","replaces"}]
-           (usage: the USAGE lines of its help; flags: the options they name;
-           replaces: the raw shell shape it replaces, or null)
+  --json   one JSON array: [{"name","command","family","short","usage","flags","replaces"}]
+           (command: the same function as gash llm|agent WORD; usage: the
+           USAGE lines of its help; flags: the options they name; replaces:
+           the raw shell shape it replaces, or null)
 `
 
 // agentFunction is one row of gash agent-functions --json.
 type agentFunction struct {
 	Name     string   `json:"name"`
+	Command  string   `json:"command"`
 	Family   string   `json:"family"`
 	Short    string   `json:"short"`
 	Usage    []string `json:"usage"`
@@ -96,6 +98,9 @@ func listAgentFunctions(t *invoke.Table) []agentFunction {
 		}
 		usage := usageLines(f.Help.Body)
 		row := agentFunction{Name: f.Name, Family: family, Short: f.Help.Short, Usage: usage, Flags: []string{}}
+		if cmd, ok := registry.CommandOf(f.Name); ok {
+			row.Command = cmd.Name()
+		}
 		seen := map[string]bool{}
 		for _, u := range usage {
 			for _, mm := range usageFlag.FindAllStringSubmatch(u, -1) {

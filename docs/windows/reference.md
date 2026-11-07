@@ -2,79 +2,41 @@
 
 # Windows and WSL: reference
 
-Inspect and repair WSL, and read the Windows host from inside it. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Inspect and repair WSL, and read the Windows host from inside it. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`wsl_compact`](#wsl_compact) | `wslc` | Fix Windows interop on a WSL2 VM with fragmented memory |
-| [`wsl_explorer`](#wsl_explorer) | `wex` | Open Windows Explorer from WSL |
-| [`wsl_restart`](#wsl_restart) | `wr` | Restart WSL (saves history, runs wsl --shutdown) |
-| [`wsl_shutdown`](#wsl_shutdown) | `wsd` | Shutdown WSL (saves history, runs wsl --shutdown) |
-| [`wsl_taskmanager`](#wsl_taskmanager) | `wtm` | Open Windows Task Manager from WSL |
+| [`gash win explorer`](#gash-win-explorer) | `wex` | Open Windows Explorer from WSL |
+| [`gash win taskmgr`](#gash-win-taskmgr) | `wtm` | Open Windows Task Manager from WSL |
+| [`gash wsl compact`](#gash-wsl-compact) | `wslc` | Fix Windows interop on a WSL2 VM with fragmented memory |
+| [`gash wsl restart`](#gash-wsl-restart) | `wr` | Restart WSL (saves history, runs wsl --shutdown) |
+| [`gash wsl shutdown`](#gash-wsl-shutdown) | `wsd` | Shutdown WSL (saves history, runs wsl --shutdown) |
 
-### wsl_compact
-
-Fix Windows interop on a WSL2 VM with fragmented memory.
-
-Alias: `wslc`
-
-#### Usage
-
-```text
-wsl_compact [--status] [-y]
-```
-
-#### Examples
-
-```bash
-# code . or explorer.exe fail with "UtilAcceptVsock ... accept4 failed 110"
-wslc
-
-# Only show the failures and the free large blocks, change nothing
-wslc --status
-```
-
-#### Notes
-
-```text
-Every Windows program started from WSL needs a contiguous 512 KiB block
-of guest memory for its hv_sock channel. When memory is fragmented the
-allocation fails (dmesg: "page allocation failure: order:7") and the
-launch times out. wsl_compact drops the page cache and slab, compacts
-memory (sudo), prints the free blocks before and after, and checks that
-cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
-On a terminal it runs without asking; headless it needs -y (--yes).
-Unattended, sudo must not need a password (sudo -n is checked first).
-When dmesg is not readable the failure count is "unknown".
-```
-
-See also: [`wsl_restart`](../windows/reference.md#wsl_restart), [`wsl_shutdown`](../windows/reference.md#wsl_shutdown)
-
-### wsl_explorer
+### gash win explorer
 
 Open Windows Explorer from WSL.
 
-Alias: `wex`
+Shortcut: `wex`. Former name: `wsl_explorer` (works through 3.x).
 
 #### Usage
 
 ```text
-wsl_explorer [PATH]
+gash win explorer [PATH]
 ```
 
 #### Examples
 
 ```bash
 # Open Explorer in current directory
-wex
+gash win explorer
 
 # Open Explorer in a specific path
-wex /home/user/projects
+gash win explorer /home/user/projects
 
 # Open Explorer in Windows user folder
-wex /mnt/c/Users
+gash win explorer /mnt/c/Users
 ```
 
 #### Notes
@@ -84,85 +46,25 @@ Defaults to current directory if no path specified.
 Only works inside WSL (Windows Subsystem for Linux).
 ```
 
-See also: [`wsl_taskmanager`](../windows/reference.md#wsl_taskmanager)
+See also: [`gash win taskmgr`](../windows/reference.md#gash-win-taskmgr)
 
-### wsl_restart
-
-Restart WSL (saves history, runs wsl --shutdown).
-
-Alias: `wr`
-
-#### Usage
-
-```text
-wsl_restart [-y]
-```
-
-#### Examples
-
-```bash
-# Restart WSL (asks, saves bash history first)
-wr
-
-# Without the question
-wr -y
-```
-
-#### Notes
-
-```text
-Runs `wsl --shutdown`: every distro stops, Docker Desktop's included,
-with the servers running in them. WSL starts again with the next
-terminal. Asks first; -y skips the question. Same as wsl_shutdown.
-```
-
-See also: [`wsl_shutdown`](../windows/reference.md#wsl_shutdown)
-
-### wsl_shutdown
-
-Shutdown WSL (saves history, runs wsl --shutdown).
-
-Alias: `wsd`
-
-#### Usage
-
-```text
-wsl_shutdown [-y]
-```
-
-#### Examples
-
-```bash
-# Shut down WSL (asks, saves bash history first)
-wsd
-```
-
-#### Notes
-
-```text
-Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.
-Asks first; -y skips the question.
-```
-
-See also: [`wsl_restart`](../windows/reference.md#wsl_restart)
-
-### wsl_taskmanager
+### gash win taskmgr
 
 Open Windows Task Manager from WSL.
 
-Alias: `wtm`
+Shortcut: `wtm`. Former name: `wsl_taskmanager` (works through 3.x).
 
 #### Usage
 
 ```text
-wsl_taskmanager
+gash win taskmgr
 ```
 
 #### Examples
 
 ```bash
 # Open Windows Task Manager
-wtm
+gash win taskmgr
 ```
 
 #### Notes
@@ -173,9 +75,107 @@ Does not change your current working directory.
 Only works inside WSL (Windows Subsystem for Linux).
 ```
 
-See also: [`wsl_explorer`](../windows/reference.md#wsl_explorer), [`process_find`](../system/reference.md#process_find)
+See also: [`gash win explorer`](../windows/reference.md#gash-win-explorer), [`gash system ps`](../system/reference.md#gash-system-ps)
 
-## Commands
+### gash wsl compact
+
+Fix Windows interop on a WSL2 VM with fragmented memory.
+
+Shortcut: `wslc`. Former name: `wsl_compact` (works through 3.x).
+
+#### Usage
+
+```text
+gash wsl compact [--status] [-y]
+```
+
+#### Examples
+
+```bash
+# code . or explorer.exe fail with "UtilAcceptVsock ... accept4 failed 110"
+gash wsl compact
+
+# Only show the failures and the free large blocks, change nothing
+gash wsl compact --status
+```
+
+#### Notes
+
+```text
+Every Windows program started from WSL needs a contiguous 512 KiB block
+of guest memory for its hv_sock channel. When memory is fragmented the
+allocation fails (dmesg: "page allocation failure: order:7") and the
+launch times out. gash wsl compact drops the page cache and slab, compacts
+memory (sudo), prints the free blocks before and after, and checks that
+cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
+On a terminal it runs without asking; headless it needs -y (--yes).
+Unattended, sudo must not need a password (sudo -n is checked first).
+When dmesg is not readable the failure count is "unknown".
+```
+
+See also: [`gash wsl restart`](../windows/reference.md#gash-wsl-restart), [`gash wsl shutdown`](../windows/reference.md#gash-wsl-shutdown)
+
+### gash wsl restart
+
+Restart WSL (saves history, runs wsl --shutdown).
+
+Shortcut: `wr`. Former name: `wsl_restart` (works through 3.x).
+
+#### Usage
+
+```text
+gash wsl restart [-y]
+```
+
+#### Examples
+
+```bash
+# Restart WSL (asks, saves bash history first)
+gash wsl restart
+
+# Without the question
+gash wsl restart -y
+```
+
+#### Notes
+
+```text
+Runs `wsl --shutdown`: every distro stops, Docker Desktop's included,
+with the servers running in them. WSL starts again with the next
+terminal. Asks first; -y skips the question. Same as gash wsl shutdown.
+```
+
+See also: [`gash wsl shutdown`](../windows/reference.md#gash-wsl-shutdown)
+
+### gash wsl shutdown
+
+Shutdown WSL (saves history, runs wsl --shutdown).
+
+Shortcut: `wsd`. Former name: `wsl_shutdown` (works through 3.x).
+
+#### Usage
+
+```text
+gash wsl shutdown [-y]
+```
+
+#### Examples
+
+```bash
+# Shut down WSL (asks, saves bash history first)
+gash wsl shutdown
+```
+
+#### Notes
+
+```text
+Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.
+Asks first; -y skips the question.
+```
+
+See also: [`gash wsl restart`](../windows/reference.md#gash-wsl-restart)
+
+## Command trees
 
 ### gash wsl
 

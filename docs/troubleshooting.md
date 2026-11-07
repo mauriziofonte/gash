@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Symptoms, their causes and the fixes, for installing and running Gash.
-When in doubt, start with `gash_doctor` (alias `gdoctor`): it checks the
+When in doubt, start with `gash doctor` (alias `gdoctor`): it checks the
 installation and every tool Gash uses, and names what is missing.
 
 Platforms: Linux, macOS and WSL. The [macOS](#macos) section covers what
@@ -69,12 +69,12 @@ NAME is the function and TOOL the program it runs.
 
 **Cause:** the function runs an external program that this system lacks.
 **Fix:** the lines after the error give the package and the command that
-installs it on this system; run it, or `gash_doctor --install TOOL`. A few
+installs it on this system; run it, or `gash doctor --install TOOL`. A few
 functions print the shorter `Error: Command 'TOOL' is not installed or not
 in PATH.`: install the tool the same way. `gash_doctor --prereqs` lists
 every tool and what needs it, and [requirements.md](requirements.md) the
 package on each system. The [Gash guide](gash/README.md#install-a-missing-tool)
-explains the message and `gash_doctor --install`.
+explains the message and `gash doctor --install`.
 
 ## "Gash requires Bash 4.4 or newer"
 
@@ -91,7 +91,7 @@ newer Bash your login shell. On macOS: `brew install bash`, add
 
 **Cause:** `gash.sh` returns at once in a non-interactive shell unless
 `GASH_HEADLESS=1` is set. **Fix:**
-`GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; files_largest --json .'`,
+`GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash files largest --json .'`,
 or call the binary directly: `~/.gash/bin/gash llm_tree`.
 
 ## "the Gash tree changed since this shell loaded it"
@@ -108,8 +108,8 @@ holds the old version. **Fix:** `source ~/.gashrc`, or open a new terminal.
 `GASH_HEADLESS=1`, `NO_COLOR` (any non-empty value) or `GASH_NO_COLOR` (any
 value but `0`) is set. Messages go to stderr but follow stdout, so
 `cmd 2>log` at a terminal writes colors into `log`. **Fix:** `NO_COLOR=1`,
-or `--no-color` where accepted (`files_largest`, `tree_stats`,
-`gash_doctor`, `gash`, `disk_usage`, ...). The prompt drops its colors too,
+or `--no-color` where accepted (`gash files largest`, `gash files stats`,
+`gash doctor`, `gash`, `gash system disks`, ...). The prompt drops its colors too,
 from the next prompt; `GASH_PROMPT=0` keeps your own `PS1`. Without colors
 no escape code is printed at all: no screen clear, spinners redraw with
 carriage returns, and tables, bars and menus print as plain text, with
@@ -128,7 +128,7 @@ add the repository root to `GASH_GIT_EXCLUDE` (absolute paths joined by
 
 **Cause:** something in the startup takes long: a large `~/.bash_history`
 (Gash keeps history unlimited), `GASH_NVM=on`, your own `~/.bash_local`, or
-a slow filesystem. **Fix:** run `gash_doctor --timing`. It lists what each
+a slow filesystem. **Fix:** run `gash doctor --timing`. It lists what each
 Gash file and step costs in a new shell (5 ms or more stands out), then the
 time of a whole new shell with your `~/.bashrc` next to bash alone, so you
 can tell Gash from the rest. `GASH_NVM=lazy` avoids sourcing `nvm.sh` at
@@ -137,7 +137,7 @@ every start.
 ## Warnings about ~/.gash_env
 
 They appear once per shell, the first time a function reads the file
-(`gash_db_list`, `remote_*`, `llm_db_*`, `ai_*`), or when the shell starts
+(`gash db list`, `remote_*`, `llm_db_*`, `ai_*`), or when the shell starts
 if the file has `SSH:` keys, until the line is fixed. They name the file,
 the line number and the problem, never the line's content. Headless calls
 stay quiet unless `GASH_DEBUG=1`.
@@ -164,7 +164,7 @@ stay quiet unless `GASH_DEBUG=1`.
 ## A setting has no effect
 
 1. **Typo or quotes.** An unknown name gets a warning when the file is
-   read; `gash_doctor` lists, under "Configuration", the settings set in
+   read; `gash doctor` lists, under "Configuration", the settings set in
    the shell.
 2. **Environment wins.** A variable already set when Gash loads overrides
    the file.
@@ -181,27 +181,27 @@ stay quiet unless `GASH_DEBUG=1`.
 
 **Cause:** `llm_exec` refuses `awk` unless `gawk --sandbox` works, and
 refuses `sed` unless GNU `sed --sandbox` works (mawk, BSD awk and BSD sed
-have no sandbox). `hgrep` runs no awk: its matching, timestamps and JSON
+have no sandbox). `gash shell history-smart` runs no awk: its matching, timestamps and JSON
 are the same with every awk. **Fix:** install `gawk` and GNU sed
-(`gash_doctor --install gawk gnu-sed`). To force a specific awk program
+(`gash doctor --install gawk gnu-sed`). To force a specific awk program
 for the other functions, set `GASH_AWK` (for example `GASH_AWK=gawk`)
 before Gash loads.
 
 ## macOS
 
-Gash needs the Homebrew Bash on macOS. The scanners (`files_largest`,
-`tree_stats`, `dirs_*`, `llm_tree`, `llm_find`) and the path checks of the
+Gash needs the Homebrew Bash on macOS. The scanners (`gash files largest`,
+`gash files stats`, `dirs_*`, `llm_tree`, `llm_find`) and the path checks of the
 `llm_*` functions are Go code and work the same as on Linux; a few
 functions still call GNU tools:
 
 | Missing GNU feature | Affected |
 |---|---|
 | `sed --sandbox`, `gawk --sandbox` | `sed` and `awk` in `llm_exec` are refused |
-| `df -T` | `disk_usage` shows every `/dev` device, without a filesystem type |
+| `df -T` | `gash system disks` shows every `/dev` device, without a filesystem type |
 
 **Fix:** `brew install gawk gnu-sed` is enough for `llm_exec`: Gash
 finds them under their Homebrew names (`gawk`, `gsed`). For the filesystem
-type of `disk_usage`, also `brew install coreutils` and put its GNU names
+type of `gash system disks`, also `brew install coreutils` and put its GNU names
 first in `PATH`, before the Gash block in `~/.bashrc`:
 
 ```bash
@@ -221,7 +221,7 @@ PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin:$PATH"
 
 ## Load errors and gash_doctor
 
-`gash_doctor` reports the Bash version and the binary, then
+`gash doctor` reports the Bash version and the binary, then
 `failed to load FILE: exit N` (or `FILE: missing`) for every file that did
 not load, then the core files, the modules, the binary and the generated
 files against the release, the `~/.gash_env` mode and settings, and every
@@ -256,7 +256,7 @@ State lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`). See
 
 ## Removing Gash
 
-`gash_unload` removes Gash from the current shell; `gash_uninstall`
+`gash unload` removes Gash from the current shell; `gash uninstall`
 removes it for good, and asks first (without a terminal it prints
 `Info: Uninstall cancelled.` and removes nothing). Run
 `gash hte uninstall --yes` before it if you installed `gash hte`. What

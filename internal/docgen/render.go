@@ -4,6 +4,7 @@ package docgen
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/registry"
@@ -50,7 +51,7 @@ func definedWhen(pack, cond, runs string) string {
 // groups split the functions of an area into sections by help topic, for
 // the areas that hold more than one family.
 var groups = map[string][]struct{ Topic, Title string }{
-	"agents": {{"llm", "Read-only functions (llm_*)"}, {"agent", "Write functions (agent_*)"}},
+	"agents": {{"llm", "Read-only commands (gash llm, llm_*)"}, {"agent", "Write commands (gash agent, agent_*)"}},
 }
 
 // HelpFunc returns the --help output of a gash command line ("hte",
@@ -71,9 +72,10 @@ func Reference(a Area, help HelpFunc) string {
 		"",
 		"# "+a.Title+": reference",
 		"",
-		a.Summary+" The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).")
+		a.Summary+" The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).")
 
 	fns := FunctionsOf(a.Key)
+	sort.SliceStable(fns, func(i, j int) bool { return title(fns[i]) < title(fns[j]) })
 	if len(fns) > 0 {
 		if gs, ok := groups[a.Key]; ok {
 			for _, g := range gs {
@@ -87,7 +89,7 @@ func Reference(a Area, help HelpFunc) string {
 				functionTable(w, sub)
 			}
 		} else {
-			w("", "## Functions", "")
+			w("", "## Commands", "")
 			functionTable(w, fns)
 		}
 		for _, f := range fns {
@@ -134,7 +136,7 @@ func Reference(a Area, help HelpFunc) string {
 	}
 
 	if len(a.Commands) > 0 && help != nil {
-		w("", "## Commands")
+		w("", "## Command trees")
 		for _, c := range a.Commands {
 			command(w, help, []string{c})
 		}
@@ -142,23 +144,58 @@ func Reference(a Area, help HelpFunc) string {
 	return b.String()
 }
 
+// title is the heading of a function: its canonical command (gash files
+// largest), or its own name for a script helper with no command.
+func title(f registry.Function) string {
+	if c, ok := registry.CommandOf(f.Name); ok {
+		return c.Name()
+	}
+	return f.Name
+}
+
+// shortcuts are the typing shortcuts of a function: the shortcut of its
+// command, else its module aliases.
+func shortcuts(f registry.Function) []string {
+	if c, ok := registry.CommandOf(f.Name); ok && c.Shortcut != "" {
+		return []string{c.Shortcut}
+	}
+	return f.Aliases
+}
+
 func functionTable(w func(...string), fns []registry.Function) {
-	w("| Function | Alias | Description |", "|---|---|---|")
+	w("| Command | Shortcut | Description |", "|---|---|---|")
 	for _, f := range fns {
 		alias := ""
-		if len(f.Aliases) > 0 {
-			alias = "`" + strings.Join(f.Aliases, "`, `") + "`"
+		if s := shortcuts(f); len(s) > 0 {
+			alias = "`" + strings.Join(s, "`, `") + "`"
 		}
-		w("| [`" + f.Name + "`](#" + anchor(f.Name) + ") | " + alias + " | " + cell(f.Help.Short) + " |")
+		w("| [`" + title(f) + "`](#" + anchor(title(f)) + ") | " + alias + " | " + cell(f.Help.Short) + " |")
 	}
 }
 
-// function renders one function: its short description, aliases, the
-// commands it replaces, each help section, and its see-also links.
+// function renders one function: its short description, shortcut and
+// other names, the commands it replaces, each help section, and its
+// see-also links.
 func function(w func(...string), f registry.Function) {
-	w("", "### "+f.Name, "", strings.TrimSuffix(f.Help.Short, ".")+".")
-	if len(f.Aliases) > 0 {
-		w("", "Alias: `"+strings.Join(f.Aliases, "`, `")+"`")
+	w("", "### "+title(f), "", strings.TrimSuffix(f.Help.Short, ".")+".")
+	var names []string
+	if s := shortcuts(f); len(s) > 0 {
+		names = append(names, "Shortcut: `"+strings.Join(s, "`, `")+"`")
+	}
+	if c, ok := registry.CommandOf(f.Name); ok {
+		switch {
+		case c.Permanent():
+			names = append(names, "Also `"+f.Name+"`, the name agents call")
+		case len(c.FormerNames()) > 0:
+			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (works through 3.x)")
+		}
+	}
+	if len(names) > 0 {
+		w("", strings.Join(names, ". ")+".")
+	}
+	h := f.Help
+	if _, ok := registry.CommandOf(f.Name); ok {
+		h = registry.CanonicalHelp(&f)
 	}
 	if routes := registry.RoutesOf(f.Name); len(routes) > 0 {
 		w("", "Replaces:", "")
@@ -170,16 +207,22 @@ func function(w func(...string), f registry.Function) {
 			w(line)
 		}
 	}
-	for _, sec := range helpSections(f.Help.Body) {
+	for _, sec := range helpSections(h.Body) {
 		fence := "text"
 		if sec.title == "EXAMPLES" {
 			fence = "bash"
 		}
 		w("", "#### "+titleCase(sec.title), "", "```"+fence, sec.text, "```")
 	}
-	if f.Help.SeeAlso != "" {
+	if h.SeeAlso != "" {
 		var links []string
-		for _, name := range strings.Fields(f.Help.SeeAlso) {
+		for _, name := range strings.FieldsFunc(h.SeeAlso, func(r rune) bool { return r == '\n' || r == '\t' }) {
+			if !strings.HasPrefix(name, "gash ") {
+				for _, n := range strings.Fields(name) {
+					links = append(links, link(n))
+				}
+				continue
+			}
 			links = append(links, link(name))
 		}
 		w("", "See also: "+strings.Join(links, ", "))
@@ -189,15 +232,19 @@ func function(w func(...string), f registry.Function) {
 // link is a see-also entry: a link to the function's section in the
 // reference of its area, plain code when it is not a documented function.
 func link(name string) string {
+	fn := name
+	if c, ok := registry.CanonicalName(name); ok && c.Handler != "" && strings.HasPrefix(name, "gash ") {
+		fn = c.Handler
+	}
 	for _, f := range registry.Functions() {
-		if f.Name != name || !f.HasHelp {
+		if f.Name != fn || !f.HasHelp {
 			continue
 		}
 		area := AreaOf(f)
 		if area == "" {
 			break
 		}
-		return "[`" + name + "`](../" + area + "/reference.md#" + anchor(name) + ")"
+		return "[`" + name + "`](../" + area + "/reference.md#" + anchor(title(f)) + ")"
 	}
 	return "`" + name + "`"
 }

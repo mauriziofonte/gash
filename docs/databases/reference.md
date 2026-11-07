@@ -2,30 +2,32 @@
 
 # Databases: reference
 
-The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`gash_db_list`](#gash_db_list) |  | List configured database connections |
-| [`gash_db_test`](#gash_db_test) |  | Test a database connection |
+| [`gash db list`](#gash-db-list) |  | List configured database connections |
+| [`gash db test`](#gash-db-test) |  | Test a database connection |
 
-### gash_db_list
+### gash db list
 
 List configured database connections.
+
+Former name: `gash_db_list` (works through 3.x).
 
 #### Usage
 
 ```text
-gash_db_list
+gash db list
 ```
 
 #### Examples
 
 ```bash
 # Show all database connections from ~/.gash_env
-gash_db_list
+gash db list
 ```
 
 #### Notes
@@ -37,27 +39,29 @@ Configure connections in ~/.gash_env with:
 Supported drivers: mysql, mariadb, pgsql
 ```
 
-See also: [`gash_db_test`](../databases/reference.md#gash_db_test), [`gash_env_init`](../gash/reference.md#gash_env_init)
+See also: [`gash db test`](../databases/reference.md#gash-db-test), [`gash config init`](../gash/reference.md#gash-config-init)
 
-### gash_db_test
+### gash db test
 
 Test a database connection.
+
+Former name: `gash_db_test` (works through 3.x).
 
 #### Usage
 
 ```text
-gash_db_test [CONNECTION_NAME]
+gash db test [CONNECTION_NAME]
 ```
 
 #### Examples
 
 ```bash
 # Test the default connection
-gash_db_test
+gash db test
 
 # Test a named connection
-gash_db_test postgres
-gash_db_test legacy
+gash db test postgres
+gash db test legacy
 ```
 
-See also: [`gash_db_list`](../databases/reference.md#gash_db_list), [`gash_env_init`](../gash/reference.md#gash_env_init)
+See also: [`gash db list`](../databases/reference.md#gash-db-list), [`gash config init`](../gash/reference.md#gash-config-init)

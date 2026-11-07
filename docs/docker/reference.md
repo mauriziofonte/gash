@@ -2,30 +2,30 @@
 
 # Docker: reference
 
-Start, stop and prune containers, and check and upgrade Compose stacks. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Start, stop and prune containers, and check and upgrade Compose stacks. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`docker_compose_check`](#docker_compose_check) | `dcc` | Check for available Docker Compose image updates |
-| [`docker_compose_scan`](#docker_compose_scan) | `dcscan` | Scan directories for Docker Compose projects |
-| [`docker_compose_upgrade`](#docker_compose_upgrade) | `dcup2` | Upgrade Docker Compose services to latest images |
-| [`docker_prune_all`](#docker_prune_all) | `dpa` | Remove ALL Docker containers, images, volumes, and networks |
-| [`docker_start_all`](#docker_start_all) | `daa` | Start all stopped Docker containers |
-| [`docker_stop_all`](#docker_stop_all) | `dsa` | Stop all running Docker containers |
-| [`llm_docker_check`](#llm_docker_check) |  | Docker Compose update check (JSON output for AI agents) |
+| [`gash docker compose check`](#gash-docker-compose-check) | `dcc` | Check for available Docker Compose image updates |
+| [`gash docker compose scan`](#gash-docker-compose-scan) | `dcscan` | Scan directories for Docker Compose projects |
+| [`gash docker compose upgrade`](#gash-docker-compose-upgrade) | `dcup2` | Upgrade Docker Compose services to latest images |
+| [`gash docker prune-all`](#gash-docker-prune-all) | `dpa` | Remove ALL Docker containers, images, volumes, and networks |
+| [`gash docker start-all`](#gash-docker-start-all) | `daa` | Start all stopped Docker containers |
+| [`gash docker stop-all`](#gash-docker-stop-all) | `dsa` | Stop all running Docker containers |
+| [`gash llm docker-check`](#gash-llm-docker-check) |  | Docker Compose update check (JSON output for AI agents) |
 
-### docker_compose_check
+### gash docker compose check
 
 Check for available Docker Compose image updates.
 
-Alias: `dcc`
+Shortcut: `dcc`. Former name: `docker_compose_check` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_compose_check [PATH] [--json] [--no-color]
+gash docker compose check [PATH] [--json] [--no-color]
 ```
 
 #### Options
@@ -41,13 +41,13 @@ PATH        Directory with the compose file (default: current directory)
 
 ```bash
 # Check for updates in current directory
-dcc
+gash docker compose check
 
 # Check a specific project
-dcc /opt/myapp
+gash docker compose check /opt/myapp
 
 # JSON output for scripting
-dcc --json
+gash docker compose check --json
 ```
 
 #### Status codes
@@ -86,18 +86,18 @@ status), malformed_token, no_digest_in_response, registry_unreachable,
 invalid_reference (the image name does not parse).
 ```
 
-See also: [`docker_compose_upgrade`](../docker/reference.md#docker_compose_upgrade), [`docker_compose_scan`](../docker/reference.md#docker_compose_scan)
+See also: [`gash docker compose upgrade`](../docker/reference.md#gash-docker-compose-upgrade), [`gash docker compose scan`](../docker/reference.md#gash-docker-compose-scan)
 
-### docker_compose_scan
+### gash docker compose scan
 
 Scan directories for Docker Compose projects.
 
-Alias: `dcscan`
+Shortcut: `dcscan`. Former name: `docker_compose_scan` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_compose_scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]
+gash docker compose scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]
 ```
 
 #### Options
@@ -115,16 +115,16 @@ BASEDIR     Base directory to scan (default: current directory)
 
 ```bash
 # Scan current directory for compose files
-dcscan
+gash docker compose scan
 
 # Scan /opt with limited depth
-dcscan /opt --depth 2
+gash docker compose scan /opt --depth 2
 
 # JSON output for scripting
-dcscan /home/deploy --json
+gash docker compose scan /home/deploy --json
 
 # Full audit: scan then check each project
-dcscan /opt --depth 3
+gash docker compose scan /opt --depth 3
 ```
 
 #### Notes
@@ -133,18 +133,18 @@ dcscan /opt --depth 3
 An unknown option is refused with exit status 1.
 ```
 
-See also: [`docker_compose_check`](../docker/reference.md#docker_compose_check), [`docker_compose_upgrade`](../docker/reference.md#docker_compose_upgrade)
+See also: [`gash docker compose check`](../docker/reference.md#gash-docker-compose-check), [`gash docker compose upgrade`](../docker/reference.md#gash-docker-compose-upgrade)
 
-### docker_compose_upgrade
+### gash docker compose upgrade
 
 Upgrade Docker Compose services to latest images.
 
-Alias: `dcup2`
+Shortcut: `dcup2`. Former name: `docker_compose_upgrade` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_compose_upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]
+gash docker compose upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]
 ```
 
 #### Options
@@ -162,16 +162,16 @@ PATH        Directory with the compose file (default: current directory)
 
 ```bash
 # Upgrade services with mutable tags (latest, main, dev)
-dcup2
+gash docker compose upgrade
 
 # Preview what would be upgraded without doing it
-dcup2 --dry-run
+gash docker compose upgrade --dry-run
 
 # Force upgrade even for pinned versions
-dcup2 --force
+gash docker compose upgrade --force
 
 # Upgrade a specific project, no question asked
-dcup2 /opt/myapp --yes
+gash docker compose upgrade /opt/myapp --yes
 ```
 
 #### Notes
@@ -186,28 +186,28 @@ Headless (GASH_HEADLESS=1) it refuses to run without --yes.
 Declining the confirmation returns 1.
 ```
 
-See also: [`docker_compose_check`](../docker/reference.md#docker_compose_check), [`docker_compose_scan`](../docker/reference.md#docker_compose_scan)
+See also: [`gash docker compose check`](../docker/reference.md#gash-docker-compose-check), [`gash docker compose scan`](../docker/reference.md#gash-docker-compose-scan)
 
-### docker_prune_all
+### gash docker prune-all
 
 Remove ALL Docker containers, images, volumes, and networks.
 
-Alias: `dpa`
+Shortcut: `dpa`. Former name: `docker_prune_all` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_prune_all [-y] [--dry-run]
+gash docker prune-all [-y] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
 # Nuclear cleanup (interactive confirmation)
-dpa
+gash docker prune-all
 
 # Only count what would go
-dpa --dry-run
+gash docker prune-all --dry-run
 ```
 
 #### Notes
@@ -224,28 +224,28 @@ You will be asked for confirmation before proceeding; -y skips it.
 Declining returns 1. Built-in networks (bridge, host, none) stay.
 ```
 
-See also: [`docker_stop_all`](../docker/reference.md#docker_stop_all)
+See also: [`gash docker stop-all`](../docker/reference.md#gash-docker-stop-all)
 
-### docker_start_all
+### gash docker start-all
 
 Start all stopped Docker containers.
 
-Alias: `daa`
+Shortcut: `daa`. Former name: `docker_start_all` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_start_all [-y]
+gash docker start-all [-y]
 ```
 
 #### Examples
 
 ```bash
 # Start all stopped containers
-daa
+gash docker start-all
 
 # Restart everything
-dsa && daa
+gash docker stop-all && gash docker start-all
 ```
 
 #### Notes
@@ -256,28 +256,28 @@ and asks before acting; -y/--yes skips the question and is required
 headless or without a terminal. Declining returns 1.
 ```
 
-See also: [`docker_stop_all`](../docker/reference.md#docker_stop_all)
+See also: [`gash docker stop-all`](../docker/reference.md#gash-docker-stop-all)
 
-### docker_stop_all
+### gash docker stop-all
 
 Stop all running Docker containers.
 
-Alias: `dsa`
+Shortcut: `dsa`. Former name: `docker_stop_all` (works through 3.x).
 
 #### Usage
 
 ```text
-docker_stop_all [-y]
+gash docker stop-all [-y]
 ```
 
 #### Examples
 
 ```bash
 # Stop every running container
-dsa
+gash docker stop-all
 
 # Restart all containers: stop then start
-dsa && daa
+gash docker stop-all && gash docker start-all
 ```
 
 #### Notes
@@ -288,11 +288,13 @@ and asks before acting; -y/--yes skips the question and is required
 headless or without a terminal. Declining returns 1.
 ```
 
-See also: [`docker_start_all`](../docker/reference.md#docker_start_all), [`docker_prune_all`](../docker/reference.md#docker_prune_all)
+See also: [`gash docker start-all`](../docker/reference.md#gash-docker-start-all), [`gash docker prune-all`](../docker/reference.md#gash-docker-prune-all)
 
-### llm_docker_check
+### gash llm docker-check
 
 Docker Compose update check (JSON output for AI agents).
+
+Also `llm_docker_check`, the name agents call.
 
 Replaces:
 
@@ -301,23 +303,23 @@ Replaces:
 #### Usage
 
 ```text
-llm_docker_check [PATH]
+gash llm docker-check [PATH]
 ```
 
 #### Examples
 
 ```bash
 # Check for updates (JSON output)
-llm_docker_check
+gash llm docker-check
 
 # Check a specific path
-llm_docker_check /opt/myapp
+gash llm docker-check /opt/myapp
 ```
 
 #### Notes
 
 ```text
-Wrapper around docker_compose_check --json.
+Wrapper around gash docker compose check --json.
 Designed for LLM/AI agent consumption.
 PATH follows the llm_* path rules (no .., no protected trees).
 ${VAR} in the compose file is resolved from PATH/.env and a short
@@ -325,7 +327,7 @@ allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from
 other exported variables, so a token cannot reach the output.
 ```
 
-See also: [`docker_compose_check`](../docker/reference.md#docker_compose_check)
+See also: [`gash docker compose check`](../docker/reference.md#gash-docker-compose-check)
 
 ## Aliases
 

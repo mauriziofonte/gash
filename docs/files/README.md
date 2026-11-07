@@ -11,13 +11,13 @@ Platforms: Linux, macOS and WSL.
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [unzip](../requirements.md#tool-unzip) (feature), for `archive_extract` (.zip)
-- [bzip2](../requirements.md#tool-bzip2) (feature), for `archive_extract` (.bz2)
-- [xz](../requirements.md#tool-xz) (feature), for `archive_extract` (.xz)
-- [zstd](../requirements.md#tool-zstd) (feature), for `archive_extract` (.zst)
-- [7z](../requirements.md#tool-7z) (feature), for `archive_extract` (.7z)
-- [unrar](../requirements.md#tool-unrar) (feature), for `archive_extract` (.rar)
-- [uncompress](../requirements.md#tool-uncompress) (feature), for `archive_extract` (.Z)
+- [unzip](../requirements.md#tool-unzip) (feature), for `gash files extract` (.zip)
+- [bzip2](../requirements.md#tool-bzip2) (feature), for `gash files extract` (.bz2)
+- [xz](../requirements.md#tool-xz) (feature), for `gash files extract` (.xz)
+- [zstd](../requirements.md#tool-zstd) (feature), for `gash files extract` (.zst)
+- [7z](../requirements.md#tool-7z) (feature), for `gash files extract` (.7z)
+- [unrar](../requirements.md#tool-unrar) (feature), for `gash files extract` (.rar)
+- [uncompress](../requirements.md#tool-uncompress) (feature), for `gash files extract` (.Z)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
@@ -28,16 +28,16 @@ Four functions look at the same tree from different sides:
 
 | To see | Use | Size it reports |
 |---|---|---|
-| the biggest files | [`files_largest`](reference.md#files_largest) (`flf`) | the file's size |
-| the biggest directories at one level | [`dirs_largest`](reference.md#dirs_largest) (`dld`) | disk usage, everything below included |
-| every directory over a size, at any depth | [`dirs_find_large`](reference.md#dirs_find_large) (`dfl`) | disk usage, everything below included |
-| totals and the file types that dominate | [`tree_stats`](reference.md#tree_stats) (`tls`) | the files' sizes |
+| the biggest files | [`gash files largest`](reference.md#gash-files-largest) (`flf`) | the file's size |
+| the biggest directories at one level | [`gash files largest-dirs`](reference.md#gash-files-largest-dirs) (`dld`) | disk usage, everything below included |
+| every directory over a size, at any depth | [`gash files big-dirs`](reference.md#gash-files-big-dirs) (`dfl`) | disk usage, everything below included |
+| totals and the file types that dominate | [`gash files stats`](reference.md#gash-files-stats) (`tls`) | the files' sizes |
 
 All four start from the current directory when you give no path, and print
 absolute paths (the examples on this page show your home as `~`). They skip
 the folders that hold dependencies and caches, such as `node_modules/` and
 `.git/`, unless you pass `--no-ignore`. To see which filesystems are full in
-the first place, use [`disk_usage`](../system/README.md#check-disk-space); for
+the first place, use [`gash system disks`](../system/README.md#check-disk-space); for
 log files, [`gash logs`](../logs/README.md).
 
 The examples below use this tree:
@@ -53,7 +53,7 @@ proj/
 
 ### The biggest files
 
-`files_largest` lists files from the largest down, with their modification
+`gash files largest` lists files from the largest down, with their modification
 time:
 
 <!-- example
@@ -68,16 +68,16 @@ find proj -type f -exec touch -d '2026-01-15 09:30' {} +
 touch -d '2026-02-20 18:05' proj/logs/app.log
 -->
 ```console
-$ files_largest proj
+$ gash files largest proj
 3.0 MiB       ~/proj/assets/video.mp4  2026-01-15 09:30
 2.5 MiB       ~/proj/logs/old/app-2025.log.gz  2026-01-15 09:30
 1.5 MiB       ~/proj/logs/app.log  2026-02-20 18:05
 40.0 KiB      ~/proj/assets/logo.png  2026-01-15 09:30
 13 B          ~/proj/src/main.go  2026-01-15 09:30
-$ files_largest proj --min-size 2M
+$ gash files largest proj --min-size 2M
 3.0 MiB       ~/proj/assets/video.mp4  2026-01-15 09:30
 2.5 MiB       ~/proj/logs/old/app-2025.log.gz  2026-01-15 09:30
-$ files_largest proj --no-ignore --limit 2
+$ gash files largest proj --no-ignore --limit 2
 5.0 MiB       ~/proj/node_modules/lib/bundle.js  2026-01-15 09:30
 3.0 MiB       ~/proj/assets/video.mp4  2026-01-15 09:30
 ```
@@ -95,7 +95,7 @@ shows it. The options that matter most:
 
 ### The biggest directories
 
-`dirs_largest` shows the directories of one level, by disk usage (as `du`
+`gash files largest-dirs` shows the directories of one level, by disk usage (as `du`
 counts it), each with everything below it. `--depth 2` adds the level below,
 so a parent shows next to its children:
 
@@ -109,16 +109,16 @@ head -c 5242880 /dev/zero >proj/node_modules/lib/bundle.js
 printf 'package main\n' >proj/src/main.go
 -->
 ```console
-$ dirs_largest proj --min-size 1M
+$ gash files largest-dirs proj --min-size 1M
 4.0 MiB       ~/proj/logs
 3.0 MiB       ~/proj/assets
-$ dirs_largest proj --depth 2 --min-size 1M
+$ gash files largest-dirs proj --depth 2 --min-size 1M
 4.0 MiB       ~/proj/logs
 3.0 MiB       ~/proj/assets
 2.5 MiB       ~/proj/logs/old
 ```
 
-`dirs_find_large` walks the whole tree and lists every directory over a
+`gash files big-dirs` walks the whole tree and lists every directory over a
 threshold, 20 MiB unless you pass `--size`. `--with-mtime` adds the time of
 the newest file below each one, which tells an active directory from a
 forgotten one:
@@ -135,7 +135,7 @@ find proj -type f -exec touch -d '2026-01-15 09:30' {} +
 touch -d '2026-02-20 18:05' proj/logs/app.log
 -->
 ```console
-$ dirs_find_large proj --size 2M --with-mtime
+$ gash files big-dirs proj --size 2M --with-mtime
 4.0 MiB       ~/proj/logs  2026-02-20 18:05
 3.0 MiB       ~/proj/assets  2026-01-15 09:30
 2.5 MiB       ~/proj/logs/old  2026-01-15 09:30
@@ -158,13 +158,13 @@ touch -d '2026-01-15 09:30' proj/assets/video.mp4
 mask: "scan_time":"[0-9]+ms"
 -->
 ```console
-$ files_largest proj --json
+$ gash files largest proj --json
 {"data":[{"size":3145728,"size_human":"3.0 MiB","mtime":"2026-01-15 09:30","path":"~/proj/assets/video.mp4"}],"count":1,"total_size":3145728,"total_size_human":"3.0 MiB","kind":"files","scan_time":"0ms","errors":0}
 ```
 
 ## Summarize a tree
 
-`tree_stats` gives the counts, the total and average size, how deep the files
+`gash files stats` gives the counts, the total and average size, how deep the files
 go, how many directories are empty, and the file extensions that take the most
 files and the most space (`--top N` for more than five):
 
@@ -179,7 +179,7 @@ printf 'package main\n' >proj/src/main.go
 mask: Scan time: +[0-9]+ms
 -->
 ```console
-$ tree_stats proj
+$ gash files stats proj
 Tree statistics for ~/proj
   Files:       5
   Directories: 5
@@ -212,7 +212,7 @@ file itself).
 
 ## Find and remove empty directories
 
-[`dirs_list_empty`](reference.md#dirs_list_empty) (`dle`) lists the
+[`gash files empty-dirs`](reference.md#gash-files-empty-dirs) (`dle`) lists the
 directories that hold nothing at all, not even hidden files. Removing them
 can leave their parent empty, so list again after a removal:
 
@@ -221,12 +221,12 @@ mkdir -p uploads/2025/03 uploads/2026
 printf 'jpeg\n' >uploads/2026/cover.jpg
 -->
 ```console
-$ dirs_list_empty uploads
+$ gash files empty-dirs uploads
 ~/uploads/2025/03
-$ dirs_list_empty uploads --null | xargs -0 rmdir
-$ dirs_list_empty uploads
+$ gash files empty-dirs uploads --null | xargs -0 rmdir
+$ gash files empty-dirs uploads
 ~/uploads/2025
-$ dirs_list_empty uploads --count
+$ gash files empty-dirs uploads --count
 1
 ```
 
@@ -235,10 +235,10 @@ $ dirs_list_empty uploads --count
 
 ## Extract an archive
 
-[`archive_extract`](reference.md#archive_extract) (`axe`) picks the tool from
+[`gash files extract`](reference.md#gash-files-extract) (`axe`) picks the tool from
 the file name: tar archives with any of the usual compressions, zip, rar, 7z,
 and single compressed files such as `.gz` or `.zst` (the
-[reference](reference.md#archive_extract) lists every suffix). It extracts
+[reference](reference.md#gash-files-extract) lists every suffix). It extracts
 into the current directory, or into the directory you name, which it creates
 when missing. tar, unzip, unrar and 7z print the names they extract:
 
@@ -276,7 +276,7 @@ unzip, unrar and 7z never ask and never overwrite an existing file.
 
 ### What it refuses
 
-Before it writes anything, `archive_extract` reads the list of members of a
+Before it writes anything, `gash files extract` reads the list of members of a
 tar, zip, 7z or rar archive and refuses the whole archive when one member
 would land outside the destination: an absolute path, a `..` component, or a
 link that points outside:
@@ -311,7 +311,7 @@ before writing anything:
 
 ## Back up a file before editing it
 
-[`file_backup`](reference.md#file_backup) (`fbk`) copies a file next to
+[`gash files backup`](reference.md#gash-files-backup) (`fbk`) copies a file next to
 itself, with the date and time in the name (local time,
 `_backup_YYYYMMDDHHMMSS`):
 
@@ -320,7 +320,7 @@ printf 'listen 80;\n' >nginx.conf
 mask: _backup_[0-9]{14}
 -->
 ```console
-$ file_backup nginx.conf
+$ gash files backup nginx.conf
 'nginx.conf' -> 'nginx.conf_backup_20261026084731'
 ```
 
@@ -342,15 +342,15 @@ with `--json`:
 | `Error: path_not_found: Path 'PATH' does not exist` | Check the path; `~` and `~/...` are expanded, other forms are taken as written |
 | `Error: not_a_directory: ...` | The scanners start from a directory, not a file |
 | `Error: invalid_size: VALUE` | Use a number with an optional unit: `500K`, `20M`, `1.5G` |
-| `Error: unknown_option: OPTION` | `gash_help NAME` lists the options |
+| `Error: unknown_option: OPTION` | `gash help NAME` lists the options |
 | `Warning: Scan completed with N unreadable path(s) (permission denied).` | The results leave out the N paths you may not read; the status is still 0 |
 
-`archive_extract` and `file_backup`:
+`gash files extract` and `gash files backup`:
 
 | Message | Meaning and what to do |
 |---|---|
 | `Error: Command 'unzip' is not installed or not in PATH.` | Install the tool the format needs ([requirements](../requirements.md#tool-unzip)); for `.zst` the message is `Extracting .zst needs zstd.` Nothing was written |
-| `Error: Cannot extract 'FILE', unsupported file type.` | The suffix is not one the [reference](reference.md#archive_extract) lists; rename the file if its suffix is wrong |
+| `Error: Cannot extract 'FILE', unsupported file type.` | The suffix is not one the [reference](reference.md#gash-files-extract) lists; rename the file if its suffix is wrong |
 | `Error: Archive 'FILE' has an unsafe member 'NAME' ...` | See [What it refuses](#what-it-refuses). Inspect the archive with `tar -tvf`, `unzip -l` or `7z l` before you trust it |
 | `Error: Archive 'FILE' cannot be checked: ... is unreadable; nothing extracted.` | The archive is damaged or was built to hide a member. Get a new copy; `tar -tvf FILE` shows where it breaks |
 | `Error: Archive name 'FILE' contains wildcard characters ...` | Rename the archive without `*`, `?` and `[` |
@@ -361,6 +361,6 @@ with `--json`:
 ## See also
 
 - [reference.md](reference.md): every function of this area, with all options.
-- [System](../system/README.md): `disk_usage` and the other system checks.
+- [System](../system/README.md): `gash system disks` and the other system checks.
 - [Logs](../logs/README.md): find the log files that fill a disk and reclaim the space.
 - [Tools for AI agents](../agents/README.md): `llm_find`, `llm_tree` and the other read-only JSON tools.

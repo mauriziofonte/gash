@@ -49,7 +49,7 @@ The rules, in order of importance:
    `install`, the command that installs it. Show it to the user; do not
    run it (section 5).
 
-Help for any function: `FN --help` (or `gash_help FN`). The full list, with
+Help for any function: `FN --help` (or `gash help FN`). The full list, with
 the flags of each: `gash agent-functions --json`. The routing table of
 section 7, ready to paste into an agent's instructions: `gash
 agents-hint`. Gash needs Bash 4.4 or newer; its JSON comes from the binary
@@ -83,7 +83,7 @@ call download and verify the binary instead.
 
 Without headless mode, `gash.sh` does nothing in a non-interactive shell. Do
 not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
-`gash_doctor` lists files that failed to load. Without the color variables,
+`gash doctor` lists files that failed to load. Without the color variables,
 Gash still drops colors for most output when stdout is not a terminal; set
 one of them if you parse text.
 
@@ -96,6 +96,15 @@ exit status are those of the sourced function, byte for byte (a test
 compares them); only a shell variable that is not exported reaches the
 sourced function alone. `gash agent-functions --json` lists these
 functions for a wrapper that routes calls directly (3.11).
+
+**Names.** Every function also has a canonical command, `gash NAMESPACE
+COMMAND`. The flat names of the agent functions are permanent and are the
+ones to call: `llm_NAME` is also `gash llm NAME` and `agent_NAME` is also
+`gash agent NAME`, with `_` written `-` (`llm_db_query` is `gash llm
+db-query`), with the same output. The other functions of this page are
+named by their command (`gash files largest`, `gash doctor`); their flat
+names of 3.4 (`files_largest`) keep working through 3.x and never print a
+tip in headless mode or to a pipe. `gash help NAME` takes any of the names.
 
 ## 3. Function catalog
 
@@ -178,11 +187,11 @@ a bad `--sort` or `--by` value is `invalid_sort` or `invalid_by` (RETRY).
 
 | Function | Notes |
 |---|---|
-| `files_largest [PATH]` | Largest files; `-n N` (default 100), `--min-size SIZE`, `--depth N` |
-| `dirs_largest [PATH]` | Largest directories by cumulative size; `--depth N` (default 1), `-n N` |
-| `dirs_find_large [PATH]` | Directories over `--size SIZE` (default 20M); `-n N` (default 1000), `--with-mtime` |
-| `dirs_list_empty [PATH]` | Empty directories; `--count`, `--min-depth N`, `--ignore-dotfiles` |
-| `tree_stats [PATH]` | Totals, top extensions (`--top N`), depth, empty dirs |
+| `gash files largest [PATH]` | Largest files; `-n N` (default 100), `--min-size SIZE`, `--depth N` |
+| `gash files largest-dirs [PATH]` | Largest directories by cumulative size; `--depth N` (default 1), `-n N` |
+| `gash files big-dirs [PATH]` | Directories over `--size SIZE` (default 20M); `-n N` (default 1000), `--with-mtime` |
+| `gash files empty-dirs [PATH]` | Empty directories; `--count`, `--min-depth N`, `--ignore-dotfiles` |
+| `gash files stats [PATH]` | Totals, top extensions (`--top N`), depth, empty dirs |
 
 Common flags (each `--help` lists its own set): `--json`, `--null`/`-0`
 (NUL-separated paths), `--exclude GLOB` (repeatable; skips entries whose name
@@ -205,7 +214,7 @@ llm_db_databases      [-c CONN | -f SQLITE_FILE] [-d DB] [--format F] [--scalar]
 
 Connections live in `~/.gash_env` as `DB:name=driver://user:pass@host:port/db`
 (mysql, mariadb, pgsql); without `-c` the one named `default` is used.
-`gash_db_list` prints the names with masked passwords. SQLite needs only
+`gash db list` prints the names with masked passwords. SQLite needs only
 `-f FILE`. The database is `-d`, else the connection's, else the first word
 of a `.target-database` file in the current directory; `-d` and that file
 must hold a plain name (`[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`, otherwise
@@ -258,8 +267,8 @@ SQLite) and needs no database in the connection.
 | `llm_project [PATH] [--host ALIAS]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev] [--host ALIAS]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
-| `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
-| `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
+| `gash runtime detect php [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
+| `gash runtime detect node [DIR] [--json]` | Same for Node (needs nvm) |
 
 Git: one call answers the usual combination: `llm_git_overview`
 for `git status --short | wc -l; git log --oneline -3; git diff --stat | tail -1`,
@@ -564,7 +573,7 @@ installed ones: ask the user. They read gash's runtime cache, never write
 it. The version `project` (`llm_runtime node project`, `--php project`,
 `gash run --runtime php:project`, `agent_test --runtime node:project`) is
 the one the project in the working directory pins, read as
-`node_detect_version` and `php_detect_version` read it (`.nvmrc`,
+`gash runtime detect node` and `gash runtime detect php` read it (`.nvmrc`,
 `.node-version`, `package.json` engines.node; `.target-php-version`,
 `composer.json` require.php, `.github/copilot-instructions.md`); a project
 that pins none is `runtime_not_pinned` (STOP: ask the user which version),
@@ -577,7 +586,7 @@ functions):
 |---|---|
 | `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
 | `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime node:24\|php:8.4\|php:project] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--plain` drops escape sequences (colors, cursor moves, titles) and keeps the last state of a line redrawn with carriage returns (progress bars), before the budget and `--test-summary` read the output; `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
-| `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
+| `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","command","family","short","usage","flags","replaces"}]`, family `read` or `write`, command the same function as `gash llm WORD` or `gash agent WORD`; a table without `--json` |
 
 ### 3.12 Remote hosts
 
@@ -648,8 +657,8 @@ write). Their targets follow the transfer policy: DENY paths are
 .ssh) `sensitive_path` (STOP) without `--force`, checked before connecting
 and again on the host after resolving links.
 
-The interactive `remote_exec`, `remote_push`, `remote_pull`,
-`remote_sync_push` and `remote_sync_pull` answer a refusal in headless
+The interactive `gash remote exec`, `gash remote push`, `gash remote pull`,
+`gash remote sync push` and `gash remote sync pull` answer a refusal in headless
 mode with the error envelope as well, one line on stderr, status 1:
 `unknown_host`, `host_unreachable`, `missing_host`, `empty_command`,
 `unexpected_argument`, `unknown_option`, `missing_value`, `path_unreadable`
@@ -676,7 +685,7 @@ read-only as locally.
 
 Real output; only whitespace was changed to fit the page.
 
-### 4.1 Size list (`files_largest`, `dirs_largest`, `dirs_find_large` with `--json`)
+### 4.1 Size list (`gash files largest`, `gash files largest-dirs`, `gash files big-dirs` with `--json`)
 
 ```json
 {
@@ -690,18 +699,18 @@ Real output; only whitespace was changed to fit the page.
 ```
 
 kind is "files" or "directories"; directories have no mtime unless
-`dirs_find_large --with-mtime`. errors counts unreadable entries (usually
+`gash files big-dirs --with-mtime`. errors counts unreadable entries (usually
 permission denied). No results: `"data": []` and `"count": 0`. Equal sizes
-are ordered by mtime, newer first (`files_largest`), then by path in
+are ordered by mtime, newer first (`gash files largest`), then by path in
 descending byte order.
 
-### 4.2 Empty dirs (`dirs_list_empty --json`)
+### 4.2 Empty dirs (`gash files empty-dirs --json`)
 
 ```json
 {"data":["/tmp/web.tbjb/empty","/tmp/web.tbjb/tests"],"count":2,"path":"/tmp/web.tbjb","errors":0}
 ```
 
-### 4.3 Tree stats (`tree_stats --json --top 2`)
+### 4.3 Tree stats (`gash files stats --json --top 2`)
 
 ```json
 {"data":{"path":"/tmp/web.tbjb","files_total":4,"dirs_total":5,"size_total":594370,
@@ -879,7 +888,7 @@ the host's command):
 ```
 
 Do not install it yourself: show the user the command and let them decide.
-`gash_doctor --json` lists every tool with its state; `gash_doctor
+`gash doctor --json` lists every tool with its state; `gash doctor
 --install` refuses for an agent (`install_needs_confirmation`, with the
 command in `install`).
 
@@ -1042,15 +1051,15 @@ read-only database user in `~/.gash_env`.
 
 ### 6.5 AI functions
 
-`ai_query` and `ai_sysinfo` send text to Claude or Gemini after redacting
+`gash ai query` and `gash ai sysinfo` send text to Claude or Gemini after redacting
 private key blocks, URL passwords, `password=`/`token:`-style values,
 Authorization headers, `SSH:` passphrase lines, crypt password hashes and
 known token formats (sk-, ghp_, AKIA, xox, AIza). Redaction is pattern-based
 and can miss secrets (free text such as "the password is ..." is sent). `GASH_AI_CONFIRM`: auto (default) asks before sending data
-Gash collected itself (`ai_sysinfo`), 1 asks before every request, 0 never
+Gash collected itself (`gash ai sysinfo`), 1 asks before every request, 0 never
 asks; any other value asks before every request and warns. In headless mode or without a terminal, a request that needs
-confirmation is refused. `ai_ask` needs a terminal and refuses headless:
-use `ai_query "question"`. Piped input must start within 2 seconds; an open
+confirmation is refused. `gash ai ask` needs a terminal and refuses headless:
+use `gash ai query "question"`. Piped input must start within 2 seconds; an open
 but silent stdin is ignored with a warning (redirect `</dev/null`). Call
 AI functions only when the user asks for them.
 

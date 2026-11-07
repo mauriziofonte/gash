@@ -7,8 +7,9 @@
 #
 # It builds a fresh demo home (sandbox.sh) and makes it HOME, so the
 # prompt reads ~/projects/shop and nothing of the recording machine shows.
-# Then it loads this checkout's gash.sh, with the gash binary named by
-# GASH_BIN (render.sh and the Demos workflow build it from this checkout).
+# Then it loads this checkout's gash.sh and bash_completion, with the gash
+# binary named by GASH_BIN (render.sh and the Demos workflow build it from
+# this checkout).
 # --headless loads nothing and links this checkout at ~/.gash: the tape
 # loads Gash the way an agent does.
 if [ -z "${GASH_BIN:-}" ] || [ ! -x "$GASH_BIN" ]; then
@@ -32,5 +33,8 @@ if [ "${1:-}" = --headless ]; then
 else
     # shellcheck source=/dev/null
     source "$GASH_SH"
+    # The completion, as ~/.gashrc loads it.
+    # shellcheck source=/dev/null
+    source "$GASH_DEMO_REPO/bash_completion"
 fi
 clear

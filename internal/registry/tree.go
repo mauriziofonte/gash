@@ -160,12 +160,14 @@ var formerOf3x = map[string]string{"help": "gash_help", "update": "gash_upgrade"
 var Exempt = []string{"gash", "help", "nvm", "needs_help", "needs_confirm_prompt", "path_add", "gash_migrate"}
 
 // FormerNames are the flat names of the command that keep working through
-// 3.x (the catalog function name), empty for a permanent one.
+// 3.x (the catalog function name), empty for a permanent one and for a
+// function that is the command's shortcut (gl).
 func (c *Command) FormerNames() []string {
 	if f, ok := formerOf3x[c.Command3x]; ok && len(c.Path) == 1 {
 		return []string{f}
 	}
-	if c.Handler == "" || c.Permanent() {
+	if c.Handler == "" || c.Permanent() || c.Handler == c.Shortcut {
+		// The gl* log functions are their own shortcuts: they stay.
 		return nil
 	}
 	return []string{c.Handler}

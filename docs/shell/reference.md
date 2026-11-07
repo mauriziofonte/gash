@@ -2,34 +2,36 @@
 
 # Shell: reference
 
-The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`all_colors`](#all_colors) |  | Display all 256 terminal colors |
-| [`gash_inspiring_quote`](#gash_inspiring_quote) |  | Display a random quote, optionally with its source |
-| [`hgrep`](#hgrep) |  | Smart history search with timestamps and deduplication |
-| [`history_grep`](#history_grep) | `hg` | Search command history with colored output |
-| [`mkdir_cd`](#mkdir_cd) | `mkcd` | Create a directory and cd into it |
+| [`gash shell colors`](#gash-shell-colors) |  | Display all 256 terminal colors |
+| [`gash shell history`](#gash-shell-history) | `hg` | Search command history with colored output |
+| [`gash shell history-smart`](#gash-shell-history-smart) |  | Smart history search with timestamps and deduplication |
+| [`gash shell mkcd`](#gash-shell-mkcd) | `mkcd` | Create a directory and cd into it |
+| [`gash shell quote`](#gash-shell-quote) |  | Display a random quote, optionally with its source |
 | [`path_add`](#path_add) |  | Add directories to PATH once each |
 
-### all_colors
+### gash shell colors
 
 Display all 256 terminal colors.
+
+Former name: `all_colors` (works through 3.x).
 
 #### Usage
 
 ```text
-all_colors
+gash shell colors
 ```
 
 #### Examples
 
 ```bash
 # Test your terminal's color support
-all_colors
+gash shell colors
 ```
 
 #### Notes
@@ -39,50 +41,61 @@ Colors only on a color terminal: piped, or with NO_COLOR set, it prints
 the color names alone.
 ```
 
-### gash_inspiring_quote
+### gash shell history
 
-Display a random quote, optionally with its source.
+Search command history with colored output.
+
+Shortcut: `hg`. Former name: `history_grep` (works through 3.x).
 
 #### Usage
 
 ```text
-gash_inspiring_quote [--source]
+gash shell history PATTERN...
 ```
 
 #### Examples
 
 ```bash
-# The quote shown under the banner
-gash_inspiring_quote
+# Find all git commands in history
+gash shell history git
 
-# Where it was said or written
-gash_inspiring_quote --source
+# Find docker-compose commands
+gash shell history "docker compose"
+
+# Find SSH connections
+gash shell history "ssh "
 ```
 
 #### Notes
 
 ```text
-Quotes live in quotes/list.txt: one `"Text." — Author` line each,
-under a `# ` line with the source (book, essay, talk, mail; a link
-where one exists). New quotes need a source that can be checked;
-see CONTRIBUTING.md.
+Simple and fast. For advanced features (timestamps,
+deduplication, JSON output), use hgrep instead.
+The words are joined with spaces into one pattern (a GNU grep basic
+regex, case-insensitive) matched against each command. Column 2 is a
+command's first two words, column 3 the rest; duplicates and the
+gash shell history/hg lines themselves are left out.
 ```
 
-### hgrep
+See also: [`gash shell history-smart`](../shell/reference.md#gash-shell-history-smart)
+
+### gash shell history-smart
 
 Smart history search with timestamps and deduplication.
+
+Former name: `hgrep` (works through 3.x).
 
 #### Usage
 
 ```text
-hgrep PATTERN [OPTIONS]
+gash shell history-smart PATTERN [OPTIONS]
 ```
 
 #### Options
 
 ```text
 -n, --limit N       Show only the N most recent matches (0: all)
--a, --all           Include hgrep/history_grep commands in results
+-a, --all           Include hgrep/gash shell history commands in results
 -r, --reverse       Newest first (default: oldest first)
 -j, --json          Output as JSON array
 -H, --no-highlight  Disable highlighting / force plain output
@@ -100,31 +113,31 @@ hgrep PATTERN [OPTIONS]
 
 ```bash
 # Search for git push commands
-hgrep "git push"
+gash shell history-smart "git push"
 
 # Last 10 docker commands
-hgrep docker -n 10
+gash shell history-smart docker -n 10
 
 # Export history as JSON
-hgrep deploy -j
+gash shell history-smart deploy -j
 
 # Count how many times you ran a command
-hgrep "npm install" -c
+gash shell history-smart "npm install" -c
 
 # Regex: git push or pull at the start
-hgrep -E "^git (push|pull)"
+gash shell history-smart -E "^git (push|pull)"
 
 # Group "cd X && ..." variants under one prefix
-hgrep cd -g
+gash shell history-smart cd -g
 
 # Fuzzy-pick a past git command (needs fzf)
-hgrep git --pick
+gash shell history-smart git --pick
 
 # Newest first
-hgrep kubectl -r
+gash shell history-smart kubectl -r
 
 # A pattern that starts with "-"
-hgrep -- --force
+gash shell history-smart -- --force
 ```
 
 #### Notes
@@ -145,66 +158,28 @@ With --json:
 [{"timestamp":"2024-01-15 14:52:01","epoch":1705330321,"count":1,"command":"git push origin main"},...]
 ```
 
-See also: [`history_grep`](../shell/reference.md#history_grep)
+See also: [`gash shell history`](../shell/reference.md#gash-shell-history)
 
-### history_grep
-
-Search command history with colored output.
-
-Alias: `hg`
-
-#### Usage
-
-```text
-history_grep PATTERN...
-```
-
-#### Examples
-
-```bash
-# Find all git commands in history
-hg git
-
-# Find docker-compose commands
-hg "docker compose"
-
-# Find SSH connections
-hg "ssh "
-```
-
-#### Notes
-
-```text
-Simple and fast. For advanced features (timestamps,
-deduplication, JSON output), use hgrep instead.
-The words are joined with spaces into one pattern (a GNU grep basic
-regex, case-insensitive) matched against each command. Column 2 is a
-command's first two words, column 3 the rest; duplicates and the
-history_grep/hg lines themselves are left out.
-```
-
-See also: [`hgrep`](../shell/reference.md#hgrep)
-
-### mkdir_cd
+### gash shell mkcd
 
 Create a directory and cd into it.
 
-Alias: `mkcd`
+Shortcut: `mkcd`. Former name: `mkdir_cd` (works through 3.x).
 
 #### Usage
 
 ```text
-mkdir_cd DIRECTORY
+gash shell mkcd DIRECTORY
 ```
 
 #### Examples
 
 ```bash
 # Create and enter a new project directory
-mkcd my-new-project
+gash shell mkcd my-new-project
 
 # Create nested directories and enter
-mkcd ~/projects/client/frontend
+gash shell mkcd ~/projects/client/frontend
 ```
 
 #### Notes
@@ -212,6 +187,37 @@ mkcd ~/projects/client/frontend
 ```text
 Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates
 ./-. CDPATH is not searched, and nothing is printed.
+```
+
+### gash shell quote
+
+Display a random quote, optionally with its source.
+
+Former name: `gash_inspiring_quote` (works through 3.x).
+
+#### Usage
+
+```text
+gash shell quote [--source]
+```
+
+#### Examples
+
+```bash
+# The quote shown under the banner
+gash shell quote
+
+# Where it was said or written
+gash shell quote --source
+```
+
+#### Notes
+
+```text
+Quotes live in quotes/list.txt: one `"Text." — Author` line each,
+under a `# ` line with the source (book, essay, talk, mail; a link
+where one exists). New quotes need a source that can be checked;
+see CONTRIBUTING.md.
 ```
 
 ### path_add

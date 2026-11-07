@@ -400,9 +400,9 @@ func TestLedger_GIT11(t *testing.T) {
 			require.Contains(t, fb.Usage, w, fn)
 		}
 	}
-	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_add_tag`, `git_delete_tag` |")
-	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_sync` |")
-	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_apply_patch` |")
+	require.Contains(t, testFile(t, "../../docs/security.md"), "| `gash git tag add`, `gash git tag delete` |")
+	require.Contains(t, testFile(t, "../../docs/security.md"), "| `gash git sync` |")
+	require.Contains(t, testFile(t, "../../docs/security.md"), "| `gash git patch` |")
 	ref := testFile(t, "../../docs/git/reference.md")
 	require.Contains(t, ref, "001 is the newest revision")
 	require.NotContains(t, ref, "Requires a clean git repo")

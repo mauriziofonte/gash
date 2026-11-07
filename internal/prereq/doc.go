@@ -2,7 +2,12 @@
 
 package prereq
 
-import "strings"
+import (
+	"slices"
+	"strings"
+
+	"github.com/mauriziofonte/gash/internal/registry"
+)
 
 // managerTitles are the columns of the package tables, in Managers order.
 var managerTitles = map[Manager]string{
@@ -147,13 +152,14 @@ func osTitles(list []string) []string {
 	return out
 }
 
-// joinUsers is "`a`, `b` and `c`", each function in code; a qualifier in
+// joinUsers is "`a`, `b` and `c`", each function in code by its
+// canonical command, once; a qualifier in
 // parentheses stays outside the code span.
 func joinUsers(u []string) string {
-	parts := make([]string, len(u))
-	for i, x := range u {
+	var parts []string
+	for _, x := range u {
 		if strings.HasPrefix(x, "every ") {
-			parts[i] = strings.Replace(x, "--host", "`--host`", 1)
+			parts = append(parts, strings.Replace(x, "--host", "`--host`", 1))
 			continue
 		}
 		name, rest, _ := strings.Cut(x, " ")
@@ -162,9 +168,15 @@ func joinUsers(u []string) string {
 			word, more, _ := strings.Cut(rest, " ")
 			name, rest = "gash "+word, more
 		}
-		parts[i] = "`" + name + "`"
+		if c, ok := registry.CommandOf(name); ok && len(c.FormerNames()) > 0 {
+			name = c.Name()
+		}
+		part := "`" + name + "`"
 		if rest != "" {
-			parts[i] += " " + rest
+			part += " " + rest
+		}
+		if !slices.Contains(parts, part) {
+			parts = append(parts, part)
 		}
 	}
 	if len(parts) == 1 {

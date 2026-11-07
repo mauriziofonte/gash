@@ -7,7 +7,7 @@
 [![Platforms](https://img.shields.io/badge/linux%20%C2%B7%20macOS%20%C2%B7%20WSL-amd64%20%7C%20arm64-4EAA25?logo=gnubash&logoColor=white)](#supported-systems)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
+![Gash at a terminal: the overview, gash files largest, gash files stats and gash system info overview](docs/assets/demo.gif)
 
 Gash adds 121 functions and 155 aliases to Bash, for the jobs that
 otherwise take a pipeline or a search: find what fills a disk, see what
@@ -69,56 +69,67 @@ WSL 2 runs the Linux build. macOS needs a current Bash from Homebrew
 
 ## Quick start
 
+Every command is `gash NAMESPACE COMMAND`, and Tab completes each word,
+with a description, and the values they take (hosts, databases, tags,
+containers):
+
 ```bash
-gash                      # the reference card: every area with its functions and aliases
-gash git                  # one area: functions, short aliases, usage
-gash_help files_largest   # full help with examples (aliases work too: gash_help flf)
-gash_help --search tag    # search every help page
-files_largest ~ -n 10     # the ten largest files in your home
-sysinfo overview          # host, OS, load, memory and disks at a glance
-gash_doctor               # check the install, and what this system lacks
+gash                          # the overview: every namespace and its commands
+gash files                    # one namespace: its commands, usage and shortcuts
+gash help files largest       # full help with examples (shortcuts work too: gash help flf)
+gash help --search tag        # search every help page
+gash files largest ~ -n 10    # the ten largest files in your home
+gash system info overview     # host, OS, load, memory and disks at a glance
+gash doctor                   # check the install, and what this system lacks
 ```
 
-![Finding things: gash git, gash_help --search tag, gash_help on an alias](docs/assets/help.gif)
+Shortcuts save typing in an interactive shell: `flf` is
+`gash files largest`, `gst` is `git status`, and `gash help shortcuts`
+lists them all (`GASH_SHORTCUTS` picks the packs you want). The flat names
+of 3.4 (`files_largest`) keep working through 3.x and print a one-line
+tip with the new name, once per session; [migration](docs/migration-3.5.md)
+has the table.
+
+![Finding things: gash git, Tab completion with descriptions, gash help --search tag, gash help on a shortcut](docs/assets/help.gif)
 
 ## What Gash does
 
 ### Files and disks
 
-`files_largest`, `dirs_largest`, `dirs_find_large`, `tree_stats` and
-`dirs_list_empty` find what takes the space. `archive_extract` unpacks
+`gash files largest`, `gash files largest-dirs`, `gash files big-dirs`, `gash files stats` and
+`gash files empty-dirs` find what takes the space. `gash files extract` unpacks
 every common archive format and refuses, before extracting anything, an
 archive whose members would land outside the target folder.
-`file_backup` makes a timestamped copy before you edit.
+`gash files backup` makes a timestamped copy before you edit.
 [Guide](docs/files/README.md)
 
-![dirs_largest, dirs_list_empty, archive_extract refusing an unsafe tar, file_backup](docs/assets/files.gif)
+![gash files largest-dirs, gash files empty-dirs, gash files extract refusing an unsafe tar, gash files backup](docs/assets/files.gif)
 
 ### Git
 
-`gl` and its siblings draw a compact log. `git_sync` stages, commits and
-pushes; `git_add_tag` creates an annotated tag and pushes it; both show
+`gl` and its siblings draw a compact log. `gash git sync` stages, commits and
+pushes; `gash git tag add` creates an annotated tag and pushes it; both show
 what they will do and ask first (`--yes` skips the question, `--dry-run`
 only shows). Around them sit 37 short aliases and 6 log helpers (`gst`,
-`gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with damaged
+`gcm`, `gpf`, `gswc`...) and `gash git repair` for a repository with damaged
 objects. [Guide](docs/git/README.md)
 
-![gl, git_sync and git_add_tag with their plan and question, git_list_tags](docs/assets/git.gif)
+![gl, gash git sync and gat with their plan and question, gash git tag list](docs/assets/git.gif)
 
 ### Processes, ports and the system
 
-`process_find` and `port_kill` answer "what holds port 8080" and free it,
-after asking. `sysinfo` reports the machine section by section,
-`disk_usage` the mounts, `hgrep` searches your history with timestamps.
+`gash system ps` and `gash system port-kill` answer "what holds port 8080" and free it,
+after asking. `gash system info` reports the machine section by section,
+`gash system disks` the mounts, `gash shell history-smart` searches your history with timestamps.
 [Guide](docs/system/README.md)
 
-![process_find, port_kill with its question, hgrep](docs/assets/system.gif)
+![gash system ps, gash system port-kill with its question, gash shell history-smart](docs/assets/system.gif)
 
 ### Docker, remote hosts and databases
 
-`docker_compose_check` tells which images of a Compose stack have a newer
-version, and `docker_compose_upgrade` pulls them and restarts the stack.
-`remote_exec`, `remote_push` and `remote_sync_push` work with the SSH
+`gash docker compose check` tells which images of a Compose stack have a newer
+version, and `gash docker compose upgrade` pulls them and restarts the stack.
+`gash remote exec`, `gash remote push` and `gash remote sync push` work with the SSH
 hosts you name in `~/.gash_env`, and refuse system paths on the other
 side. The `DB:` connections of the same file are queried read-only by
 `llm_db_query` and its siblings, for MySQL, MariaDB, PostgreSQL and SQLite,
@@ -127,7 +138,7 @@ locally or on a remote host. Guides: [Docker](docs/docker/README.md),
 
 ### PHP, Node.js and local sites
 
-`php_detect_version` and `node_detect_version` read which version a
+`gash runtime detect php` and `gash runtime detect node` read which version a
 project wants; `gash run --runtime node:project -- npm test` runs a
 command under it. `gash hte` runs local Apache and PHP-FPM sites with HTTPS, one
 pool per PHP version, as your own user; installing it needs `sudo` once,
@@ -141,7 +152,7 @@ Guides: [runtimes](docs/runtimes/README.md),
 
 Inside WSL, `gash wsl` checks and repairs the WSL setup and `gash win`
 reads the Windows host (services, ports, updates, events, Defender);
-`wsl_compact` gives the disk space of the virtual disk back to Windows.
+`gash wsl compact` gives the disk space of the virtual disk back to Windows.
 `gash logs` finds the log files that fill a disk and reclaims the space
 without breaking the programs that write them.
 Guides: [Windows and WSL](docs/windows/README.md), [logs](docs/logs/README.md)
@@ -149,7 +160,7 @@ Guides: [Windows and WSL](docs/windows/README.md), [logs](docs/logs/README.md)
 ### AI from the terminal
 
 `ask` puts one question to Claude or Gemini from the terminal, with piped
-files as context; `ai_sysinfo` sends a report of this system for a
+files as context; `gash ai sysinfo` sends a report of this system for a
 diagnosis, after asking. Secrets are redacted before anything is sent.
 [Guide](docs/ai/README.md)
 
@@ -192,12 +203,12 @@ Most of Gash needs nothing beyond the install. A function that drives
 another program (rsync, Docker, expect, a database client on a remote
 host) checks for it first; when it is missing, the function stops with an
 error that names the program and the command that installs it on your
-system. `gash_doctor` lists everything this system lacks, and
-`gash_doctor --install` installs it after asking:
+system. `gash doctor` lists everything this system lacks, and
+`gash doctor --install` installs it after asking:
 
 ```bash
-gash_doctor --prereqs           # what is missing, by area, with the install command
-gash_doctor --install rsync     # install one tool (asks first)
+gash doctor --prereqs           # what is missing, by area, with the install command
+gash doctor --install rsync     # install one tool (asks first)
 ```
 
 [docs/requirements.md](docs/requirements.md) lists every tool with its
@@ -207,7 +218,7 @@ package on each system.
 
 Settings are `GASH_*` lines in `~/.gash_env`, a private file that also holds
 the SSH keys to unlock, the database connections, AI tokens and remote
-hosts (`gash_env_init` creates it from the [template](.gash_env.template)):
+hosts (`gash config init` creates it from the [template](.gash_env.template)):
 
 ```bash
 GASH_PROMPT=0            # keep your own PS1

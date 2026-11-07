@@ -13,7 +13,7 @@ binary.
 
 CI installs Gash on each of these systems at every change: from the bare
 image, `install.sh` installs what Gash needs with the system's package
-manager, then `gash_doctor` installs every package Gash can use and checks
+manager, then `gash doctor` installs every package Gash can use and checks
 that each one provides its tool. The last column is the end-to-end test of
 the local web stack ([`gash hte`](hte/README.md)).
 
@@ -37,7 +37,7 @@ the local web stack ([`gash hte`](hte/README.md)).
 <!-- END generated: systems -->
 
 Other distributions work when they have Bash 4.4 and the tools of
-[the requirements](requirements.md); `gash_doctor` recognizes the families
+[the requirements](requirements.md); `gash doctor` recognizes the families
 above (Debian, the RHEL family, Arch, SUSE, Alpine) through
 `/etc/os-release`, so a derivative such as Linux Mint, Pop!_OS, CentOS
 Stream or Manjaro gets the same install commands as its parent.
@@ -63,7 +63,7 @@ system, with status 1, or confirms that everything is there.
 Everything else Gash can use (Docker, rsync, expect, Apache, the database
 clients of remote hosts...) is needed only by the functions that use it.
 [docs/requirements.md](requirements.md) lists every tool with its package
-on each system. After the install, `gash_doctor` shows what this machine
+on each system. After the install, `gash doctor` shows what this machine
 lacks and installs it on request.
 
 macOS ships Bash 3.2, which is too old. Install a current Bash first:
@@ -118,7 +118,7 @@ The installer:
 6. downloads the `gash` binary of that release for your system into
    `~/.local/share/gash/versions/VERSION/` and checks its SHA-256 against
    the hash the release tag pins in `release/SHA256SUMS`;
-7. offers to install, through `gash_doctor --install`, the tools that
+7. offers to install, through `gash doctor --install`, the tools that
    single functions use and this system lacks.
 
 Open a new terminal when it is done, or run `source ~/.bashrc`. Running the
@@ -129,7 +129,7 @@ tag; it refuses when the checkout has local changes.
 
 | Option | Effect |
 |---|---|
-| `--assume-yes`, `-y` | Install without asking. Missing required tools are installed with the package manager; the tools of single functions are not (run `gash_doctor --install` later). |
+| `--assume-yes`, `-y` | Install without asking. Missing required tools are installed with the package manager; the tools of single functions are not (run `gash doctor --install` later). |
 | `--quiet`, `-q` | Print only warnings and errors. |
 | `--check` | Report what is missing and change nothing (status 1 when something is). |
 | `--repair` | Download and verify the binary of the installed version again, and nothing else. |
@@ -189,8 +189,8 @@ release archive by hand, with cosign or `gh attestation verify`, is in
 
 ```bash
 gash                 # the reference card: every topic with its functions
-gash_doctor          # check the install, and list what this system lacks
-gash_doctor --install   # install the missing tools, after asking
+gash doctor          # check the install, and list what this system lacks
+gash doctor --install   # install the missing tools, after asking
 ```
 
 [docs/gash/README.md](gash/README.md) explains the card, the help and the
@@ -212,7 +212,7 @@ The previous version and its binary are kept for `--rollback`. Open a new
 terminal afterwards.
 
 If the binary of the installed version is missing or damaged (a failed
-download, a cleaned cache), `gash_doctor` says so and this restores it:
+download, a cleaned cache), `gash doctor` says so and this restores it:
 
 ```bash
 bash ~/.gash/install.sh --repair
@@ -252,11 +252,11 @@ The 2.1.0 migration is described in
 ## Remove Gash
 
 ```bash
-gash_unload      # this shell only: back to how it was before Gash loaded
-gash_uninstall   # remove Gash, its profile block and ~/.gashrc (asks first)
+gash unload      # this shell only: back to how it was before Gash loaded
+gash uninstall   # remove Gash, its profile block and ~/.gashrc (asks first)
 ```
 
-`gash_uninstall` keeps a copy of each profile as it was before the edit,
+`gash uninstall` keeps a copy of each profile as it was before the edit,
 and of a `~/.gashrc` that holds your own lines, as
 `FILE.gash-uninstall.bak`. If you installed the local web stack, run
 `gash hte uninstall --yes` first: it stops the stack and restores the

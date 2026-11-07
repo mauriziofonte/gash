@@ -13,7 +13,7 @@ Platforms: Linux, macOS and WSL, in an interactive Bash. A headless shell
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [fzf](../requirements.md#tool-fzf) (optional), for `hgrep` (--pick)
+- [fzf](../requirements.md#tool-fzf) (optional), for `gash shell history-smart` (--pick)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
@@ -68,7 +68,7 @@ direnv, VTE and similar tools keep working.
 
 The navigation aliases climb directories: `..` runs `cd ..`, `...` two levels,
 `....` three, `.....` and `.4` four, `.5` five (`cd..` is there for the typo).
-`mkcd` ([`mkdir_cd`](reference.md#mkdir_cd)) creates a directory, with its
+`mkcd` ([`gash shell mkcd`](reference.md#gash-shell-mkcd)) creates a directory, with its
 parents, and enters it:
 
 <!-- example
@@ -83,7 +83,7 @@ $ pwd
 ~/projects
 ```
 
-`mkdir_cd` takes exactly one directory, taken as a name even when it starts
+`gash shell mkcd` takes exactly one directory, taken as a name even when it starts
 with `-`, and prints nothing. The listing aliases add the color option of your
 `ls`: `ll` (long), `la` (long, with hidden files), `l` (columns), `lash` (long,
 hidden, human sizes). `path` prints `PATH` one directory per line, and `cls`
@@ -128,29 +128,29 @@ history settings alone.
 
 Two functions search it:
 
-| | [`hgrep`](reference.md#hgrep) | [`hg`](reference.md#history_grep) (`history_grep`) |
+| | [`gash shell history-smart`](reference.md#gash-shell-history-smart) | [`hg`](reference.md#gash-shell-history) (`gash shell history`) |
 |---|---|---|
 | Reads | the history file, which every shell writes to | the history of this shell: what it loaded when it started and what you typed since |
 | Pattern | fixed text, or a regular expression with `-E` | a basic regular expression (grep) |
 | Shows | each command once, with the time of its last run | each command once, with a row number |
 | Extras | count, JSON, newest first, limit, fuzzy pick | none |
 
-Both ignore case and leave out their own calls. `hgrep` lists the matches
+Both ignore case and leave out their own calls. `gash shell history-smart` lists the matches
 oldest first:
 
 <!-- example
 printf '%s\n' '#1772442900' 'git pull --rebase' '#1772443200' 'make test' '#1772445900' 'git push origin main' '#1772445960' 'ssh deploy@web1' '#1772526600' 'git pull --rebase' '#1772559900' 'git push origin main' '#1772622000' 'git push --force-with-lease origin fix-login' >.bash_history
 -->
 ```console
-$ hgrep "git push"
+$ gash shell history-smart "git push"
 [2026-03-03 17:45:00] git push origin main
 [2026-03-04 11:00:00] git push --force-with-lease origin fix-login
-$ hgrep -E "^git (push|pull)" -r -n 2
+$ gash shell history-smart -E "^git (push|pull)" -r -n 2
 [2026-03-04 11:00:00] git push --force-with-lease origin fix-login
 [2026-03-03 17:45:00] git push origin main
-$ hgrep git -c
+$ gash shell history-smart git -c
 3
-$ hgrep ssh --json
+$ gash shell history-smart ssh --json
 [{"timestamp":"2026-03-02 10:06:00","epoch":1772445960,"count":1,"command":"ssh deploy@web1"}]
 ```
 
@@ -159,9 +159,9 @@ counts the distinct commands, and `--json` gives each one with the number of
 times it ran. On a terminal, matches are highlighted and `-g` groups commands
 that share a prefix such as `cd app &&`. `--pick` opens the matches in `fzf`
 and prints the one you choose. A pattern that starts with `-` goes after
-`--`: `hgrep -- --force`.
+`--`: `gash shell history-smart -- --force`.
 
-`hgrep` only sees commands saved with a timestamp. Commands saved before Gash
+`gash shell history-smart` only sees commands saved with a timestamp. Commands saved before Gash
 managed your history, or with `GASH_HISTORY=0`, have none: `hg` still finds
 them while they are in the history of the current shell.
 
@@ -214,14 +214,14 @@ $ gash
 
 `gash git` shows the functions of one topic with their short alias and usage,
 then the aliases your shell defines for it; `gash all` shows every topic.
-[`gash_help`](../gash/reference.md#gash_help) gives the full help of a
-function or of its alias (`gash_help flf`), with examples;
-`gash_help --search WORD` searches every help page, and
-`gash_help --short NAME` prints the one-line description:
+[`gash help`](../gash/reference.md#gash-help) gives the full help of a
+function or of its alias (`gash help flf`), with examples;
+`gash help --search WORD` searches every help page, and
+`gash help --short NAME` prints the one-line description:
 
 <!-- example -->
 ```console
-$ gash_help --short dfl
+$ gash help --short dfl
 Find directories exceeding a size threshold (single-walk aggregation)
 ```
 
@@ -259,7 +259,7 @@ the answer from.
 Gash output is colored on a terminal and plain when piped. `NO_COLOR` (any
 value) or `GASH_NO_COLOR` (any value but `0`) turn the colors off everywhere,
 the prompt included; many functions also take `--no-color` for one call.
-[`all_colors`](reference.md#all_colors) prints the 256 terminal colors, each
+[`gash shell colors`](reference.md#gash-shell-colors) prints the 256 terminal colors, each
 line `colourN` drawn in color N, to see what your terminal renders and pick a
 number for `\e[38;5;Nm`.
 
@@ -320,7 +320,7 @@ every replacement.
 When a shell starts, Gash also:
 
 - prints a banner line with its version and your user name, then a quote
-  ([`gash_inspiring_quote`](reference.md#gash_inspiring_quote); `--source`
+  ([`gash shell quote`](reference.md#gash-shell-quote); `--source`
   says where it comes from). `GASH_BANNER=0` hides both.
 - sets `EDITOR` to `nano`, or `vim`, when you have not chosen one.
 - applies `GASH_UMASK` (an octal mask such as `027`) when you set it.
@@ -341,18 +341,18 @@ alias or function.
 | An alias of this page does not exist (`type ll` finds nothing) | A program of the same name is installed, or you defined the name before Gash loaded. `type NAME` shows what runs; define the alias again in `~/.bash_aliases` |
 | The prompt is yours, not Gash's, or the git part stopped updating | `GASH_PROMPT` is not `1`, or a tool that loads after Gash assigned `PROMPT_COMMAND` instead of adding to it. Load that tool before Gash, or have it append to `PROMPT_COMMAND` |
 | The prompt is slow inside one repository | The git part runs `git status` at each prompt. Add the repository root to `GASH_GIT_EXCLUDE` |
-| `Error: Cannot read history file: PATH` | `hgrep` reads `HISTFILE` (default `~/.bash_history`), which does not exist yet or is not readable. It exists once a command has run with `GASH_HISTORY=1` |
-| `hgrep` finds nothing that `hg` finds | Those commands have no timestamp in the history file (see [Search your history](#search-your-history)) |
+| `Error: Cannot read history file: PATH` | `gash shell history-smart` reads `HISTFILE` (default `~/.bash_history`), which does not exist yet or is not readable. It exists once a command has run with `GASH_HISTORY=1` |
+| `gash shell history-smart` finds nothing that `hg` finds | Those commands have no timestamp in the history file (see [Search your history](#search-your-history)) |
 | `Error: Invalid regex: PATTERN` | The `-E` pattern is not a valid regular expression. Without `-E` the pattern is plain text |
 | `Error: hgrep (--pick) needs fzf, which is not installed.` | Run the install command printed below it, or drop `--pick` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
-| `Error: Unexpected argument: NAME` from `mkcd` | `mkdir_cd` takes one directory; quote a name that contains spaces |
+| `Error: Unexpected argument: NAME` from `mkcd` | `gash shell mkcd` takes one directory; quote a name that contains spaces |
 | `Error: Unknown topic: NAME. Topics: ...` | `gash` takes one of the topics it lists, or `all` |
-| `Error: No help found for 'NAME'.` | No function or alias has that name; the hint suggests `gash_help --search NAME` |
+| `Error: No help found for 'NAME'.` | No function or alias has that name; the hint suggests `gash help --search NAME` |
 | `Warning: GASH_UMASK must be an octal mask such as 022 or 077 (ignored)` | Set three or four octal digits, or remove the setting |
 
 ## See also
 
 - [reference.md](reference.md): every function and alias of this area, with all options.
 - [Configuration](../configuration.md): `~/.gash_env` and every `GASH_*` setting.
-- [Gash itself](../gash/README.md): `gash_help`, `gash_doctor`, updates and removal.
+- [Gash itself](../gash/README.md): `gash help`, `gash doctor`, updates and removal.
 - [Git](../git/README.md): the git aliases and the `gl` log functions.

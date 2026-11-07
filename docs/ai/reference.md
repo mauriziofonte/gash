@@ -2,38 +2,38 @@
 
 # AI assistants: reference
 
-Ask Claude or Gemini from the terminal, with the context of this system. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Ask Claude or Gemini from the terminal, with the context of this system. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`ai_ask`](#ai_ask) | `ask` | Ask the AI one question from the terminal |
-| [`ai_query`](#ai_query) |  | Non-interactive AI query with optional piped input |
-| [`ai_sysinfo`](#ai_sysinfo) | `sysinfo_ai` | AI-powered system security and configuration analysis |
-| [`gash_ai_list`](#gash_ai_list) |  | List configured AI providers |
+| [`gash ai ask`](#gash-ai-ask) | `ask` | Ask the AI one question from the terminal |
+| [`gash ai providers`](#gash-ai-providers) |  | List configured AI providers |
+| [`gash ai query`](#gash-ai-query) |  | Non-interactive AI query with optional piped input |
+| [`gash ai sysinfo`](#gash-ai-sysinfo) | `sysinfo_ai` | AI-powered system security and configuration analysis |
 
-### ai_ask
+### gash ai ask
 
 Ask the AI one question from the terminal.
 
-Alias: `ask`
+Shortcut: `ask`. Former name: `ai_ask` (works through 3.x).
 
 #### Usage
 
 ```text
-ai_ask [provider]
+gash ai ask [provider]
 ```
 
 #### Examples
 
 ```bash
 # Ask one question (uses first configured provider)
-ask
+gash ai ask
 
 # Use a specific provider
-ask claude
-ask gemini
+gash ai ask claude
+gash ai ask gemini
 
 # Type your question at the prompt:
 #   claude: how to find files larger than 100MB?
@@ -41,24 +41,24 @@ ask gemini
 #   Explanation: Finds all files larger than 100MB.
 
 # Pipe a config file and ask about it
-cat /etc/nginx/nginx.conf | ask claude
+cat /etc/nginx/nginx.conf | gash ai ask claude
 #   claude (or Enter for auto-analysis): is this config secure?
 #   Issue: ...
 #   Suggestion: ...
 
 # Pipe content and press Enter for auto-analysis
-cat my-script.sh | ask
+cat my-script.sh | gash ai ask
 #   (auto-analyzes: explains, identifies issues, suggests improvements)
 
 # Pipe multiple files for combined analysis
-cat /usr/local/bin/backup.sh /etc/systemd/system/backup.service | ask claude
+cat /usr/local/bin/backup.sh /etc/systemd/system/backup.service | gash ai ask claude
 #   claude (or Enter for auto-analysis): <your question>
 ```
 
 #### Pipe support
 
 ```text
-When stdin is piped, ai_ask reads the piped content first and
+When stdin is piped, gash ai ask reads the piped content first and
 then prompts for a question via the terminal. Press Enter
 without typing to auto-analyze the content (explains what it
 does, identifies issues, suggests improvements).
@@ -78,8 +78,8 @@ The AI automatically detects your intent:
 
 ```text
 One question per call; Enter on an empty line aborts, exit/quit cancel.
-ai_ask needs a terminal (not headless): from a script or an agent use
-ai_query "question" instead.
+gash ai ask needs a terminal (not headless): from a script or an agent use
+gash ai query "question" instead.
 Piped content is auto-truncated to 4KB to save tokens; piped input must
 start within 2 seconds, or stdin is ignored with a warning.
 -h/--help is help as the first word or right after the provider.
@@ -98,42 +98,74 @@ GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```
 
-See also: [`ai_query`](../ai/reference.md#ai_query), [`ai_sysinfo`](../ai/reference.md#ai_sysinfo), [`gash_ai_list`](../ai/reference.md#gash_ai_list)
+See also: [`gash ai query`](../ai/reference.md#gash-ai-query), [`gash ai sysinfo`](../ai/reference.md#gash-ai-sysinfo), [`gash ai providers`](../ai/reference.md#gash-ai-providers)
 
-### ai_query
+### gash ai providers
 
-Non-interactive AI query with optional piped input.
+List configured AI providers.
+
+Former name: `gash_ai_list` (works through 3.x).
 
 #### Usage
 
 ```text
-ai_query [provider] "query"
-command | ai_query "question about this output"
+gash ai providers
+```
+
+#### Examples
+
+```bash
+# Show configured AI providers
+gash ai providers
+```
+
+#### Notes
+
+```text
+Configure providers in ~/.gash_env with:
+  AI:claude=sk-ant-api03-xxxxx
+  AI:gemini=AIzaSyxxxxx
+The first configured provider is used by default.
+```
+
+See also: [`gash ai ask`](../ai/reference.md#gash-ai-ask), [`gash ai query`](../ai/reference.md#gash-ai-query), [`gash config init`](../gash/reference.md#gash-config-init)
+
+### gash ai query
+
+Non-interactive AI query with optional piped input.
+
+Former name: `ai_query` (works through 3.x).
+
+#### Usage
+
+```text
+gash ai query [provider] "query"
+command | gash ai query "question about this output"
 ```
 
 #### Examples
 
 ```bash
 # Ask a question (uses first configured provider)
-ai_query "how do I find files larger than 100MB?"
+gash ai query "how do I find files larger than 100MB?"
 
 # Use a specific provider
-ai_query claude "explain the difference between grep and rg"
+gash ai query claude "explain the difference between grep and rg"
 
 # Pipe a config file for analysis
-cat /etc/nginx/nginx.conf | ai_query "any security issues?"
+cat /etc/nginx/nginx.conf | gash ai query "any security issues?"
 
 # Pipe error logs for troubleshooting
-tail -50 /var/log/apache2/error.log | ai_query "what is wrong?"
+tail -50 /var/log/apache2/error.log | gash ai query "what is wrong?"
 
 # Pipe command output
-docker logs myapp 2>&1 | ai_query "why is this crashing?"
+docker logs myapp 2>&1 | gash ai query "why is this crashing?"
 
 # Review a script
-cat deploy.sh | ai_query "review this for bugs"
+cat deploy.sh | gash ai query "review this for bugs"
 
 # Pipe a diff for summary
-git diff | ai_query "summarize these changes"
+git diff | gash ai query "summarize these changes"
 ```
 
 #### Multi-source piping
@@ -145,18 +177,18 @@ git diff | ai_query "summarize these changes"
   cat /etc/apache2/apache2.conf
   echo "=== Ports ==="
   cat /etc/apache2/ports.conf
-} | ai_query "is this Apache setup correct?"
+} | gash ai query "is this Apache setup correct?"
 
 # Combine config and its test output
 {
   cat /etc/nginx/nginx.conf
   echo "---"
   nginx -t 2>&1
-} | ai_query "fix the nginx configuration errors"
+} | gash ai query "fix the nginx configuration errors"
 
 # Compare PHP-FPM pools
 diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
-  | ai_query "what changed between PHP 8.1 and 8.2 pool configs?"
+  | gash ai query "what changed between PHP 8.1 and 8.2 pool configs?"
 
 # Analyze multiple log sources
 {
@@ -164,7 +196,7 @@ diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
   tail -20 /var/log/syslog
   echo "=== App Log ==="
   tail -20 /var/log/myapp/error.log
-} | ai_query "correlate these errors"
+} | gash ai query "correlate these errors"
 ```
 
 #### Notes
@@ -174,7 +206,7 @@ Piped content is auto-truncated to 4KB to save tokens. Piped input must
 start within 2 seconds: an open stdin that stays silent is ignored with
 a warning (redirect </dev/null to skip the wait).
 When input is piped, the AI enters troubleshoot mode automatically.
-A provider alone is not a question: "ai_query claude" fails with
+A provider alone is not a question: "gash ai query claude" fails with
 "No query provided". -h/--help is help as the first word or as the
 only word after the provider; inside a longer question it is text.
 ```
@@ -192,32 +224,32 @@ GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```
 
-See also: [`ai_ask`](../ai/reference.md#ai_ask), [`ai_sysinfo`](../ai/reference.md#ai_sysinfo), [`gash_ai_list`](../ai/reference.md#gash_ai_list)
+See also: [`gash ai ask`](../ai/reference.md#gash-ai-ask), [`gash ai sysinfo`](../ai/reference.md#gash-ai-sysinfo), [`gash ai providers`](../ai/reference.md#gash-ai-providers)
 
-### ai_sysinfo
+### gash ai sysinfo
 
 AI-powered system security and configuration analysis.
 
-Alias: `sysinfo_ai`
+Shortcut: `sysinfo_ai`. Former name: `ai_sysinfo` (works through 3.x).
 
 #### Usage
 
 ```text
-ai_sysinfo [claude|gemini] [--raw] [--no-color]
+gash ai sysinfo [claude|gemini] [--raw] [--no-color]
 ```
 
 #### Examples
 
 ```bash
 # Run AI-powered system analysis
-ai_sysinfo
+gash ai sysinfo
 
 # Use a specific provider
-ai_sysinfo claude
-ai_sysinfo gemini
+gash ai sysinfo claude
+gash ai sysinfo gemini
 
 # Dump raw collected data (no API call, useful for debugging)
-ai_sysinfo --raw
+gash ai sysinfo --raw
 ```
 
 #### Interactive drill-down
@@ -254,7 +286,7 @@ listings leave secret files out.
 #### Privacy
 
 ```text
-Before the first request, ai_sysinfo shows how much system data it
+Before the first request, gash ai sysinfo shows how much system data it
 will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?
 question that collects data asks again before sending it. Without
 a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow
@@ -262,32 +294,4 @@ unattended runs. Secrets are redacted before sending either way.
 Use --raw to see exactly what is collected.
 ```
 
-See also: [`sysinfo`](../system/reference.md#sysinfo), [`ai_query`](../ai/reference.md#ai_query)
-
-### gash_ai_list
-
-List configured AI providers.
-
-#### Usage
-
-```text
-gash_ai_list
-```
-
-#### Examples
-
-```bash
-# Show configured AI providers
-gash_ai_list
-```
-
-#### Notes
-
-```text
-Configure providers in ~/.gash_env with:
-  AI:claude=sk-ant-api03-xxxxx
-  AI:gemini=AIzaSyxxxxx
-The first configured provider is used by default.
-```
-
-See also: [`ai_ask`](../ai/reference.md#ai_ask), [`ai_query`](../ai/reference.md#ai_query), [`gash_env_init`](../gash/reference.md#gash_env_init)
+See also: [`gash system info`](../system/reference.md#gash-system-info), [`gash ai query`](../ai/reference.md#gash-ai-query)

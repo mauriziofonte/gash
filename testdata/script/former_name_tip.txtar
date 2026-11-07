@@ -1,0 +1,32 @@
+# Gash 3.5. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.5 names)
+#
+# A former flat name typed at an interactive prompt, with stderr on a
+# terminal, prints one tip naming its command and shortcut, once per name
+# and session; GASH_LEGACY_HINTS=0 turns it off. script(1) gives the shell
+# its terminal (util-linux, Linux only); the lines arrive as typed, since
+# a former name in a script prints nothing.
+
+[!linux] skip 'script(1) of util-linux'
+[!exec:script] skip 'no script(1)'
+env GASH_BANNER=0
+mkdir d
+
+stdin drive.sh
+exec script -qec 'bash --norc --noprofile -i' /dev/null
+stdout -count=1 'tip: files_largest is now gash files largest \(shortcut flf\)'
+! stdout 'tip: .*gash files stats'
+
+env GASH_LEGACY_HINTS=0
+stdin drive.sh
+exec script -qec 'bash --norc --noprofile -i' /dev/null
+! stdout 'tip:'
+
+-- drive.sh --
+source "$GASH_SH" >/dev/null 2>&1
+files_largest d >/dev/null
+files_largest d >/dev/null
+gash files stats d >/dev/null
+flf d >/dev/null
+exit

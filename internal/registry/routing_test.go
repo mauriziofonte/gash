@@ -83,3 +83,11 @@ func TestRouting_AgentsMDHoldsTheTable(t *testing.T) {
 	}
 	require.Contains(t, section, "\n"+RoutingTable(), "AGENTS.md section 7 is not the routing table (go test ./internal/registry -update-docs)")
 }
+
+// TestAgentsHintSize: gash llm hint goes into an agent's instructions, on
+// every request of a session: it stays under 6 KB.
+func TestAgentsHintSize(t *testing.T) {
+	if n := len(AgentsHint()); n >= 6*1024 {
+		t.Fatalf("gash llm hint is %d bytes, over 6 KB", n)
+	}
+}

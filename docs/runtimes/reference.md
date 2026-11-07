@@ -2,41 +2,154 @@
 
 # PHP, Node.js and Chrome: reference
 
-Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`chrome_headless_update`](#chrome_headless_update) | `chri` | Install or upgrade chrome-headless-shell (Chrome for Testing) |
-| [`node_detect_version`](#node_detect_version) |  | Detect the Node.js version a project wants |
-| [`node_upgrade`](#node_upgrade) | `nvmc` | Upgrade each installed Node.js major to its newest patch |
-| [`nvm_prune_versions`](#nvm_prune_versions) | `nvmp` | Remove duplicate/older NVM patch versions |
-| [`php_detect_version`](#php_detect_version) |  | Detect the PHP version a project wants |
+| [`gash runtime detect node`](#gash-runtime-detect-node) |  | Detect the Node.js version a project wants |
+| [`gash runtime detect php`](#gash-runtime-detect-php) |  | Detect the PHP version a project wants |
+| [`gash runtime prune node`](#gash-runtime-prune-node) | `nvmp` | Remove duplicate/older NVM patch versions |
+| [`gash runtime upgrade chrome`](#gash-runtime-upgrade-chrome) | `chri` | Install or upgrade chrome-headless-shell (Chrome for Testing) |
+| [`gash runtime upgrade node`](#gash-runtime-upgrade-node) | `nvmc` | Upgrade each installed Node.js major to its newest patch |
 
-### chrome_headless_update
+### gash runtime detect node
 
-Install or upgrade chrome-headless-shell (Chrome for Testing).
+Detect the Node.js version a project wants.
 
-Alias: `chri`
+Former name: `node_detect_version` (works through 3.x).
 
 #### Usage
 
 ```text
-chrome_headless_update [-y] [--dry-run]
+gash runtime detect node [project_dir] [--json|--llm]
+```
+
+#### Examples
+
+```bash
+# Human-readable, current directory
+gash runtime detect node
+
+# JSON, specific project
+gash runtime detect node /path/to/project --json
+```
+
+#### Notes
+
+```text
+Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
+installed, read in project_dir only (no walk-up). Every source is
+reduced to its major (lts/NAME through nvm's alias files, then the
+codename table), and full_version is the newest installed patch of
+that major: an exact pin such as v20.9.0 resolves to the newest
+installed v20 patch. Installed versions are the vX.Y.Z directories of
+$NVM_DIR/versions/node (prereleases and other names do not count).
+When the major is not installed, a warning names it and the newest
+installed version is used. A project_dir that is not a directory gives
+"Warning: Directory not found: DIR" with the same answer and status 0.
+Unknown options are refused before the NVM directory is checked.
+JSON output is also emitted automatically under GASH_HEADLESS=1;
+--json (or --llm) is not required there.
+```
+
+### gash runtime detect php
+
+Detect the PHP version a project wants.
+
+Former name: `php_detect_version` (works through 3.x).
+
+#### Usage
+
+```text
+gash runtime detect php [project_dir] [--json|--llm]
+```
+
+#### Examples
+
+```bash
+# Human-readable, current directory
+gash runtime detect php
+
+# JSON, specific project
+gash runtime detect php /path/to/project --json
+```
+
+#### Notes
+
+```text
+Priority: .target-php-version (the first X.Y of its first line, looked
+up in project_dir, then in every parent directory except /) ->
+composer.json .require.php -> .github/copilot-instructions.md (the
+first "php X.Y") -> fallback 8.4. composer.json and
+copilot-instructions.md are read in project_dir only.
+A composer constraint is split on | and ||; each alternative counts by
+its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is
+8.0; * alone counts for nothing). The highest alternative whose
+/usr/bin/phpX.Y is installed wins, else the highest alternative.
+When /usr/bin/phpX.Y is not installed, a warning on stderr says so and
+names the binary used instead (/usr/bin/phpX, then php on PATH); the
+JSON is unchanged. A project_dir that is not a directory gives
+"Warning: Directory not found: DIR" with the same answer and status 0.
+JSON output is also emitted automatically under GASH_HEADLESS=1;
+--json (or --llm) is not required there.
+```
+
+### gash runtime prune node
+
+Remove duplicate/older NVM patch versions.
+
+Shortcut: `nvmp`. Former name: `nvm_prune_versions` (works through 3.x).
+
+#### Usage
+
+```text
+gash runtime prune node [-y|--yes|--force]
+```
+
+#### Examples
+
+```bash
+# Preview what would be removed (default, no changes made)
+gash runtime prune node
+
+# Actually uninstall the duplicate patch versions
+gash runtime prune node --force
+```
+
+#### Notes
+
+```text
+For each installed major version, keeps only the latest patch.
+The currently active version (nvm current) is never uninstalled,
+even if it is not the latest patch for its major. -f, -y and --yes
+are the same as --force. Exits 1 when a removal failed.
+```
+
+### gash runtime upgrade chrome
+
+Install or upgrade chrome-headless-shell (Chrome for Testing).
+
+Shortcut: `chri`. Former name: `chrome_headless_update` (works through 3.x).
+
+#### Usage
+
+```text
+gash runtime upgrade chrome [-y] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
 # Show what would change, touch nothing
-chri --dry-run
+gash runtime upgrade chrome --dry-run
 
 # After upgrading Playwright: bring the shared browser to the same build
-chri
+gash runtime upgrade chrome
 
 # Unattended (CI, provisioning scripts)
-chri -y
+gash runtime upgrade chrome -y
 ```
 
 #### Notes
@@ -62,69 +175,31 @@ browsers of its own:
 Without a terminal the question is refused: pass -y.
 ```
 
-See also: [`node_upgrade`](../runtimes/reference.md#node_upgrade)
+See also: [`gash runtime upgrade node`](../runtimes/reference.md#gash-runtime-upgrade-node)
 
-### node_detect_version
-
-Detect the Node.js version a project wants.
-
-#### Usage
-
-```text
-node_detect_version [project_dir] [--json|--llm]
-```
-
-#### Examples
-
-```bash
-# Human-readable, current directory
-node_detect_version
-
-# JSON, specific project
-node_detect_version /path/to/project --json
-```
-
-#### Notes
-
-```text
-Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
-installed, read in project_dir only (no walk-up). Every source is
-reduced to its major (lts/NAME through nvm's alias files, then the
-codename table), and full_version is the newest installed patch of
-that major: an exact pin such as v20.9.0 resolves to the newest
-installed v20 patch. Installed versions are the vX.Y.Z directories of
-$NVM_DIR/versions/node (prereleases and other names do not count).
-When the major is not installed, a warning names it and the newest
-installed version is used. A project_dir that is not a directory gives
-"Warning: Directory not found: DIR" with the same answer and status 0.
-Unknown options are refused before the NVM directory is checked.
-JSON output is also emitted automatically under GASH_HEADLESS=1;
---json (or --llm) is not required there.
-```
-
-### node_upgrade
+### gash runtime upgrade node
 
 Upgrade each installed Node.js major to its newest patch.
 
-Alias: `nvmc`
+Shortcut: `nvmc`. Former name: `node_upgrade` (works through 3.x).
 
 #### Usage
 
 ```text
-node_upgrade [-y] [--dry-run]
+gash runtime upgrade node [-y] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
 # See the plan, change nothing
-nvmc --dry-run
+gash runtime upgrade node --dry-run
 
 # Upgrade: plan, one question, then install and clean up
-nvmc
+gash runtime upgrade node
 
 # Unattended
-nvmc -y
+gash runtime upgrade node -y
 ```
 
 #### Notes
@@ -141,78 +216,7 @@ Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to
 nodejs.org. Without a terminal the question is refused: pass -y.
 ```
 
-See also: [`nvm_prune_versions`](../runtimes/reference.md#nvm_prune_versions), [`node_detect_version`](../runtimes/reference.md#node_detect_version)
-
-### nvm_prune_versions
-
-Remove duplicate/older NVM patch versions.
-
-Alias: `nvmp`
-
-#### Usage
-
-```text
-nvm_prune_versions [-y|--yes|--force]
-```
-
-#### Examples
-
-```bash
-# Preview what would be removed (default, no changes made)
-nvmp
-
-# Actually uninstall the duplicate patch versions
-nvmp --force
-```
-
-#### Notes
-
-```text
-For each installed major version, keeps only the latest patch.
-The currently active version (nvm current) is never uninstalled,
-even if it is not the latest patch for its major. -f, -y and --yes
-are the same as --force. Exits 1 when a removal failed.
-```
-
-### php_detect_version
-
-Detect the PHP version a project wants.
-
-#### Usage
-
-```text
-php_detect_version [project_dir] [--json|--llm]
-```
-
-#### Examples
-
-```bash
-# Human-readable, current directory
-php_detect_version
-
-# JSON, specific project
-php_detect_version /path/to/project --json
-```
-
-#### Notes
-
-```text
-Priority: .target-php-version (the first X.Y of its first line, looked
-up in project_dir, then in every parent directory except /) ->
-composer.json .require.php -> .github/copilot-instructions.md (the
-first "php X.Y") -> fallback 8.4. composer.json and
-copilot-instructions.md are read in project_dir only.
-A composer constraint is split on | and ||; each alternative counts by
-its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is
-8.0; * alone counts for nothing). The highest alternative whose
-/usr/bin/phpX.Y is installed wins, else the highest alternative.
-When /usr/bin/phpX.Y is not installed, a warning on stderr says so and
-names the binary used instead (/usr/bin/phpX, then php on PATH); the
-JSON is unchanged. A project_dir that is not a directory gives
-"Warning: Directory not found: DIR" with the same answer and status 0.
-JSON output is also emitted automatically under GASH_HEADLESS=1;
---json (or --llm) is not required there.
-```
+See also: [`gash runtime prune node`](../runtimes/reference.md#gash-runtime-prune-node), [`gash runtime detect node`](../runtimes/reference.md#gash-runtime-detect-node)
 
 ## Aliases
 
@@ -233,7 +237,7 @@ Loaded when `php` is on PATH. `phpX.Y` stands for the absolute path of that bina
 | `composer-self-update` | `sudo composer self-update` | when composer is installed |
 | `composer1-self-update` | `sudo composer1 self-update` | when composer1 is installed |
 
-## Commands
+## Command trees
 
 ### gash runtime
 

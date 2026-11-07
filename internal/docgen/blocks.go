@@ -50,7 +50,11 @@ func Prerequisites(a Area) string {
 		}
 	}
 	for _, f := range FunctionsOf(a.Key) {
-		add(f.Name, registry.NeedsOf(f.Name))
+		who := f.Name
+		if c, ok := registry.CommandOf(f.Name); ok && len(c.FormerNames()) > 0 {
+			who = c.Name()
+		}
+		add(who, registry.NeedsOf(f.Name))
 	}
 	for _, c := range a.Commands {
 		add("gash "+c, registry.NeedsOf("gash "+c))
@@ -89,4 +93,31 @@ func join(list []string) string {
 		return strings.Join(list, "")
 	}
 	return strings.Join(list[:len(list)-1], ", ") + " and " + list[len(list)-1]
+}
+
+// Migration is the generated table of docs/migration-3.5.md: every former
+// flat name with its canonical command and shortcut, by former name.
+func Migration() string {
+	type row struct{ former, canon, shortcut string }
+	var rows []row
+	for i := range registry.Tree() {
+		c := &registry.Tree()[i]
+		if c.Hidden {
+			continue
+		}
+		for _, n := range c.FormerNames() {
+			rows = append(rows, row{n, c.Name(), c.Shortcut})
+		}
+	}
+	slices.SortFunc(rows, func(a, b row) int { return strings.Compare(a.former, b.former) })
+	var b strings.Builder
+	b.WriteString("| Former name | Command | Shortcut |\n|---|---|---|\n")
+	for _, r := range rows {
+		sc := ""
+		if r.shortcut != "" {
+			sc = "`" + r.shortcut + "`"
+		}
+		b.WriteString("| `" + r.former + "` | `" + r.canon + "` | " + sc + " |\n")
+	}
+	return b.String()
 }

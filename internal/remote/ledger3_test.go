@@ -364,7 +364,8 @@ func TestLedger_REM09(t *testing.T) {
 	require.Contains(t, rex.Help.Body, "mode 0700")
 	ref, err := os.ReadFile(filepath.Join(absRoot, "docs/remote/reference.md"))
 	require.NoError(t, err)
-	require.Contains(t, string(ref), syncPullSpec.usage)
+	// The reference names the command: gash remote sync pull.
+	require.Contains(t, string(ref), "gash remote sync pull"+strings.TrimPrefix(syncPullSpec.usage, "remote_sync_pull"))
 }
 
 // TestFollowup_F08: with openrsync (macOS /usr/bin/rsync), which has no -s,

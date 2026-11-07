@@ -2,21 +2,21 @@
 
 # Gash itself: reference
 
-Help, the doctor, prerequisites, settings, updates and removal. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Help, the doctor, prerequisites, settings, updates and removal. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
 | [`gash`](#gash) |  | The overview of Gash: namespaces, their commands and shortcuts |
-| [`gash_doctor`](#gash_doctor) | `gdoctor` | Run health checks on the Gash installation |
-| [`gash_env_init`](#gash_env_init) |  | Create ~/.gash_env configuration template |
-| [`gash_help`](#gash_help) |  | The page of a command, a namespace or a topic; search every page |
+| [`gash config init`](#gash-config-init) |  | Create ~/.gash_env configuration template |
+| [`gash doctor`](#gash-doctor) | `gdoctor` | Run health checks on the Gash installation |
+| [`gash help`](#gash-help) |  | The page of a command, a namespace or a topic; search every page |
+| [`gash shell username`](#gash-shell-username) |  | Print the current user name |
+| [`gash uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
+| [`gash unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
+| [`gash update`](#gash-update) |  | Upgrade Gash to the latest version |
 | [`gash_migrate`](#gash_migrate) |  | Shows how to migrate a Gash 1.x configuration |
-| [`gash_uninstall`](#gash_uninstall) |  | Uninstall Gash and clean up configurations |
-| [`gash_unload`](#gash_unload) |  | Restore shell state to before Gash was loaded |
-| [`gash_upgrade`](#gash_upgrade) |  | Upgrade Gash to the latest version |
-| [`gash_username`](#gash_username) |  | Print the current user name |
 
 ### gash
 
@@ -63,19 +63,53 @@ gash all --no-color > gash-pages.txt
 gash files largest --limit 5
 ```
 
-See also: [`gash_help`](../gash/reference.md#gash_help), [`gash_doctor`](../gash/reference.md#gash_doctor)
+See also: [`gash_help`](../gash/reference.md#gash-help), [`gash_doctor`](../gash/reference.md#gash-doctor)
 
-### gash_doctor
+### gash config init
 
-Run health checks on the Gash installation.
+Create ~/.gash_env configuration template.
 
-Alias: `gdoctor`
+Former name: `gash_env_init` (works through 3.x).
 
 #### Usage
 
 ```text
-gash_doctor [--timing] [--no-color] [--prereqs] [--json]
-gash_doctor --install [--yes] [--all] [TOOL...]
+gash config init [--force]
+```
+
+#### Examples
+
+```bash
+# Create config from template (will not overwrite existing)
+gash config init
+
+# Overwrite existing config with fresh template
+gash config init --force
+```
+
+#### Notes
+
+```text
+Creates ~/.gash_env with template sections for:
+  SSH:~/.ssh/id_ed25519=your_passphrase
+  DB:default=mysql://user:pass@host:port/db
+  AI:claude=sk-ant-api03-xxxxx
+Always set permissions: chmod 600 ~/.gash_env
+```
+
+See also: [`gash db list`](../databases/reference.md#gash-db-list), [`gash ai providers`](../ai/reference.md#gash-ai-providers), [`gash remote unlock-keys`](../remote/reference.md#gash-remote-unlock-keys)
+
+### gash doctor
+
+Run health checks on the Gash installation.
+
+Shortcut: `gdoctor`. Former name: `gash_doctor` (works through 3.x).
+
+#### Usage
+
+```text
+gash doctor [--timing] [--no-color] [--prereqs] [--json]
+gash doctor --install [--yes] [--all] [TOOL...]
 ```
 
 #### Options
@@ -95,16 +129,16 @@ gash_doctor --install [--yes] [--all] [TOOL...]
 
 ```bash
 # Run a full health check
-gash_doctor
+gash doctor
 
 # What is missing on this system, and how to install it
-gash_doctor --prereqs
+gash doctor --prereqs
 
 # Install rsync and ssh with the package manager (asks first)
-gash_doctor --install rsync ssh
+gash doctor --install rsync ssh
 
 # Find what makes new shells slow
-gash_doctor --timing
+gash doctor --timing
 ```
 
 #### Notes
@@ -133,43 +167,13 @@ Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
 the same figures in its __GASH_LOAD_TIMES array.
 ```
 
-See also: [`gash_upgrade`](../gash/reference.md#gash_upgrade), [`gash`](../gash/reference.md#gash)
+See also: `gash update`, [`gash`](../gash/reference.md#gash)
 
-### gash_env_init
-
-Create ~/.gash_env configuration template.
-
-#### Usage
-
-```text
-gash_env_init [--force]
-```
-
-#### Examples
-
-```bash
-# Create config from template (will not overwrite existing)
-gash_env_init
-
-# Overwrite existing config with fresh template
-gash_env_init --force
-```
-
-#### Notes
-
-```text
-Creates ~/.gash_env with template sections for:
-  SSH:~/.ssh/id_ed25519=your_passphrase
-  DB:default=mysql://user:pass@host:port/db
-  AI:claude=sk-ant-api03-xxxxx
-Always set permissions: chmod 600 ~/.gash_env
-```
-
-See also: [`gash_db_list`](../databases/reference.md#gash_db_list), [`gash_ai_list`](../ai/reference.md#gash_ai_list), [`gash_ssh_auto_unlock`](../remote/reference.md#gash_ssh_auto_unlock)
-
-### gash_help
+### gash help
 
 The page of a command, a namespace or a topic; search every page.
+
+Former name: `gash_help` (works through 3.x).
 
 #### Usage
 
@@ -209,6 +213,137 @@ gash help --bash cd
 
 See also: [`gash`](../gash/reference.md#gash)
 
+### gash shell username
+
+Print the current user name.
+
+Former name: `gash_username` (works through 3.x).
+
+#### Usage
+
+```text
+gash shell username
+```
+
+#### Examples
+
+```bash
+# The name the banner and the prompt show
+gash shell username
+```
+
+#### Notes
+
+```text
+Tries whoami, then id -un, then the /etc/passwd entry of the
+current user id; prints UNKNOWN_USERNAME when all of them fail.
+```
+
+### gash uninstall
+
+Uninstall Gash and clean up configurations.
+
+Former name: `gash_uninstall` (works through 3.x).
+
+#### Usage
+
+```text
+gash uninstall
+```
+
+#### Examples
+
+```bash
+# Remove Gash completely (interactive confirmation)
+gash uninstall
+```
+
+#### Notes
+
+```text
+Removes the Gash sourcing block from your shell profile,
+deletes the installation directory, and cleans up.
+Kept as FILE.gash-uninstall.bak: each profile as it was
+before the edit, and a ~/.gashrc that holds your own lines.
+Restart your terminal after uninstalling.
+```
+
+See also: `gash update`, [`gash unload`](../gash/reference.md#gash-unload)
+
+### gash unload
+
+Restore shell state to before Gash was loaded.
+
+Former name: `gash_unload` (works through 3.x).
+
+#### Usage
+
+```text
+gash unload
+```
+
+#### Examples
+
+```bash
+# Temporarily disable Gash in the current terminal
+gash unload
+
+# Re-enable Gash without restarting
+source ~/.gashrc
+```
+
+#### Notes
+
+```text
+Removes all functions, aliases, and settings introduced by Gash.
+Restores PS1, PROMPT_COMMAND, history settings, and shopt options
+to the state captured before Gash loaded. Session-only: does not
+modify any files.
+```
+
+See also: [`gash uninstall`](../gash/reference.md#gash-uninstall)
+
+### gash update
+
+Upgrade Gash to the latest version.
+
+Former name: `gash_upgrade` (works through 3.x).
+
+#### Usage
+
+```text
+gash update
+```
+
+#### Examples
+
+```bash
+# Upgrade to latest version
+gash update
+# Then restart your terminal to apply changes
+```
+
+#### Notes
+
+```text
+Fetches the release tags and checks out the newest release (never
+an older one). It runs the steps of gash update. A checkout newer
+than the latest release (a pre-release, or a commit after it) is
+left as it is.
+Before the checkout, the release binary is downloaded into
+~/.local/share/gash/versions/<version>/ and verified (the hash in
+the tag's release/SHA256SUMS, else the release's checksums.txt;
+GASH_REQUIRE_SIGNED=1 also requires a signed tag or a Sigstore
+release signature that cosign verifies, and a pinned binary).
+After it, the new version is loaded in a test shell; if that
+fails, the previous version is checked out again.
+Open a new terminal afterwards to load the new version.
+To go back: gash update --rollback (the previous version and its
+binary are kept), or git -C ~/.gash checkout vX.Y.Z
+```
+
+See also: [`gash doctor`](../gash/reference.md#gash-doctor), [`gash uninstall`](../gash/reference.md#gash-uninstall)
+
 ### gash_migrate
 
 Shows how to migrate a Gash 1.x configuration.
@@ -246,132 +381,9 @@ nothing.
 gash migrate
 ```
 
-See also: [`gash`](../gash/reference.md#gash), [`gash_doctor`](../gash/reference.md#gash_doctor), [`gash_upgrade`](../gash/reference.md#gash_upgrade)
+See also: `gash gash_doctor gash_upgrade`
 
-### gash_uninstall
-
-Uninstall Gash and clean up configurations.
-
-#### Usage
-
-```text
-gash_uninstall
-```
-
-#### Examples
-
-```bash
-# Remove Gash completely (interactive confirmation)
-gash_uninstall
-```
-
-#### Notes
-
-```text
-Removes the Gash sourcing block from your shell profile,
-deletes the installation directory, and cleans up.
-Kept as FILE.gash-uninstall.bak: each profile as it was
-before the edit, and a ~/.gashrc that holds your own lines.
-Restart your terminal after uninstalling.
-```
-
-See also: [`gash_upgrade`](../gash/reference.md#gash_upgrade), [`gash_unload`](../gash/reference.md#gash_unload)
-
-### gash_unload
-
-Restore shell state to before Gash was loaded.
-
-#### Usage
-
-```text
-gash_unload
-```
-
-#### Examples
-
-```bash
-# Temporarily disable Gash in the current terminal
-gash_unload
-
-# Re-enable Gash without restarting
-source ~/.gashrc
-```
-
-#### Notes
-
-```text
-Removes all functions, aliases, and settings introduced by Gash.
-Restores PS1, PROMPT_COMMAND, history settings, and shopt options
-to the state captured before Gash loaded. Session-only: does not
-modify any files.
-```
-
-See also: [`gash_uninstall`](../gash/reference.md#gash_uninstall)
-
-### gash_upgrade
-
-Upgrade Gash to the latest version.
-
-#### Usage
-
-```text
-gash_upgrade
-```
-
-#### Examples
-
-```bash
-# Upgrade to latest version
-gash_upgrade
-# Then restart your terminal to apply changes
-```
-
-#### Notes
-
-```text
-Fetches the release tags and checks out the newest release (never
-an older one). It runs the steps of gash update. A checkout newer
-than the latest release (a pre-release, or a commit after it) is
-left as it is.
-Before the checkout, the release binary is downloaded into
-~/.local/share/gash/versions/<version>/ and verified (the hash in
-the tag's release/SHA256SUMS, else the release's checksums.txt;
-GASH_REQUIRE_SIGNED=1 also requires a signed tag or a Sigstore
-release signature that cosign verifies, and a pinned binary).
-After it, the new version is loaded in a test shell; if that
-fails, the previous version is checked out again.
-Open a new terminal afterwards to load the new version.
-To go back: gash update --rollback (the previous version and its
-binary are kept), or git -C ~/.gash checkout vX.Y.Z
-```
-
-See also: [`gash_doctor`](../gash/reference.md#gash_doctor), [`gash_uninstall`](../gash/reference.md#gash_uninstall)
-
-### gash_username
-
-Print the current user name.
-
-#### Usage
-
-```text
-gash_username
-```
-
-#### Examples
-
-```bash
-# The name the banner and the prompt show
-gash_username
-```
-
-#### Notes
-
-```text
-Tries whoami, then id -un, then the /etc/passwd entry of the
-current user id; prints UNKNOWN_USERNAME when all of them fail.
-```
-
-## Commands
+## Command trees
 
 ### gash version
 

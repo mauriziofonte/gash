@@ -8,13 +8,13 @@ version on the registry, and upgrade the services that follow a moving tag.
 Platforms: Linux, macOS and WSL, wherever the `docker` command works (Docker
 Engine, or Docker Desktop and its WSL integration). The Compose functions
 need Compose v2 (`docker compose`) or `docker-compose`. Finding stacks with
-`docker_compose_scan` needs neither.
+`gash docker compose scan` needs neither.
 
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [docker](../requirements.md#tool-docker) (feature), for `docker_compose_check`, `docker_compose_upgrade`, `docker_prune_all`, `docker_start_all`, `docker_stop_all` and `llm_docker_check`
-- [docker-compose](../requirements.md#tool-docker-compose) (optional), for `docker_compose_check`, `docker_compose_upgrade` and `llm_docker_check`
+- [docker](../requirements.md#tool-docker) (feature), for `gash docker compose check`, `gash docker compose upgrade`, `gash docker prune-all`, `gash docker start-all`, `gash docker stop-all` and `llm_docker_check`
+- [docker-compose](../requirements.md#tool-docker-compose) (optional), for `gash docker compose check`, `gash docker compose upgrade` and `llm_docker_check`
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
@@ -26,8 +26,8 @@ page shows the commands and describes what they print.
 
 ## Start or stop every container
 
-[`docker_stop_all`](reference.md#docker_stop_all) (`dsa`) stops every running
-container, and [`docker_start_all`](reference.md#docker_start_all) (`daa`)
+[`gash docker stop-all`](reference.md#gash-docker-stop-all) (`dsa`) stops every running
+container, and [`gash docker start-all`](reference.md#gash-docker-start-all) (`daa`)
 starts every stopped one (exited or just created):
 
 ```bash
@@ -43,7 +43,7 @@ so (`No running containers to stop.`) and return 0.
 
 ## Remove everything Docker holds
 
-[`docker_prune_all`](reference.md#docker_prune_all) (`dpa`) returns a host to
+[`gash docker prune-all`](reference.md#gash-docker-prune-all) (`dpa`) returns a host to
 an empty Docker: it stops and removes every container, removes every image,
 every volume and every network you created, then runs
 `docker system prune --volumes -a --force` for the build cache. Volume data
@@ -64,7 +64,7 @@ gentler choices.
 
 ## Find the Compose projects on a host
 
-[`docker_compose_scan`](reference.md#docker_compose_scan) (`dcscan`) looks for
+[`gash docker compose scan`](reference.md#gash-docker-compose-scan) (`dcscan`) looks for
 `compose.yaml`, `compose.yml`, `docker-compose.yml` and `docker-compose.yaml`
 below a directory, three levels deep unless you pass `--depth`, and lists
 each project with its services and their images:
@@ -98,7 +98,7 @@ file itself.
 
 ## Check a stack for newer images
 
-[`docker_compose_check`](reference.md#docker_compose_check) (`dcc`) compares,
+[`gash docker compose check`](reference.md#gash-docker-compose-check) (`dcc`) compares,
 for each service of a Compose project, the image you have with the one on its
 registry:
 
@@ -117,7 +117,7 @@ It prints one row per service with its image and a status:
   upgrade leaves alone.
 - `ERROR`: the registry could not answer for this image; with `--json` the
   `error` field says why (`rate_limited`, `unauthorized`, `dns_error` and the
-  others the [reference](reference.md#docker_compose_check) lists).
+  others the [reference](reference.md#gash-docker-compose-check) lists).
 
 It asks each image's registry the way an anonymous `docker pull` would: it
 never reads the credentials of `docker login`. For GHCR, an exported
@@ -126,13 +126,13 @@ other private images show as `ERROR` with `unauthorized`. Image names may use
 `${VARIABLES}`: they are filled from your exported environment and the
 project's `.env`, as Compose does. The status is 0 whenever the report
 prints, even with `ERROR` rows. AI agents call
-[`llm_docker_check`](reference.md#llm_docker_check), the same check as JSON,
+[`llm_docker_check`](reference.md#gash-llm-docker-check), the same check as JSON,
 in which only the project's `.env` and a short list of common variables
 (`HOME`, `USER` and the like) can fill an image name.
 
 ## Upgrade a stack
 
-[`docker_compose_upgrade`](reference.md#docker_compose_upgrade) (`dcup2`)
+[`gash docker compose upgrade`](reference.md#gash-docker-compose-upgrade) (`dcup2`)
 pulls new images for the services whose tag moves, and recreates their
 containers:
 
@@ -183,13 +183,13 @@ installed: `dc`, for example, is also the name of a calculator.
 | `ERROR` rows with `rate_limited` | Docker Hub limits anonymous requests; wait, or check fewer projects at a time |
 | `Error: Refusing to upgrade in headless mode without --yes (pull + restart is destructive).` | Check the plan with `--dry-run`, then add `--yes` |
 | `Info: Upgrade cancelled.` or `Info: Aborted.` | You answered no; nothing changed. Status 1 |
-| `Error: No terminal to ask for confirmation: pass -y to go ahead.` | `docker_start_all`, `docker_stop_all` or `docker_prune_all` ran without a terminal |
+| `Error: No terminal to ask for confirmation: pass -y to go ahead.` | `gash docker start-all`, `gash docker stop-all` or `gash docker prune-all` ran without a terminal |
 | `Error: Failed to pull images. Aborting upgrade.` | A pull failed (registry, credentials, a missing tag) before anything was stopped; Compose's message above says which |
 | `Error: Failed to start containers. Check logs with: ...` | The new images were pulled and the old containers stopped, but `up` failed: run the logs command it prints |
-| `Error: -n is not --dry-run anymore; use --dry-run` | `docker_compose_upgrade` has only the long form |
+| `Error: -n is not --dry-run anymore; use --dry-run` | `gash docker compose upgrade` has only the long form |
 
 ## See also
 
 - [reference.md](reference.md): every function and alias of this area, with all options.
 - [Tools for AI agents](../agents/README.md): `llm_docker_ps`, `llm_docker_logs`, `llm_docker_exec` and `agent_docker_exec`.
-- [System](../system/README.md): `services_stop`, which also stops the Docker service.
+- [System](../system/README.md): `gash system stop-services`, which also stops the Docker service.

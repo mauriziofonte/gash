@@ -24,13 +24,13 @@ Enter
 Sleep 1.5s
 Show
 
-Type "process_find php"
+Type "gash system ps php"
 Sleep 300ms
 Enter
 Wait
 Sleep 3s
 
-Type "port_kill 8080"
+Type "gash system port-kill 8080"
 Sleep 300ms
 Enter
 Sleep 2.5s
@@ -41,7 +41,7 @@ Enter
 Wait
 Sleep 2.5s
 
-Type "clear; hgrep artisan"
+Type "clear; gash shell history-smart artisan"
 Sleep 300ms
 Enter
 Wait
