@@ -66,6 +66,7 @@ func generate(fsys fs.FS, stage bool) ([]File, error) {
 		{"lib/compat/bootstrap.sh", "bootstrap.sh.tmpl", 0o644, d},
 		{"bash_completion", "bash_completion.tmpl", 0o644, d},
 		{"bin/gash", "gash.tmpl", 0o755, d},
+		{"lib/compat/legacy.sh", "legacy.sh.tmpl", 0o644, d},
 	}
 	for _, name := range coreFiles {
 		steps = append(steps, struct {
@@ -121,6 +122,11 @@ func committedModule(name string) bool {
 // such a function starts with it too ({{% loadenv %}}).
 const LoadEnvLine = `declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env`
 
+// PrivatePrefix starts the name under which gash.sh defines the function
+// of a legacy flat name (__gash_fn_files_largest): 4.0 defines the flat
+// name itself only with GASH_LEGACY_NAMES=1 (lib/compat/legacy.sh).
+const PrivatePrefix = "__gash_fn_"
+
 // overridePrefix names the templates (in compat/stubs.tmpl) that replace
 // the one-line stub of a function: {{% define "stub/NAME" %}}.
 const overridePrefix = "stub/"
@@ -147,8 +153,35 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		}
 		return name + `() { __gash_call ` + name + ` "$@"; }`, nil
 	}
+	// shellStub is the stub gash.sh and the core shims define: a legacy
+	// name (registry.Legacy) is defined as __gash_fn_NAME, which the gash
+	// function routes to and lib/compat/legacy.sh wraps under NAME.
+	shellStub := func(name string) (string, error) {
+		s, err := stub(name)
+		if err != nil || !registry.Legacy(name) {
+			return s, err
+		}
+		def := name + "() {"
+		i := strings.Index("\n"+s, "\n"+def)
+		if i < 0 {
+			return "", fmt.Errorf("stub: %q has no line starting with %q", name, def)
+		}
+		return s[:i] + PrivatePrefix + s[i:], nil
+	}
 	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
-		"stub":        stub,
+		"stub":        shellStub,
+		"publicStub":  stub,
+		// coreStub is the stub of a core shim: sourced alone (a 2.x
+		// harness, no gash.sh), the shim keeps the 2.x name of a legacy
+		// function too.
+		"coreStub": func(name string) (string, error) {
+			s, err := shellStub(name)
+			if err != nil || !registry.Legacy(name) {
+				return s, err
+			}
+			return s + "\nif [[ -z \"${__GASH_BOOT_LOADED-}\" ]]; then\n    " + name + "() { " + PrivatePrefix + name + " \"$@\"; }\nfi", nil
+		},
+		"private":     func(name string) string { return PrivatePrefix + name },
 		"loadenv":     func() string { return LoadEnvLine },
 		"gashRoute":   GashRoute,
 		"formerTable": FormerTable,
@@ -222,6 +255,9 @@ type Data struct {
 	// tree, with its words: former flat names, llm_*/agent_* names and
 	// shortcuts.
 	CompleteWords []NamedWords
+	// Legacy are the flat names lib/compat/legacy.sh defines (4.0:
+	// GASH_LEGACY_NAMES=1), sorted.
+	Legacy []string
 	// Served are the functions the per-shell server runs.
 	Served []string
 	// PrereqBash is the package manager detection and the install
@@ -248,7 +284,8 @@ type NamedWords struct {
 }
 
 func buildData() Data {
-	d := Data{Common: registry.CommonShellVars, Served: registry.Served(), PrereqBash: prereq.BashFunctions("__gash_", 4, "")}
+	d := Data{Common: registry.CommonShellVars, Served: registry.Served(), PrereqBash: prereq.BashFunctions("__gash_", 4, ""),
+		Legacy: registry.LegacyNames()}
 	common := map[string]bool{}
 	for _, v := range registry.CommonShellVars {
 		common[v] = true

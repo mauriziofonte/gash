@@ -21,7 +21,7 @@ fi
 unset __gash_here
 
 # shellcheck disable=SC2120
-gash() { __gash_cold gash b75aed2c && "${FUNCNAME[0]}" "$@"; }
+gash() { __gash_cold gash 84aa23f4 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
 gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
@@ -41,7 +41,7 @@ gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 # shellcheck disable=SC2120
 gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-gash_unload() { __gash_cold gash_unload 37b45b21 && "${FUNCNAME[0]}" "$@"; }
+gash_unload() { __gash_cold gash_unload f53daea0 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 

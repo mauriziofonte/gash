@@ -55,6 +55,9 @@ var Known = []SettingInfo{
 	// former flat name prints.
 	{Name: "GASH_SHORTCUTS", Default: "all"},
 	{Name: "GASH_LEGACY_HINTS", Default: "1"},
+	// 4.0: the former flat names of 3.x come back in a shell (gash.sh
+	// reads it while sourcing, headless mode too).
+	{Name: "GASH_LEGACY_NAMES", Default: "0", Headless: true},
 }
 
 // SplitPathAdd splits a GASH_PATH_ADD value into words on space, tab and

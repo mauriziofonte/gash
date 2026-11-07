@@ -452,13 +452,13 @@ __gash_get_host_entries() {
 # =============================================================================
 
 # List available database connections
-{{% stub "gash_db_list" %}}
+{{% coreStub "gash_db_list" %}}
 
 # Test a database connection
-{{% stub "gash_db_test" %}}
+{{% coreStub "gash_db_test" %}}
 
 # Create ~/.gash_env from template
-{{% stub "gash_env_init" %}}
+{{% coreStub "gash_env_init" %}}
 
 # =============================================================================
 # AI Provider Functions
@@ -505,7 +505,7 @@ __gash_get_first_ai_provider() {
 }
 
 # List available AI providers
-{{% stub "gash_ai_list" %}}
+{{% coreStub "gash_ai_list" %}}
 
 # Sourcing never fails: the status of this file is 0.
 true

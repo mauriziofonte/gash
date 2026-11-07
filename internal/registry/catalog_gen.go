@@ -4693,6 +4693,7 @@ var settings = []Setting{
 	{Name: "GASH_REMOTE_NO_BINARY", Headless: false, FileOnly: true, Passed: false},
 	{Name: "GASH_SHORTCUTS", Headless: false, FileOnly: false, Passed: true},
 	{Name: "GASH_LEGACY_HINTS", Headless: false, FileOnly: false, Passed: true},
+	{Name: "GASH_LEGACY_NAMES", Headless: true, FileOnly: false, Passed: true},
 }
 
 var topics = []Topic{

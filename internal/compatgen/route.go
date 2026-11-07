@@ -11,9 +11,10 @@ import (
 
 // The shell side of the 3.5 command tree: the gash function routes a
 // canonical command (gash files largest) to the shell function of its
-// handler (files_largest), so that the command does in the shell exactly
-// what the flat name does (a stub override's cd, history and ssh-agent
-// steps included); the words it does not route go to the binary.
+// handler (__gash_fn_files_largest since 4.0, files_largest in 3.x), so
+// that the command does in the shell what the handler's stub does (a stub
+// override's cd, history and ssh-agent steps included); the words it does
+// not route go to the binary.
 
 // routeNode is one word of the tree below gash.
 type routeNode struct {
@@ -73,7 +74,12 @@ func writeRoute(b *strings.Builder, n *routeNode, depth int, pad string) {
 		writeRoute(b, k, depth+1, pad+"        ")
 		if k.handler != "" {
 			b.WriteString(pad + "        shift " + itoa(depth) + "\n")
-			b.WriteString(pad + "        __gash_route " + k.handler + " \"$@\"\n")
+			if registry.Legacy(k.handler) {
+				// 4.0: the function of a legacy name is private.
+				b.WriteString(pad + "        " + PrivatePrefix + k.handler + " \"$@\"\n")
+			} else {
+				b.WriteString(pad + "        __gash_route " + k.handler + " \"$@\"\n")
+			}
 			b.WriteString(pad + "        return\n")
 		}
 		b.WriteString(pad + "        ;;\n")

@@ -252,15 +252,15 @@ unset __GASH_BOOT_LOADED
 
 # ai
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-ai_ask() {
+__gash_fn_ai_ask() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_ask "$@"
 }
-ai_query() {
+__gash_fn_ai_query() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_query "$@"
 }
-ai_sysinfo() {
+__gash_fn_ai_sysinfo() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_sysinfo "$@"
 }
@@ -268,42 +268,42 @@ ai_sysinfo() {
 
 # chrome
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
+__gash_fn_chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/chrome.sh" "$__GASH_T1"
 
 # docker
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-docker_prune_all() { __gash_call docker_prune_all "$@"; }
-docker_start_all() { __gash_call docker_start_all "$@"; }
-docker_stop_all() { __gash_call docker_stop_all "$@"; }
+__gash_fn_docker_prune_all() { __gash_call docker_prune_all "$@"; }
+__gash_fn_docker_start_all() { __gash_call docker_start_all "$@"; }
+__gash_fn_docker_stop_all() { __gash_call docker_stop_all "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/docker.sh" "$__GASH_T1"
 
 # docker-compose
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-docker_compose_check() { __gash_call docker_compose_check "$@"; }
-docker_compose_scan() { __gash_call docker_compose_scan "$@"; }
-docker_compose_upgrade() { __gash_call docker_compose_upgrade "$@"; }
+__gash_fn_docker_compose_check() { __gash_call docker_compose_check "$@"; }
+__gash_fn_docker_compose_scan() { __gash_call docker_compose_scan "$@"; }
+__gash_fn_docker_compose_upgrade() { __gash_call docker_compose_upgrade "$@"; }
 llm_docker_check() { __gash_call llm_docker_check "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/docker-compose.sh" "$__GASH_T1"
 
 # files
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-archive_extract() { __gash_call archive_extract "$@"; }
-dirs_find_large() { __gash_call dirs_find_large "$@"; }
-dirs_largest() { __gash_call dirs_largest "$@"; }
-dirs_list_empty() { __gash_call dirs_list_empty "$@"; }
-file_backup() { __gash_call file_backup "$@"; }
-files_largest() { __gash_call files_largest "$@"; }
-tree_stats() { __gash_call tree_stats "$@"; }
+__gash_fn_archive_extract() { __gash_call archive_extract "$@"; }
+__gash_fn_dirs_find_large() { __gash_call dirs_find_large "$@"; }
+__gash_fn_dirs_largest() { __gash_call dirs_largest "$@"; }
+__gash_fn_dirs_list_empty() { __gash_call dirs_list_empty "$@"; }
+__gash_fn_file_backup() { __gash_call file_backup "$@"; }
+__gash_fn_files_largest() { __gash_call files_largest "$@"; }
+__gash_fn_tree_stats() { __gash_call tree_stats "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/files.sh" "$__GASH_T1"
 
 # gash
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 # shellcheck disable=SC2120
-gash() { __gash_cold gash b75aed2c && "${FUNCNAME[0]}" "$@"; }
+gash() { __gash_cold gash 84aa23f4 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
-gash_help() {
+__gash_fn_gash_doctor() { __gash_cold __gash_fn_gash_doctor 3d0ab6af && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
     local -a __gash_rest=()
@@ -316,24 +316,24 @@ gash_help() {
     fi
     __gash_call gash_help "$@"
 }
-gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
+__gash_fn_gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 # shellcheck disable=SC2120
-gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_uninstall() { __gash_cold __gash_fn_gash_uninstall 3837923a && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-gash_unload() { __gash_cold gash_unload 37b45b21 && "${FUNCNAME[0]}" "$@"; }
-gash_upgrade() { __gash_call gash_upgrade "$@"; }
+__gash_fn_gash_unload() { __gash_cold __gash_fn_gash_unload 23253f28 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
 
 # git
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-git_add_tag() { __gash_call git_add_tag "$@"; }
-git_apply_patch() { __gash_call git_apply_patch "$@"; }
-git_delete_tag() { __gash_call git_delete_tag "$@"; }
-git_dump_revisions() { __gash_call git_dump_revisions "$@"; }
-git_list_tags() { __gash_call git_list_tags "$@"; }
-git_repair() { __gash_call git_repair "$@"; }
-git_sync() { __gash_call git_sync "$@"; }
+__gash_fn_git_add_tag() { __gash_call git_add_tag "$@"; }
+__gash_fn_git_apply_patch() { __gash_call git_apply_patch "$@"; }
+__gash_fn_git_delete_tag() { __gash_call git_delete_tag "$@"; }
+__gash_fn_git_dump_revisions() { __gash_call git_dump_revisions "$@"; }
+__gash_fn_git_list_tags() { __gash_call git_list_tags "$@"; }
+__gash_fn_git_repair() { __gash_call git_repair "$@"; }
+__gash_fn_git_sync() { __gash_call git_sync "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/git.sh" "$__GASH_T1"
 
 # llm
@@ -426,7 +426,7 @@ llm_wait() { __gash_call llm_wait "$@"; }
 
 # node
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-node_detect_version() { __gash_call node_detect_version "$@"; }
+__gash_fn_node_detect_version() { __gash_call node_detect_version "$@"; }
 __gash_require_nvm() {
     if ! declare -f nvm >/dev/null 2>&1; then
         __gash_error "nvm is not loaded in this shell. Source \$NVM_DIR/nvm.sh first."
@@ -464,40 +464,40 @@ __node_read_remote_index() {
 }
 
 # shellcheck disable=SC2120
-node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_node_upgrade() { __gash_cold __gash_fn_node_upgrade d3a26d47 && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 # shellcheck disable=SC2120
-nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_nvm_prune_versions() { __gash_cold __gash_fn_nvm_prune_versions 630c6085 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-php_detect_version() { __gash_call php_detect_version "$@"; }
+__gash_fn_php_detect_version() { __gash_call php_detect_version "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/php.sh" "$__GASH_T1"
 
 # remote
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-remote_exec() {
+__gash_fn_remote_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_exec "$@"
 }
-remote_hosts() {
+__gash_fn_remote_hosts() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_hosts "$@"
 }
-remote_pull() {
+__gash_fn_remote_pull() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_pull "$@"
 }
-remote_push() {
+__gash_fn_remote_push() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_push "$@"
 }
-remote_sync_pull() {
+__gash_fn_remote_sync_pull() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_sync_pull "$@"
 }
-remote_sync_push() {
+__gash_fn_remote_sync_push() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_sync_push "$@"
 }
@@ -506,18 +506,18 @@ remote_sync_push() {
 # ssh
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 # shellcheck disable=SC2120
-gash_ssh_auto_unlock() { __gash_cold gash_ssh_auto_unlock d3161657 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_ssh_auto_unlock() { __gash_cold __gash_fn_gash_ssh_auto_unlock 500cc434 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
 # sysinfo
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-sysinfo() { __gash_call sysinfo "$@"; }
+__gash_fn_sysinfo() { __gash_call sysinfo "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/sysinfo.sh" "$__GASH_T1"
 
 # system
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-disk_usage() { __gash_call disk_usage "$@"; }
-hgrep() {
+__gash_fn_disk_usage() { __gash_call disk_usage "$@"; }
+__gash_fn_hgrep() {
     local __gash_go="" __gash_rc=0
     {
         __gash_go="$(GASH__HANDOFF=3 __gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
@@ -526,7 +526,7 @@ hgrep() {
     history -a 2>/dev/null || true
     GASH__RESUME=1 __gash_call hgrep "$@"
 }
-history_grep() {
+__gash_fn_history_grep() {
     case "${1-}" in
         -h | --help | "")
             __gash_call history_grep "$@"
@@ -537,18 +537,18 @@ history_grep() {
     # (LEDGER SYS-09).
     HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
-ip_public() { __gash_call ip_public "$@"; }
+__gash_fn_ip_public() { __gash_call ip_public "$@"; }
 # shellcheck disable=SC2120
-mkdir_cd() { __gash_cold mkdir_cd 83c6a4ed && "${FUNCNAME[0]}" "$@"; }
-port_kill() { __gash_call port_kill "$@"; }
-process_find() { __gash_call process_find "$@"; }
-process_kill() { __gash_call process_kill "$@"; }
-services_stop() { __gash_call services_stop "$@"; }
+__gash_fn_mkdir_cd() { __gash_cold __gash_fn_mkdir_cd 1222e2ab && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_port_kill() { __gash_call port_kill "$@"; }
+__gash_fn_process_find() { __gash_call process_find "$@"; }
+__gash_fn_process_kill() { __gash_call process_kill "$@"; }
+__gash_fn_services_stop() { __gash_call services_stop "$@"; }
 # shellcheck disable=SC2120
-sudo_last() { __gash_cold sudo_last 5d76cf71 && "${FUNCNAME[0]}" "$@"; }
-wsl_compact() { __gash_call wsl_compact "$@"; }
-wsl_explorer() { __gash_call wsl_explorer "$@"; }
-wsl_restart() {
+__gash_fn_sudo_last() { __gash_cold __gash_fn_sudo_last 99bff139 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_wsl_compact() { __gash_call wsl_compact "$@"; }
+__gash_fn_wsl_explorer() { __gash_call wsl_explorer "$@"; }
+__gash_fn_wsl_restart() {
     local __gash_go="" __gash_rc=0
     {
         __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
@@ -557,7 +557,7 @@ wsl_restart() {
     history -a 2>/dev/null || true
     GASH__RESUME=1 __gash_call wsl_restart "$@"
 }
-wsl_shutdown() {
+__gash_fn_wsl_shutdown() {
     local __gash_go="" __gash_rc=0
     {
         __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
@@ -566,12 +566,12 @@ wsl_shutdown() {
     history -a 2>/dev/null || true
     GASH__RESUME=1 __gash_call wsl_shutdown "$@"
 }
-wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
+__gash_fn_wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/system.sh" "$__GASH_T1"
 
 # migrate
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-gash_migrate() {
+__gash_fn_gash_migrate() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_migrate "$@"
 }
@@ -640,6 +640,15 @@ fi
 [[ -v '__GASH_USER_ALIASES[wslc]' ]] || alias wslc='gash wsl compact'
 ((__gash_ua)) && unset __GASH_USER_ALIASES
 unset __gash_ua
+
+# 4.0: the former flat names of Gash 3.x (files_largest, git_sync) only with
+# GASH_LEGACY_NAMES=1, from the environment or ~/.gash_env. Without it the
+# canonical commands, their shortcuts, the llm_*/agent_* functions and the
+# script helpers are the names this shell defines.
+declare -F __gash_apply_env_settings >/dev/null && __gash_apply_env_settings GASH_LEGACY_NAMES
+if [[ "${GASH_LEGACY_NAMES-}" == 1 ]]; then
+    __gash_source "$GASH_DIR/lib/compat/legacy.sh"
+fi
 
 # -----------------------------------------------------------------------------
 # Headless mode

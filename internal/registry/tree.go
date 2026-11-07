@@ -156,12 +156,14 @@ var formerOf3x = map[string]string{"help": "gash_help", "update": "gash_upgrade"
 // Exempt are the catalog functions that stay functions with no canonical
 // command: the script helpers (library API for the user's scripts and
 // ~/.bash_local), the help wrapper of Bash's builtin, the nvm loader, the
-// card itself (gash) and the 1.x route (gash_migrate, gone in 4.0).
+// card itself (gash) and the 1.x route (gash_migrate, a legacy name since
+// 4.0: gash migrate stays).
 var Exempt = []string{"gash", "help", "nvm", "needs_help", "needs_confirm_prompt", "path_add", "gash_migrate"}
 
-// FormerNames are the flat names of the command that keep working through
-// 3.x (the catalog function name), empty for a permanent one and for a
-// function that is the command's shortcut (gl).
+// FormerNames are the flat names of the command in 3.x (the catalog
+// function name), empty for a permanent one and for a function that is the
+// command's shortcut (gl). Since 4.0 a shell defines them only with
+// GASH_LEGACY_NAMES=1 (Legacy), gash_username (Kept) always.
 func (c *Command) FormerNames() []string {
 	if f, ok := formerOf3x[c.Command3x]; ok && len(c.Path) == 1 {
 		return []string{f}
@@ -171,6 +173,43 @@ func (c *Command) FormerNames() []string {
 		return nil
 	}
 	return []string{c.Handler}
+}
+
+// Kept are the former flat names that 4.0 still defines in every shell:
+// gash_username, which prompts call and the update of a 3.x install runs
+// to check the tree it moves to.
+var Kept = []string{"gash_username"}
+
+// LegacyVar is the setting that brings the former flat names back in 4.x.
+const LegacyVar = "GASH_LEGACY_NAMES"
+
+// Legacy reports a flat function name that 4.0 defines only with
+// GASH_LEGACY_NAMES=1: a former name of a command (files_largest), and
+// gash_migrate. The shell keeps its function as __gash_fn_NAME, which the
+// gash function routes to.
+func Legacy(name string) bool {
+	if name == "gash_migrate" {
+		return true
+	}
+	if slices.Contains(Kept, name) {
+		return false
+	}
+	c, ok := CommandOf(name)
+	return ok && slices.Contains(c.FormerNames(), name)
+}
+
+// LegacyNames are the names Legacy reports, sorted.
+func LegacyNames() []string {
+	out := []string{"gash_migrate"}
+	for i := range tree {
+		for _, n := range tree[i].FormerNames() {
+			if !slices.Contains(Kept, n) && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 var (

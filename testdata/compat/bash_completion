@@ -9,8 +9,8 @@
 # options of every command and the values they take (hosts and databases
 # of ~/.gash_env, git tags, containers, units, processes, ports).
 
-# Ensure that Gash functions are available by checking for one core Gash function.
-if ! declare -F git_add_tag >/dev/null 2>&1; then
+# Ensure that Gash is loaded in this shell: its gash function.
+if ! declare -F gash >/dev/null 2>&1; then
     return
 fi
 

@@ -284,7 +284,10 @@ __gash_download() {
 
 # Display all available terminal colors.
 # Useful for testing color support.
-all_colors() { __gash_call all_colors "$@"; }
+__gash_fn_all_colors() { __gash_call all_colors "$@"; }
+if [[ -z "${__GASH_BOOT_LOADED-}" ]]; then
+    all_colors() { __gash_fn_all_colors "$@"; }
+fi
 
 # Sourcing never fails: the status of this file is 0.
 true
