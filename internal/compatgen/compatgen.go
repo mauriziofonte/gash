@@ -148,12 +148,12 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		return name + `() { __gash_call ` + name + ` "$@"; }`, nil
 	}
 	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
-		"stub":    stub,
-		"loadenv": func() string { return LoadEnvLine },
-		"gashRoute": GashRoute,
+		"stub":        stub,
+		"loadenv":     func() string { return LoadEnvLine },
+		"gashRoute":   GashRoute,
 		"formerTable": FormerTable,
-		"join":    strings.Join,
-		"indent":  indent,
+		"join":        strings.Join,
+		"indent":      indent,
 		// cardAliasNames is the names of the card entries as shell words,
 		// for the gash stub.
 		"cardAliasNames": func() string { return shellWords(registry.CardAliasNames()) },
