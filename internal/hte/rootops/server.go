@@ -102,7 +102,7 @@ func open(env Env) (*server, error) {
 	gid, gerr := strconv.Atoi(env.Getenv("SUDO_GID"))
 	if uerr != nil || gerr != nil || uid <= 0 || !receipt.UserRE.MatchString(user) {
 		return nil, hteerr.New(hteerr.PrivilegedStepRequired, "the root step needs the invoking user from sudo (SUDO_USER, SUDO_UID), not root",
-			"run gash hte as your own user")
+			"run gash localweb as your own user")
 	}
 	s := &server{env: env, user: user, uid: uid, gid: gid, plan: map[int]Op{}, done: map[int]bool{}, made: map[int]bool{},
 		stamp: env.Now().UTC().Format("20060102T150405Z")}
@@ -448,7 +448,7 @@ func (s *server) secureParents(sys string) error {
 			return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "%s is not a directory", d)
 		case fi.Mode().Perm()&0o022 != 0 || (s.env.Sysroot.IsReal() && (st == nil || st.Uid != 0)):
 			return hteerr.Newf(hteerr.PrivilegedStepRequired,
-				"make "+d+" owned by root and writable only by it (sudo chown root "+d+" && sudo chmod go-w "+d+"), then run gash hte install again",
+				"make "+d+" owned by root and writable only by it (sudo chown root "+d+" && sudo chmod go-w "+d+"), then run gash localweb install again",
 				"%s, above %s, can be changed by a user other than root", d, sys)
 		}
 		if d == "/" {
@@ -477,7 +477,7 @@ func (s *server) installHelper(ctx context.Context, o Op) ([]string, error) {
 		return nil, hteerr.Newf(hteerr.PrivilegedStepRequired, "", "reading the hosts helper: %v", err)
 	}
 	if sum(data) != o.SHA256 {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte install again", "%s changed after the plan was made", o.Src)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb install again", "%s changed after the plan was made", o.Src)
 	}
 	if err := s.ensureDirs(path.Dir(HelperPath)); err != nil {
 		return nil, err
@@ -501,7 +501,7 @@ func (s *server) writeSudoers(ctx context.Context) ([]string, error) {
 	main, err := os.ReadFile(s.host("/etc/sudoers"))
 	if err != nil || !includedirRE.Match(main) {
 		return nil, hteerr.New(hteerr.PrivilegedStepRequired, "/etc/sudoers does not include /etc/sudoers.d",
-			"add the line @includedir /etc/sudoers.d to /etc/sudoers with visudo, then run gash hte install again (gash never edits /etc/sudoers)")
+			"add the line @includedir /etc/sudoers.d to /etc/sudoers with visudo, then run gash localweb install again (gash never edits /etc/sudoers)")
 	}
 	if err := s.ensureDirs(SudoersDir); err != nil {
 		return nil, err
@@ -521,7 +521,7 @@ func (s *server) writeSudoers(ctx context.Context) ([]string, error) {
 func (s *server) sysctlPorts(ctx context.Context, value int) ([]string, error) {
 	raw, err := os.ReadFile(s.host(sysctlProc))
 	if err != nil {
-		return nil, hteerr.Newf(hteerr.PlatformUnsupported, "use gash hte install --ports high",
+		return nil, hteerr.Newf(hteerr.PlatformUnsupported, "use gash localweb install --ports high",
 			"%s cannot be read: %v (Linux 4.11 or later has it)", sysctlProc, err)
 	}
 	cur := strings.TrimSpace(string(raw))
@@ -695,7 +695,7 @@ func (s *server) configTest(ctx context.Context) error {
 		return err
 	}
 	if !res.Success() {
-		return hteerr.Newf(hteerr.ConfigTestFailed, "the archived vhosts were put back; fix the system Apache configuration, then run gash hte migrate --apply again",
+		return hteerr.Newf(hteerr.ConfigTestFailed, "the archived vhosts were put back; fix the system Apache configuration, then run gash localweb migrate --apply again",
 			"%s configtest: %s", name, child.Output(res))
 	}
 	return nil
@@ -751,7 +751,7 @@ func (s *server) archiveVhost(p string) ([]string, error) {
 	inv := s.inventory()
 	i := slices.IndexFunc(inv.Vhosts, func(v legacy.Vhost) bool { return v.Path == p })
 	if i < 0 {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte migrate again", "%s is not a vhost of the system Apache", p)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb migrate again", "%s is not a vhost of the system Apache", p)
 	}
 	v := inv.Vhosts[i]
 	c := receipt.Change{Kind: receipt.LegacyVhost, Path: p, Prior: receipt.Raw(receipt.VhostState{Enabled: v.Enabled}), Archive: s.archivePath(p)}
@@ -785,7 +785,7 @@ func (s *server) archiveVhost(p string) ([]string, error) {
 func (s *server) archivePool(p string) ([]string, error) {
 	inv := s.inventory()
 	if _, ok := inv.Pools[p]; !ok {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte migrate again", "%s is not a pool of the system PHP-FPM", p)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb migrate again", "%s is not a pool of the system PHP-FPM", p)
 	}
 	c, err := s.record(receipt.Change{Kind: receipt.LegacyPool, Path: p, Archive: s.archivePath(p)})
 	if err != nil {
@@ -804,7 +804,7 @@ func (s *server) archivePool(p string) ([]string, error) {
 func (s *server) copyKey(ctx context.Context, o Op) ([]string, error) {
 	inv := s.inventory()
 	if !slices.ContainsFunc(inv.Vhosts, func(v legacy.Vhost) bool { return v.KeyFile == o.Src }) {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte migrate again", "%s is not the key of a vhost of the system Apache", o.Src)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb migrate again", "%s is not the key of a vhost of the system Apache", o.Src)
 	}
 	f, err := os.OpenFile(s.host(o.Src), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {

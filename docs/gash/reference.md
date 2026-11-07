@@ -69,7 +69,7 @@ See also: [`gash_help`](../gash/reference.md#gash-help), [`gash_doctor`](../gash
 
 Create ~/.gash_env configuration template.
 
-Former name: `gash_env_init` (works through 3.x).
+Former name: `gash_env_init` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -103,13 +103,14 @@ See also: [`gash db list`](../databases/reference.md#gash-db-list), [`gash ai pr
 
 Run health checks on the Gash installation.
 
-Shortcut: `gdoctor`. Former name: `gash_doctor` (works through 3.x).
+Shortcut: `gdoctor`. Former name: `gash_doctor` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
 ```text
 gash doctor [--timing] [--no-color] [--prereqs] [--json]
 gash doctor --install [--yes] [--all] [TOOL...]
+gash doctor --legacy [--json] [FILE...]
 ```
 
 #### Options
@@ -123,6 +124,10 @@ gash doctor --install [--yes] [--all] [TOOL...]
             system's package manager, after asking
 --yes, -y   With --install: do not ask
 --all       With --install: the optional tools too
+--legacy    The former flat names of Gash 3.x (gash files largest) that the
+            FILEs call, with the command that replaces each; without
+            FILE, the startup files of your home (~/.bashrc,
+            ~/.bash_local and the others)
 ```
 
 #### Examples
@@ -139,6 +144,9 @@ gash doctor --install rsync ssh
 
 # Find what makes new shells slow
 gash doctor --timing
+
+# Which lines of a script still call a Gash 3.x name
+gash doctor --legacy ~/bin/backup.sh
 ```
 
 #### Notes
@@ -165,6 +173,12 @@ then times whole new shells: with your ~/.bashrc, and bash alone,
 3 times each (a line says first that your ~/.bashrc runs 3 times).
 Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
 the same figures in its __GASH_LOAD_TIMES array.
+
+--legacy reads text, not Bash: a name in a string counts, a
+comment line does not. It returns 1 when it finds a name or
+cannot read a FILE. Gash 4 defines the former names only with
+GASH_LEGACY_NAMES=1; an interactive shell whose startup files
+call one says so on stderr, at most once a day.
 ```
 
 See also: `gash update`, [`gash`](../gash/reference.md#gash)
@@ -173,7 +187,7 @@ See also: `gash update`, [`gash`](../gash/reference.md#gash)
 
 The page of a command, a namespace or a topic; search every page.
 
-Former name: `gash_help` (works through 3.x).
+Former name: `gash_help` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -217,7 +231,7 @@ See also: [`gash`](../gash/reference.md#gash)
 
 Print the current user name.
 
-Former name: `gash_username` (works through 3.x).
+Also `gash_username`, a function prompts and scripts call.
 
 #### Usage
 
@@ -243,7 +257,7 @@ current user id; prints UNKNOWN_USERNAME when all of them fail.
 
 Uninstall Gash and clean up configurations.
 
-Former name: `gash_uninstall` (works through 3.x).
+Former name: `gash_uninstall` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -274,7 +288,7 @@ See also: `gash update`, [`gash unload`](../gash/reference.md#gash-unload)
 
 Restore shell state to before Gash was loaded.
 
-Former name: `gash_unload` (works through 3.x).
+Former name: `gash_unload` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -307,7 +321,7 @@ See also: [`gash uninstall`](../gash/reference.md#gash-uninstall)
 
 Upgrade Gash to the latest version.
 
-Former name: `gash_upgrade` (works through 3.x).
+Former name: `gash_upgrade` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

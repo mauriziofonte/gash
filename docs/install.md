@@ -15,10 +15,10 @@ CI installs Gash on each of these systems at every change: from the bare
 image, `install.sh` installs what Gash needs with the system's package
 manager, then `gash doctor` installs every package Gash can use and checks
 that each one provides its tool. The last column is the end-to-end test of
-the local web stack ([`gash hte`](hte/README.md)).
+the local web stack ([`gash localweb`](hte/README.md)).
 
 <!-- BEGIN generated: systems (go test ./internal/docgen -update) -->
-| System | Version | amd64 | arm64 | Local sites (`gash hte`) |
+| System | Version | amd64 | arm64 | Local sites (`gash localweb`) |
 |---|---|---|---|---|
 | Rocky Linux | 8 | tested | tested | not tested |
 | Rocky Linux | 9 (minimal image) | tested | tested | not tested |
@@ -259,7 +259,7 @@ gash uninstall   # remove Gash, its profile block and ~/.gashrc (asks first)
 `gash uninstall` keeps a copy of each profile as it was before the edit,
 and of a `~/.gashrc` that holds your own lines, as
 `FILE.gash-uninstall.bak`. If you installed the local web stack, run
-`gash hte uninstall --yes` first: it stops the stack and restores the
+`gash localweb uninstall --yes` first: it stops the stack and restores the
 system files it changed. Packages installed for Gash stay installed.
 
 ## When the install fails

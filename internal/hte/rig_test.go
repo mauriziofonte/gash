@@ -347,7 +347,7 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 }
 
 // unitJob plays the user manager for gash-hte.service: start runs
-// ExecStart (gash hte __unit start) unless the unit is active, stop runs
+// ExecStart (gash localweb __unit start) unless the unit is active, stop runs
 // ExecStop when it is, restart both, as Type=oneshot with RemainAfterExit
 // does.
 func (m *rig) unitJob(verb string) runner.Expect {
@@ -750,7 +750,7 @@ func TestLedger_HTE73(t *testing.T) {
 
 // TestLedger_HTE75: install on the standard ports next to a system Apache
 // that serves enabled vhosts succeeds without starting the stack: started
-// false, next "gash hte migrate", and a warning that names the vhosts and
+// false, next "gash localweb migrate", and a warning that names the vhosts and
 // the command. The system Apache keeps running.
 func TestLedger_HTE75(t *testing.T) {
 	m := newRig(t)
@@ -760,7 +760,7 @@ func TestLedger_HTE75(t *testing.T) {
 	}
 	vhosts := []string{"/etc/apache2/sites-available/001-http.test.conf", "/etc/apache2/sites-available/002-https.test.conf",
 		"/etc/apache2/sites-available/003-forced.test.conf"}
-	if res.Started || res.Next != "gash hte migrate" || !slices.Equal(res.Blocking, vhosts) {
+	if res.Started || res.Next != "gash localweb migrate" || !slices.Equal(res.Blocking, vhosts) {
 		t.Fatalf("started %v next %q blocking %v", res.Started, res.Next, res.Blocking)
 	}
 	warned := slices.ContainsFunc(res.Warnings, func(w string) bool {
@@ -769,14 +769,14 @@ func TestLedger_HTE75(t *testing.T) {
 				return false
 			}
 		}
-		return strings.Contains(w, "run gash hte migrate")
+		return strings.Contains(w, "run gash localweb migrate")
 	})
 	if !warned {
 		t.Errorf("warnings %q", res.Warnings)
 	}
 	data, err := json.Marshal(res)
 	must(t, err)
-	if !bytes.Contains(data, []byte(`"started":false`)) || !bytes.Contains(data, []byte(`"next":"gash hte migrate"`)) {
+	if !bytes.Contains(data, []byte(`"started":false`)) || !bytes.Contains(data, []byte(`"next":"gash localweb migrate"`)) {
 		t.Errorf("JSON %s", data)
 	}
 	if m.stack.Running() != 0 || !m.active["apache2"] || slices.ContainsFunc(res.Plan, func(l string) bool { return strings.Contains(l, "stop") }) {

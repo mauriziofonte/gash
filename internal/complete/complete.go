@@ -6,7 +6,7 @@
 // argument or an option, read live where they come from (the hosts and
 // databases of ~/.gash_env, git tags and refs, Docker containers, systemd
 // units, processes, listening ports). The 3.x commands of the tree (gash
-// update, gash wsl info, gash hte ...) are relayed to their cobra tree.
+// update, gash wsl info, gash localweb ...) are relayed to their cobra tree.
 //
 // The reply is cobra's format, which the generated bash completion reads:
 // one "VALUE<TAB>DESCRIPTION" line per candidate, then ":DIRECTIVE".
@@ -57,7 +57,7 @@ type Env struct {
 	Get func(string) string
 	// Delegate returns the completions the 3.x command name gives for
 	// args (its last word the partial one): the delegate namespaces' own
-	// words (gash wsl info, gash hte site).
+	// words (gash wsl info, gash localweb site).
 	Delegate func(name string, args []string) []Candidate
 	// Run, Environ and Dir run the programs that list values (git tags,
 	// Docker containers); nil Run lists none.
@@ -85,13 +85,13 @@ func Words(words []string, partial string, env Env) Reply {
 
 	if !isCmd {
 		if len(path) == 0 && len(rest) > 0 {
-			// gash hte ...: a namespace that is its 3.x command alone.
+			// gash localweb ...: a namespace that is its 3.x command alone.
 			if ns, ok := registry.NamespaceOf(rest[0]); ok && ns.Delegate != "" {
 				return Reply{Relay: append(append([]string{ns.Delegate}, rest[1:]...), partial), Offset: -1}
 			}
 		}
 		if len(rest) > 0 {
-			// Words the tree does not list: a delegate's own (gash hte
+			// Words the tree does not list: a delegate's own (gash localweb
 			// site list), else nothing.
 			if ns, ok := delegateOf(path); ok {
 				return Reply{Relay: append(append([]string{ns.Delegate}, rest...), partial), Offset: -1}

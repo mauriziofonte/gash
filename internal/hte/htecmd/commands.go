@@ -19,13 +19,17 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/state"
 )
 
-// tree is `gash hte` and every command of design/hte.md 9.
+// tree is `gash localweb` (4.0; `gash localweb` before, still accepted through
+// 4.x) and every command of design/hte.md 9. The code keeps the name hte
+// (homelab test environment) for historical reasons: the stack began as
+// hte-cli, a standalone PHP tool.
 func (r *run) tree() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "hte",
-		Short: "Manage the local Apache and PHP-FPM test environment",
-		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Use:     "localweb",
+		Aliases: []string{"hte"},
+		Short:   "Manage the local Apache and PHP-FPM test environment",
+		Args:    cobra.NoArgs,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	root.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return err })

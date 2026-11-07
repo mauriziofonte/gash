@@ -215,19 +215,28 @@ __gash_get_host_entries() {
 # =============================================================================
 
 # List available database connections
-gash_db_list() {
+__gash_fn_gash_db_list() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_db_list "$@"
 }
+if [[ -z "${__GASH_BOOT_LOADED-}" ]]; then
+    gash_db_list() { __gash_fn_gash_db_list "$@"; }
+fi
 
 # Test a database connection
-gash_db_test() {
+__gash_fn_gash_db_test() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_db_test "$@"
 }
+if [[ -z "${__GASH_BOOT_LOADED-}" ]]; then
+    gash_db_test() { __gash_fn_gash_db_test "$@"; }
+fi
 
 # Create ~/.gash_env from template
-gash_env_init() { __gash_call gash_env_init "$@"; }
+__gash_fn_gash_env_init() { __gash_call gash_env_init "$@"; }
+if [[ -z "${__GASH_BOOT_LOADED-}" ]]; then
+    gash_env_init() { __gash_fn_gash_env_init "$@"; }
+fi
 
 # =============================================================================
 # AI Provider Functions
@@ -253,10 +262,13 @@ __gash_get_first_ai_provider() {
 }
 
 # List available AI providers
-gash_ai_list() {
+__gash_fn_gash_ai_list() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_ai_list "$@"
 }
+if [[ -z "${__GASH_BOOT_LOADED-}" ]]; then
+    gash_ai_list() { __gash_fn_gash_ai_list "$@"; }
+fi
 
 # Sourcing never fails: the status of this file is 0.
 true

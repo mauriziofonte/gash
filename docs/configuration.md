@@ -17,9 +17,9 @@ each.
 | `~/.gash_env` | you (`gash config init` creates it) | SSH keys to unlock, database connections, AI tokens, remote hosts and settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
 | `~/.local/share/gash/versions/VERSION/` | the installer, the first shell, `gash update` | The `gash` binary of each version (and `gash-hosts-helper`) |
-| `~/.local/state/gash/` | Gash | `update` (the version `gash update --rollback` returns to), `schema` and `notice` (the Gash 1.x reminder), `hte/` (the rendered `gash hte` configuration and its logs) |
+| `~/.local/state/gash/` | Gash | `update` (the version `gash update --rollback` returns to), `schema` and `notice` (the Gash 1.x reminder), `hte/` (the rendered `gash localweb` configuration and its logs) |
 | `~/.cache/gash/` | Gash | `init-probes` (what the shell start learned about `ls`, `grep`, `rm` and `dircolors`, reused for a day), `runtimes.json` (`gash runtime` answers). A `probes` file there is a Gash 2.x leftover, safe to delete |
-| `~/.config/gash/hte/` | `gash hte` | The sites, settings and overlay files of the [local web stack](hte/README.md) |
+| `~/.config/gash/hte/` | `gash localweb` | The sites, settings and overlay files of the [local web stack](hte/README.md) |
 
 `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` and `XDG_CONFIG_HOME`
 move the last four, as their names say.
@@ -53,7 +53,7 @@ nothing unless `GASH_HEADLESS=1` is set. There are two modes.
    [Precedence](#precedence)), terminal settings and the umask, history,
    the prompt, `GASH_PATH_ADD` and `GASH_NVM`, the alias packs, the
    banner, the unlock of the SSH keys of `~/.gash_env`, the Gash 1.x
-   reminder, and the `gash hte` start when its autostart is `shell`.
+   reminder, and the `gash localweb` start when its autostart is `shell`.
 4. `~/.bash_aliases` (unless your `~/.bashrc` already sources it), then
    `~/.bash_local`.
 5. `~/.gashrc` sources the completion.
@@ -348,8 +348,9 @@ in the environment (but the four file-only ones).
 | `GASH_HISTORY` | `1` | Gash manages history: unlimited size, timestamps, `histappend`, each command written at once, and `ignoreboth` added to `HISTCONTROL` unless you set your own (`ignorespace`, `ignoredups` or `ignoreboth`; another value such as `erasedups` gets `:ignoreboth` appended). `0` leaves history alone |
 | `GASH_HISTORY_SYNC` | `0` | `1` re-reads the history file before each prompt, to see commands from other terminals |
 | `GASH_SAFETY_ALIASES` | `1` | `cp -iv`, `mv -iv`, `mkdir -pv`, and `rm -Iv --one-file-system --preserve-root` plus `--preserve-root` for `chown`, `chmod`, `chgrp` with GNU tools (`rm -iv` otherwise). `0` turns them off |
-| `GASH_SHORTCUTS` | `all` | Which shortcut packs Gash defines, separated by spaces, commas or colons: `commands` (the short names of commands, such as `flf` for `gash files largest`), `git` (`gst`, `gcm`, `gpf` and the other git aliases; the `gl*` log functions stay), `docker` (`dcls`, `dils`...), `navigation` (the `ls` and `cd` shortcuts) and `php` (`php` and `composer` with Gash's options). `all` is every pack, `none` (or any value naming no pack) defines none. The commands themselves (`gash files largest`) and their former names stay whatever the value |
-| `GASH_LEGACY_HINTS` | `1` | `0` stops the tip a former name (`files_largest`) prints once per session, the first time it runs, naming its `gash NAMESPACE COMMAND` form |
+| `GASH_SHORTCUTS` | `all` | Which shortcut packs Gash defines, separated by spaces, commas or colons: `commands` (the short names of commands, such as `flf` for `gash files largest`), `git` (`gst`, `gcm`, `gpf` and the other git aliases; the `gl*` log functions stay), `docker` (`dcls`, `dils`...), `navigation` (the `ls` and `cd` shortcuts) and `php` (`php` and `composer` with Gash's options). `all` is every pack, `none` (or any value naming no pack) defines none. The commands themselves (`gash files largest`), and their former names with `GASH_LEGACY_NAMES=1`, stay whatever the value |
+| `GASH_LEGACY_NAMES` | `0` | `1` defines the former flat names of Gash 3.x again (`files_largest`, `git_sync`; [the full list](migration-4.0.md#every-former-name)), in interactive and headless shells. Read while `gash.sh` loads: the environment first, then `~/.gash_env` |
+| `GASH_LEGACY_HINTS` | `1` | `0` stops the tip a former name (`files_largest`, with `GASH_LEGACY_NAMES=1`) prints once per session, the first time it runs, naming its `gash NAMESPACE COMMAND` form |
 | `GASH_REPLACE_TOOLS` | `0` | `1` aliases `less` to `most` (and sets `PAGER`), `tail` to `multitail`, `df` to `pydf`, `top` to `htop`, `traceroute` and `tracepath` to `mtr`, `diff` to `colordiff` when installed, and `php`/`composer` to the newest `phpX.Y` |
 | `GASH_UMASK` | empty | An octal mask of 3 or 4 digits, such as `027`, applied at startup. Empty keeps the system umask; any other value is ignored with a warning |
 | `GASH_PATH_ADD` | empty | Directories put first on `PATH`, in the order given, when they exist (`~` is expanded), e.g. `"~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"`. Separated by spaces; no wildcards (a `*` is taken literally). Directories only, no options: a word starting with `-` is a directory name. Re-sourcing never adds them twice |

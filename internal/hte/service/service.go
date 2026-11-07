@@ -439,13 +439,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		return err
 	}
 	if !ok {
-		return hteerr.New(hteerr.InvalidState, "nothing is rendered yet", "run gash hte service reload")
+		return hteerr.New(hteerr.InvalidState, "nothing is rendered yet", "run gash localweb service reload")
 	}
 	u := s.running(m)
 	for _, f := range m.FPM {
 		if !u.fpm[f.Version] {
 			if err := s.startFPM(ctx, f); err != nil {
-				return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+				return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "%v", err)
 			}
 		}
 	}
@@ -461,9 +461,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 // port_in_use.
 func startError(err error, a render.ApacheMaster) error {
 	if strings.Contains(err.Error(), "Address already in use") || strings.Contains(err.Error(), "could not bind") {
-		return hteerr.Newf(hteerr.PortInUse, "run gash hte doctor: it names the process holding the port", "%v", err)
+		return hteerr.Newf(hteerr.PortInUse, "run gash localweb doctor: it names the process holding the port", "%v", err)
 	}
-	return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+	return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "%v", err)
 }
 
 // Graceful makes a running Apache read its configuration and
@@ -477,7 +477,7 @@ func (s *Supervisor) Graceful(ctx context.Context) error {
 		return nil
 	}
 	if err := s.signalReady(ctx, s.apache(m.Apache), syscall.SIGUSR1); err != nil {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "%v", err)
 	}
 	return nil
 }
@@ -499,13 +499,13 @@ func (s *Supervisor) Reload(ctx context.Context) (bool, error) {
 	for _, f := range m.FPM {
 		if u.fpm[f.Version] {
 			if err := s.signalReady(ctx, s.fpm(f), syscall.SIGUSR2); err != nil {
-				return true, hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+				return true, hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "%v", err)
 			}
 		}
 	}
 	if u.apache {
 		if err := s.signalReady(ctx, s.apache(m.Apache), syscall.SIGUSR1); err != nil {
-			return true, hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs, then gash hte service start", "%v", err)
+			return true, hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs, then gash localweb service start", "%v", err)
 		}
 	}
 	return u.any(), nil
@@ -527,7 +527,7 @@ func (s *Supervisor) ReloadFPM(ctx context.Context, version string) error {
 			return nil
 		}
 		if err := s.signalReady(ctx, s.fpm(f), syscall.SIGUSR2); err != nil {
-			return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+			return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "%v", err)
 		}
 	}
 	return nil
@@ -551,7 +551,7 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service status", "%v", err)
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service status", "%v", err)
 	}
 	return nil
 }
@@ -666,7 +666,7 @@ func (s *Supervisor) Apply(ctx context.Context, in render.Input) (Outcome, error
 // rollback makes the previous generation current again and moves the
 // stack back to it.
 func (s *Supervisor) rollback(ctx context.Context, failed, prev *render.Manifest, hasPrev bool, cause error) error {
-	hint := "run gash hte service logs; gash hte doctor names the remedy"
+	hint := "run gash localweb service logs; gash localweb doctor names the remedy"
 	if !hasPrev {
 		return hteerr.Newf(hteerr.ReloadFailed, hint, "%v; no previous generation to roll back to", cause)
 	}

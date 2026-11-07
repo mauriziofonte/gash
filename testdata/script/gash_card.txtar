@@ -33,7 +33,7 @@ done
 
 # :20 the overview names every namespace, by group.
 ov="$(gash --no-color)"
-for ns in files system shell git docker remote db runtime ai hte wsl win logs llm agent run; do
+for ns in files system shell git docker remote db runtime ai localweb wsl win logs llm agent run; do
   grep -qE "^    $ns +[A-Z]" <<<"$ov" || fail "20 missing $ns"
 done
 for g in EVERYDAY PLATFORM "FOR AI AGENTS" GASH; do

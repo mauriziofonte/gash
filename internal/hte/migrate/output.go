@@ -25,7 +25,7 @@ func (p *Plan) JSON() ([]byte, error) {
 // Text renders the plan for a human reader.
 func (p *Plan) Text() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "gash hte migrate: plan for %s (dry run: nothing is changed)\n", p.Platform)
+	fmt.Fprintf(&b, "gash localweb migrate: plan for %s (dry run: nothing is changed)\n", p.Platform)
 
 	b.WriteString("\nSites\n")
 	if len(p.Sites) == 0 {

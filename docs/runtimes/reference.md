@@ -18,7 +18,7 @@ Pick PHP and Node.js versions per project, run commands under a version, and kee
 
 Detect the Node.js version a project wants.
 
-Former name: `node_detect_version` (works through 3.x).
+Former name: `node_detect_version` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -58,7 +58,7 @@ JSON output is also emitted automatically under GASH_HEADLESS=1;
 
 Detect the PHP version a project wants.
 
-Former name: `php_detect_version` (works through 3.x).
+Former name: `php_detect_version` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -100,7 +100,7 @@ JSON output is also emitted automatically under GASH_HEADLESS=1;
 
 Remove duplicate/older NVM patch versions.
 
-Shortcut: `nvmp`. Former name: `nvm_prune_versions` (works through 3.x).
+Shortcut: `nvmp`. Former name: `nvm_prune_versions` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -131,7 +131,7 @@ are the same as --force. Exits 1 when a removal failed.
 
 Install or upgrade chrome-headless-shell (Chrome for Testing).
 
-Shortcut: `chri`. Former name: `chrome_headless_update` (works through 3.x).
+Shortcut: `chri`. Former name: `chrome_headless_update` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -181,7 +181,7 @@ See also: [`gash runtime upgrade node`](../runtimes/reference.md#gash-runtime-up
 
 Upgrade each installed Node.js major to its newest patch.
 
-Shortcut: `nvmc`. Former name: `node_upgrade` (works through 3.x).
+Shortcut: `nvmc`. Former name: `node_upgrade` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -302,7 +302,7 @@ Run CMD and return its exit status unchanged.
 
 Options come before -- (or before the first word that is not an option);
 every word after it belongs to CMD. CMD may be a gash function
-(gash run --max-lines 20 -- files_largest .). Without a budget flag or
+(gash run --max-lines 20 -- gash files largest .). Without a budget flag or
 --plain CMD's output passes through untouched. gash's own errors (a bad option, a
 program not found, a --safe refusal, a runtime not installed) are JSON
 envelopes on stderr.

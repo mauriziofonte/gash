@@ -18,12 +18,12 @@ import (
 )
 
 // doctorUsage is the usage line of gash_doctor.
-const doctorUsage = "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]]"
+const doctorUsage = "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]]"
 
 // doctorFlags are the parsed arguments of gash_doctor.
 type doctorFlags struct {
-	timing, noColor, prereqs, json, install, yes, all bool
-	tools                                             []string
+	timing, noColor, prereqs, json, install, yes, all, legacy bool
+	tools, files                                              []string
 }
 
 // parseDoctor reads the arguments; ok is false after a usage error.
@@ -45,14 +45,24 @@ func parseDoctor(c *invoke.Call) (doctorFlags, bool) {
 			f.yes = true
 		case "--all":
 			f.all = true
+		case "--legacy":
+			f.legacy = true
 		default:
 			if !strings.HasPrefix(a, "-") && f.install {
 				f.tools = append(f.tools, a)
 				continue
 			}
+			if !strings.HasPrefix(a, "-") && f.legacy {
+				f.files = append(f.files, a)
+				continue
+			}
 			badArgs(c, doctorUsage)
 			return f, false
 		}
+	}
+	if f.legacy && (f.install || f.timing || f.prereqs) {
+		ui.StyleOf(c.Term, f.noColor).Printer(c.Stderr).Error("--legacy takes only files and --json (usage: " + doctorUsage + ")")
+		return f, false
 	}
 	if (f.yes || f.all) && !f.install {
 		ui.StyleOf(c.Term, f.noColor).Printer(c.Stderr).Error("--yes and --all go with --install (usage: " + doctorUsage + ")")

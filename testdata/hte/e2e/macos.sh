@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
-# Runs the gash hte end-to-end story TestE2EDistro natively on a macOS
+# Runs the gash localweb end-to-end story TestE2EDistro natively on a macOS
 # GitHub Actions runner (there is no Docker there): Homebrew's httpd, php
 # and php@8.3, the runner user as the user, its passwordless sudo for the
 # root step. The runner is a disposable VM, and this script refuses to run

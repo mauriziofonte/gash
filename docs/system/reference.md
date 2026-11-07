@@ -21,7 +21,7 @@ Processes, ports, services, disks, sudo history and a system report. The guide i
 
 Re-run last command with sudo.
 
-Shortcut: `plz`. Former name: `sudo_last` (works through 3.x).
+Shortcut: `plz`. Former name: `sudo_last` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -52,7 +52,7 @@ with no previous command in its history.
 
 Display disk usage for real filesystem types.
 
-Shortcut: `du2`. Former name: `disk_usage` (works through 3.x).
+Shortcut: `du2`. Former name: `disk_usage` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -82,7 +82,7 @@ See also: [`gash files largest-dirs`](../files/reference.md#gash-files-largest-d
 
 Comprehensive system information enumeration.
 
-Shortcut: `si`. Former name: `sysinfo` (works through 3.x).
+Shortcut: `si`. Former name: `sysinfo` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -148,7 +148,7 @@ See also: [`gash ai sysinfo`](../ai/reference.md#gash-ai-sysinfo)
 
 Get your public IP address.
 
-Shortcut: `myip`. Former name: `ip_public` (works through 3.x).
+Shortcut: `myip`. Former name: `ip_public` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -184,7 +184,7 @@ address (a captive portal or rate-limit page) is an error, rc 1.
 
 Kill all processes matching a name.
 
-Shortcut: `pk`. Former name: `process_kill` (works through 3.x).
+Shortcut: `pk`. Former name: `process_kill` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -221,7 +221,7 @@ See also: [`gash system ps`](../system/reference.md#gash-system-ps), [`gash syst
 
 Kill processes listening on a specific port.
 
-Shortcut: `ptk`. Former name: `port_kill` (works through 3.x).
+Shortcut: `ptk`. Former name: `port_kill` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -254,7 +254,7 @@ See also: [`gash system ps`](../system/reference.md#gash-system-ps), [`gash syst
 
 Search for a process by name.
 
-Shortcut: `pf`. Former name: `process_find` (works through 3.x).
+Shortcut: `pf`. Former name: `process_find` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -288,7 +288,7 @@ See also: [`gash system kill`](../system/reference.md#gash-system-kill), [`gash 
 
 Stop well-known services (Apache, MySQL, Redis, Docker, etc.).
 
-Shortcut: `svs`. Former name: `services_stop` (works through 3.x).
+Shortcut: `svs`. Former name: `services_stop` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

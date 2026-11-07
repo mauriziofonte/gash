@@ -249,7 +249,7 @@ Whatever the agent asks, these rails hold:
 - **Processes.** `agent_kill` signals only your own processes, never
   PID 1, the agent itself or its parents.
 - **Confirmations.** A function that asks a person before it acts (killing
-  a process by name, pruning Docker, `gash hte site remove`) refuses to run
+  a process by name, pruning Docker, `gash localweb site remove`) refuses to run
   for an agent without `-y` or `--yes`. The agent should pass it only after
   you agreed.
 

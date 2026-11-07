@@ -102,7 +102,7 @@ func FindApache(sr platform.Sysroot, o platform.OS) (Apache, error) {
 	l, ok := apacheLayouts[o.Family]
 	if !ok {
 		return Apache{}, hteerr.Newf(hteerr.PlatformUnsupported,
-			"gash hte supports Debian, Ubuntu, Fedora, Arch and macOS with Homebrew",
+			"gash localweb supports Debian, Ubuntu, Fedora, Arch and macOS with Homebrew",
 			"%s is not a supported platform", o.Platform())
 	}
 	hint := ApacheInstallHint(o.Family)

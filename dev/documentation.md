@@ -62,7 +62,7 @@ mask: Scan time: +[0-9]+ms
 -->
 ```console
 $ cd project
-$ tree_stats .
+$ gash files stats .
 Tree statistics for ~/project
   Files:       1
   Directories: 2

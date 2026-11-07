@@ -91,10 +91,10 @@ func (r *run) applied(a *hte.Applied) {
 	case a.Reloaded:
 		r.say().Info(fmt.Sprintf("the stack reloaded (generation %d)", a.Generation))
 	case a.Changed:
-		r.say().Info("the stack is not running: the change applies at the next gash hte service start")
+		r.say().Info("the stack is not running: the change applies at the next gash localweb service start")
 	}
 	if h := a.Hosts; h != nil && !h.InSync {
-		r.say().Warning("the hosts block does not match the sites: run gash hte hosts apply")
+		r.say().Warning("the hosts block does not match the sites: run gash localweb hosts apply")
 	}
 }
 
@@ -116,13 +116,13 @@ func (r *run) printInstall(res *hte.InstallResult) {
 	r.warn(res.Warnings)
 	switch {
 	case res.Started:
-		r.say().Success("gash hte is installed and the stack runs")
+		r.say().Success("gash localweb is installed and the stack runs")
 	case res.Next != "":
-		r.say().Success("gash hte is installed; the stack starts once the system vhosts are migrated")
+		r.say().Success("gash localweb is installed; the stack starts once the system vhosts are migrated")
 		r.say().Hint("Next: " + res.Next)
 	default:
-		r.say().Success("gash hte is installed")
-		r.say().Hint("Start the stack: gash hte service start")
+		r.say().Success("gash localweb is installed")
+		r.say().Hint("Start the stack: gash localweb service start")
 	}
 }
 
@@ -130,8 +130,8 @@ func (r *run) printUninstall(res *hte.UninstallResult) {
 	r.style().KV(r.out(), "Stage", orDash(res.Stage), "Restored", plural(len(res.Restored), "change", "changes"))
 	r.warn(res.Warnings)
 	if res.Stage != "" {
-		r.say().Success("gash hte is uninstalled; the sites are staged for a later install")
-		r.say().Hint("gash hte install offers to restore " + res.Stage)
+		r.say().Success("gash localweb is uninstalled; the sites are staged for a later install")
+		r.say().Hint("gash localweb install offers to restore " + res.Stage)
 	}
 }
 
@@ -175,7 +175,7 @@ func (r *run) printMigrate(res *hte.MigrateResult) {
 			r.list("Every root step of --apply, in order (one sudo):", res.RootPlan)
 		}
 		r.warn(res.Warnings)
-		r.say().Hint("Apply it: gash hte migrate --apply")
+		r.say().Hint("Apply it: gash localweb migrate --apply")
 		return
 	}
 	kv := []string{"Imported", orDash(strings.Join(res.Imported, ", ")), "Switched", yesNo(res.Switched),
@@ -282,7 +282,7 @@ func (r *run) printSiteShow(sh *hte.SiteShow) {
 func (r *run) printSiteList(l *hte.SiteList) {
 	if len(l.Sites) == 0 {
 		r.warn(l.Problems)
-		r.say().Info("no sites yet: gash hte site create --domain D --docroot PATH")
+		r.say().Info("no sites yet: gash localweb site create --domain D --docroot PATH")
 		return
 	}
 	rows := []string{"DOMAIN\tPHP\tHTTPS\tENABLED\tDOCUMENT ROOT"}
@@ -455,7 +455,7 @@ func (r *run) printCert(i *certs.Info) {
 		"Serial", i.Serial,
 		"SHA-256", i.SHA256)
 	if i.Legacy {
-		r.say().Hint("A certificate copied from hte-cli: gash hte cert renew --domain " + i.Domain + " makes an ECDSA one")
+		r.say().Hint("A certificate copied from hte-cli: gash localweb cert renew --domain " + i.Domain + " makes an ECDSA one")
 	}
 }
 
@@ -474,7 +474,7 @@ func (r *run) printDrift(use string) func(*hosts.Drift) {
 		default:
 			r.say().Warning("the hosts block does not match the sites")
 			if use == "check" {
-				r.say().Hint("Write it: gash hte hosts apply")
+				r.say().Hint("Write it: gash localweb hosts apply")
 			}
 		}
 	}

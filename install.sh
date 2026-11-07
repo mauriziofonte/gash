@@ -390,12 +390,12 @@
       return 0
     fi
     if [ "${ASSUME_YES-0}" -eq 1 ] || [ "${GASH_HEADLESS-}" = 1 ] || ! { : </dev/tty; } 2>/dev/null; then
-      gashinst_info "gash_doctor --prereqs lists the tools single functions use; gash_doctor --install installs the missing ones."
+      gashinst_info "gash doctor --prereqs lists the tools single commands use; gash doctor --install installs the missing ones."
       return 0
     fi
     gashinst_echo
-    gashinst_info "The tools single Gash functions use (gash_doctor --install):"
-    "$__GASH_BIN" gash_doctor --install </dev/tty || true
+    gashinst_info "The tools single Gash commands use (gash doctor --install):"
+    "$__GASH_BIN" doctor --install </dev/tty || true
   }
 
   # Highest release tag: vX.Y.Z or X.Y (no pre-release suffix), compared as

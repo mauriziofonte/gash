@@ -5,7 +5,7 @@
 # docs/assets/*.gif with vhs, against gash and gash-hosts-helper built from
 # this checkout (stamped with VERSION, as a release build). Needs go, vhs,
 # ttyd, ffmpeg, git, jq and sqlite3; hte.tape also needs Apache, PHP-FPM
-# and passwordless sudo, and changes the machine (gash hte install), so it
+# and passwordless sudo, and changes the machine (gash localweb install), so it
 # is recorded only where GASH_DEMO_HTE=1 (the Demos workflow sets it).
 #
 #   dev/tapes/render.sh                 # every tape

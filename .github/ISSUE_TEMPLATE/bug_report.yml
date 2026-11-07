@@ -8,7 +8,7 @@ body:
       label: What happened
       description: The command you ran, what you expected and what you got.
       placeholder: |
-        $ files_largest --json /srv
+        $ gash files largest --json /srv
         expected ..., got ...
     validations:
       required: true
@@ -29,8 +29,8 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: gash_doctor output
-      description: Output of `gash_doctor` (it shows no secrets).
+      label: gash doctor output
+      description: Output of `gash doctor` (it shows no secrets).
       render: text
   - type: dropdown
     id: os

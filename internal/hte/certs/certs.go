@@ -201,7 +201,7 @@ func (m Manager) ensureDir(dir string) error {
 		return err
 	}
 	if !fi.IsDir() {
-		return hteerr.Newf(hteerr.InvalidState, "remove it; gash hte cert renew makes a new pair", "%s is not a directory", dir)
+		return hteerr.Newf(hteerr.InvalidState, "remove it; gash localweb cert renew makes a new pair", "%s is not a directory", dir)
 	}
 	if err := os.Chmod(dir, dirMode); err != nil {
 		return err
@@ -370,10 +370,10 @@ func (m Manager) Show(domain string) (Info, error) {
 	path := m.Paths.CertFile(domain)
 	c, err := readCert(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Info{}, hteerr.Newf(hteerr.InvalidState, "run gash hte cert renew --domain "+domain, "%s has no certificate", domain)
+		return Info{}, hteerr.Newf(hteerr.InvalidState, "run gash localweb cert renew --domain "+domain, "%s has no certificate", domain)
 	}
 	if err != nil {
-		return Info{}, hteerr.Newf(hteerr.InvalidState, "run gash hte cert renew --domain "+domain, "%s: %v", path, err)
+		return Info{}, hteerr.Newf(hteerr.InvalidState, "run gash localweb cert renew --domain "+domain, "%s: %v", path, err)
 	}
 	alg, legacy := algorithm(c)
 	return Info{
@@ -425,7 +425,7 @@ func (m Manager) Check(ctx context.Context, s state.Site) Health {
 		h.Problems = append(h.Problems, "the certificate does not cover "+strings.Join(miss, ", "))
 	}
 	if info.Legacy {
-		h.Warnings = append(h.Warnings, "a copied hte-cli certificate ("+info.Algorithm+"): gash hte cert renew makes an ECDSA one")
+		h.Warnings = append(h.Warnings, "a copied hte-cli certificate ("+info.Algorithm+"): gash localweb cert renew makes an ECDSA one")
 	}
 	if len(h.Problems) == 0 {
 		if err := m.pairMatches(ctx, info.Path, key); err != nil {

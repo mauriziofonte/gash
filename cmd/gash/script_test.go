@@ -167,6 +167,10 @@ func TestScript(t *testing.T) {
 			env.Setenv("GASH_BIN", bin)
 			env.Setenv("LANG", "C.UTF-8")
 			env.Setenv("TERM", "dumb")
+			// 4.0: most scripts predate it and call the 3.x flat names
+			// (files_largest), which the setting brings back; a script
+			// about the 4.0 default clears it (env GASH_LEGACY_NAMES=).
+			env.Setenv("GASH_LEGACY_NAMES", "1")
 			if has2x {
 				env.Setenv("GASH_2X_SH", filepath.Join(tree2x, "gash.sh"))
 			}

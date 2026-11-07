@@ -20,7 +20,7 @@ Sync, tags, patches, repository repair and the gl* log shortcuts. The guide is [
 
 Apply a patch from a feature branch to main.
 
-Shortcut: `gpatch`. Former name: `git_apply_patch` (works through 3.x).
+Shortcut: `gpatch`. Former name: `git_apply_patch` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -60,7 +60,7 @@ See also: [`gash git revisions`](../git/reference.md#gash-git-revisions)
 
 Repair a repo with corrupted 0-byte loose objects.
 
-Shortcut: `gheal`. Former name: `git_repair` (works through 3.x).
+Shortcut: `gheal`. Former name: `git_repair` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -98,7 +98,7 @@ See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list)
 
 Dump all revisions of a file into separate files.
 
-Shortcut: `gdr`. Former name: `git_dump_revisions` (works through 3.x).
+Shortcut: `gdr`. Former name: `git_dump_revisions` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -132,7 +132,7 @@ See also: [`gash git patch`](../git/reference.md#gash-git-patch)
 
 Stage everything, commit and push the current branch.
 
-Shortcut: `gsync`. Former name: `git_sync` (works through 3.x).
+Shortcut: `gsync`. Former name: `git_sync` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -176,7 +176,7 @@ See also: [`gash git repair`](../git/reference.md#gash-git-repair)
 
 Create an annotated tag and push to remote.
 
-Shortcut: `gat`. Former name: `git_add_tag` (works through 3.x).
+Shortcut: `gat`. Former name: `git_add_tag` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -216,7 +216,7 @@ See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list), [`gash g
 
 Delete a tag locally and on remote.
 
-Shortcut: `gdt`. Former name: `git_delete_tag` (works through 3.x).
+Shortcut: `gdt`. Former name: `git_delete_tag` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -251,7 +251,7 @@ See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list), [`gash g
 
 List all local and remote tags.
 
-Shortcut: `glt`. Former name: `git_list_tags` (works through 3.x).
+Shortcut: `glt`. Former name: `git_list_tags` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

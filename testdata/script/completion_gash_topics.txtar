@@ -11,7 +11,7 @@
 
 env GASH_BANNER=0
 exec bash --norc --noprofile -i drive.sh
-stdout '^offered: files system shell git docker remote db runtime ai hte wsl win logs llm agent help doctor update version config uninstall unload init run all$'
+stdout '^offered: files system shell git docker remote db runtime ai localweb wsl win logs llm agent help doctor update version config uninstall unload init run all$'
 ! stdout 'FAILED'
 stdout '^ran 19$'
 

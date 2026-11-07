@@ -5,7 +5,7 @@
 # MATRIX "gash __complete", 3.5: the generated bash_completion asks the
 # binary (`gash __complete WORDS... PARTIAL`, cobra's protocol) for every
 # word: the namespaces, the commands of a group, the options of a command
-# and their values, the 3.x commands (init, update, version, hte) through
+# and their values, the 3.x commands (init, update, version, localweb) through
 # their cobra tree. Two or more candidates carry their descriptions
 # ("VALUE  (DESCRIPTION)", cut here); one is inserted alone. A shortcut and
 # a former name complete as their command; --name=value and a command line
@@ -20,7 +20,7 @@ cmp stdout want.txt
 
 # The binary's own answer: candidates with descriptions, then the
 # directive (4: no file completion).
-exec gash __complete hte si
+exec gash __complete localweb si
 stdout '^site\tCreate, change and remove sites$'
 stdout '^:4$'
 ! stdout '^service'
@@ -53,13 +53,13 @@ c gash git tag d
 c gash init ""
 c gash version --
 c gash update --r
-c gash hte ""
-c gash hte s
-c gash hte site ""
-c gash hte site cr
-c gash hte site create --do
-c gash hte --json do
-c gash hte cert ""
+c gash localweb ""
+c gash localweb s
+c gash localweb site ""
+c gash localweb site cr
+c gash localweb site create --do
+c gash localweb --json do
+c gash localweb cert ""
 c gash files largest --li
 c files_largest --li
 c gash llm grep --format = j
@@ -73,7 +73,7 @@ COMP_WORDS=(gash git sy); COMP_CWORD=2; __gash_complete; printf '%s\n' "${COMPRE
 # Without a binary the words complete to nothing.
 __GASH_BIN=/nonexistent
 __gash_bin_resolve() { return 1; }
-c gash hte ""
+c gash localweb ""
 c gash ""
 -- want.txt --
 registered
@@ -85,13 +85,13 @@ gash git tag d => delete
 gash init  => bash
 gash version -- => --help --json
 gash update --r => --rollback
-gash hte  => apache cert doctor hosts install migrate php service site uninstall
-gash hte s => service site
-gash hte site  => create disable enable list modify remove show
-gash hte site cr => create
-gash hte site create --do => --docroot --domain
-gash hte --json do => doctor
-gash hte cert  => renew show
+gash localweb  => apache cert doctor hosts install migrate php service site uninstall
+gash localweb s => service site
+gash localweb site  => create disable enable list modify remove show
+gash localweb site cr => create
+gash localweb site create --do => --docroot --domain
+gash localweb --json do => doctor
+gash localweb cert  => renew show
 gash files largest --li => --limit
 files_largest --li => --limit
 gash llm grep --format = j => json jsonl
@@ -100,5 +100,5 @@ gash help gi => git
 gash_help --se => --search
 add     (Create an annotated tag and push to remote)
 sync
-gash hte  => 
+gash localweb  => 
 gash  => 

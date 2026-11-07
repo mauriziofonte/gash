@@ -178,7 +178,7 @@ declare -gA __GASH_CALL_SETTINGS=(
     [llm_db_sample]="GASH_DB_TIMEOUT"
     [llm_db_schema]="GASH_DB_TIMEOUT"
     [llm_db_tables]="GASH_DB_TIMEOUT"
-    [__init]="GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_NVM GASH_PATH_ADD GASH_SHORTCUTS GASH_LEGACY_HINTS"
+    [__init]="GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_NVM GASH_PATH_ADD GASH_SHORTCUTS GASH_LEGACY_HINTS GASH_LEGACY_NAMES"
 )
 
 # PATH as the messages name it: a leading HOME, taken literally and
@@ -362,9 +362,6 @@ __gash_export_state() {
 __gash_call() {
     local __gc_name="${1-}"
     shift
-    # A former flat name (files_largest) typed at the prompt: one tip per
-    # name and session (3.5); never from a function, a script or gash.
-    [[ -z "${FUNCNAME[2]-}" && -n "${__GASH_FORMER[$__gc_name]-}" ]] && __gash_former "$__gc_name"
     __gash_compat_ready || {
         __gash_missing "$__gc_name"
         return 1
@@ -397,9 +394,10 @@ __gash_route() {
     fi
 }
 
-# The former flat names of 3.5 and what replaces them. They work through
-# Gash 3.x; typed at the prompt of an interactive shell, each one prints
-# a tip once per session (GASH_LEGACY_HINTS=0 turns the tips off).
+# The former flat names of 3.x and what replaces them. Since 4.0 a shell
+# defines them only with GASH_LEGACY_NAMES=1 (lib/compat/legacy.sh); typed
+# at the prompt of an interactive shell, each one prints a tip once per
+# session (GASH_LEGACY_HINTS=0 turns the tips off).
 declare -gA __GASH_FORMER=(
     [ai_ask]='gash ai ask (shortcut ask)'
     [ai_query]='gash ai query'
@@ -464,13 +462,14 @@ declare -gA __GASH_FORMER=(
     [wsl_restart]='gash wsl restart (shortcut wr)'
     [wsl_shutdown]='gash wsl shutdown (shortcut wsd)'
     [wsl_taskmanager]='gash win taskmgr (shortcut wtm)'
+    ['gash hte']='gash localweb'
 )
 declare -gA __GASH_FORMER_SEEN=()
 
 # Usage: __gash_former NAME
 __gash_former() {
     [[ $- == *i* && -t 2 && "${GASH_LEGACY_HINTS-1}" != 0 && "${GASH_HEADLESS-}" != 1 ]] || return 0
-    [[ -z "${__GASH_FORMER_SEEN[$1]-}" ]] || return 0
+    [[ -n "${__GASH_FORMER[$1]-}" && -z "${__GASH_FORMER_SEEN[$1]-}" ]] || return 0
     __GASH_FORMER_SEEN[$1]=1
     printf 'tip: %s is now %s\n' "$1" "${__GASH_FORMER[$1]}" >&2
 }

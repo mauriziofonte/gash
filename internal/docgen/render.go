@@ -4,6 +4,7 @@ package docgen
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -55,7 +56,7 @@ var groups = map[string][]struct{ Topic, Title string }{
 }
 
 // HelpFunc returns the --help output of a gash command line ("hte",
-// "site", "create"), as `gash hte site create --help` prints it.
+// "site", "create"), as `gash localweb site create --help` prints it.
 type HelpFunc func(args ...string) string
 
 // Reference renders docs/<area>/reference.md: the functions of the area
@@ -186,8 +187,10 @@ func function(w func(...string), f registry.Function) {
 		switch {
 		case c.Permanent():
 			names = append(names, "Also `"+f.Name+"`, the name agents call")
+		case len(c.FormerNames()) > 0 && slices.Contains(registry.Kept, c.FormerNames()[0]):
+			names = append(names, "Also `"+f.Name+"`, a function prompts and scripts call")
 		case len(c.FormerNames()) > 0:
-			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (works through 3.x)")
+			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (with `GASH_LEGACY_NAMES=1`)")
 		}
 	}
 	if len(names) > 0 {

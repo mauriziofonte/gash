@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
-# Runs the gash hte end-to-end test in a disposable container: the system
+# Runs the gash localweb end-to-end test in a disposable container: the system
 # Apache and PHP-FPM of a distro image, then the test binary (built with
-# -tags hte_e2e) installs gash hte as an unprivileged user, exercises the
+# -tags hte_e2e) installs gash localweb as an unprivileged user, exercises the
 # stack and uninstalls; setup.sh then compares /etc with its state before
 # install. Nothing runs on the host system: the host only builds the
 # binaries and starts docker.

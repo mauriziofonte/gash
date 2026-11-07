@@ -318,6 +318,15 @@ fi
 ((__gash_ua)) && unset __GASH_USER_ALIASES
 unset __gash_ua
 
+# 4.0: the former flat names of Gash 3.x (files_largest, git_sync) only with
+# GASH_LEGACY_NAMES=1, from the environment or ~/.gash_env. Without it the
+# canonical commands, their shortcuts, the llm_*/agent_* functions and the
+# script helpers are the names this shell defines.
+declare -F __gash_apply_env_settings >/dev/null && __gash_apply_env_settings GASH_LEGACY_NAMES
+if [[ "${GASH_LEGACY_NAMES-}" == 1 ]]; then
+    __gash_source "$GASH_DIR/lib/compat/legacy.sh"
+fi
+
 # -----------------------------------------------------------------------------
 # Headless mode
 # -----------------------------------------------------------------------------

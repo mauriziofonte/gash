@@ -1,4 +1,4 @@
-gash hte migrate: plan for ubuntu-24.04 (dry run: nothing is changed)
+gash localweb migrate: plan for ubuntu-24.04 (dry run: nothing is changed)
 
 Sites
   skip            -                    Raw           /etc/apache2/sites-available/000-default.conf

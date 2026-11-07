@@ -16,7 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// call runs gash hte ARGS with an engine builder.
+// call runs gash localweb ARGS with an engine builder.
 func call(build func(*invoke.Call, bool) (*hte.Engine, error), args ...string) (stdout, stderr string, status int) {
 	var out, errb bytes.Buffer
 	env := invoke.EnvMap(nil)
@@ -52,7 +52,7 @@ func TestEngineBuild(t *testing.T) {
 	}
 	stdout, stderr, status := call(fail, "site", "list")
 	if status != 1 || stdout != "" ||
-		stderr != `{"error":"internal_error","details":"uid 4242 has no user name","action":"STOP","recoverable":true,"hint":"run gash hte doctor"}`+"\n" {
+		stderr != `{"error":"internal_error","details":"uid 4242 has no user name","action":"STOP","recoverable":true,"hint":"run gash localweb doctor"}`+"\n" {
 		t.Errorf("status %d stdout %q stderr %q", status, stdout, stderr)
 	}
 	for _, args := range [][]string{{"--help"}, {"site", "create"}, {"install", "--nope"}, {"uninstall"}} {
@@ -65,10 +65,10 @@ func TestEngineBuild(t *testing.T) {
 
 func TestMissingArg(t *testing.T) {
 	for msg, want := range map[string]bool{
-		"accepts 2 arg(s), received 1":           true,
-		"accepts 1 arg(s), received 0":           true,
-		"accepts 1 arg(s), received 2":           false,
-		"unknown command \"x\" for \"gash hte\"": false,
+		"accepts 2 arg(s), received 1":                true,
+		"accepts 1 arg(s), received 0":                true,
+		"accepts 1 arg(s), received 2":                false,
+		"unknown command \"x\" for \"gash localweb\"": false,
 	} {
 		if missingArg(msg) != want {
 			t.Errorf("%q: %v", msg, !want)

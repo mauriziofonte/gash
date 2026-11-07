@@ -85,7 +85,7 @@ func (e *Engine) Doctor(ctx context.Context) (*DoctorResult, error) {
 	r.add("platform", CheckOK, v.os.Platform(), "")
 	if e.EUID == 0 {
 		r.add("user", CheckWarn, "running as root: the userland checks below are those of root's own (empty) stack",
-			"run gash hte doctor as your own user")
+			"run gash localweb doctor as your own user")
 	}
 
 	// The machine.
@@ -98,7 +98,7 @@ func (e *Engine) Doctor(ctx context.Context) (*DoctorResult, error) {
 	// The install.
 	if setErr != nil {
 		if errors.Is(setErr, state.ErrNotInstalled) {
-			r.add("install", CheckFail, "gash hte is not installed for this user", "run gash hte install")
+			r.add("install", CheckFail, "gash localweb is not installed for this user", "run gash localweb install")
 		} else {
 			r.err("install", setErr)
 		}
@@ -201,7 +201,7 @@ func (e *Engine) doctorReceipt(v *env, r *report) {
 	userData, userErr := os.ReadFile(v.paths.Receipt())
 	switch {
 	case errors.Is(rootErr, fs.ErrNotExist) && errors.Is(userErr, fs.ErrNotExist):
-		r.add("receipt", CheckWarn, "no receipt: install recorded no root change", "run gash hte install")
+		r.add("receipt", CheckWarn, "no receipt: install recorded no root change", "run gash localweb install")
 		return
 	case rootErr != nil && !errors.Is(rootErr, fs.ErrNotExist):
 		r.add("receipt", CheckFail, "the root copy cannot be read: "+rootErr.Error(), "")
@@ -224,7 +224,7 @@ func (e *Engine) doctorReceipt(v *env, r *report) {
 	}
 	if pending > 0 {
 		r.add("receipt", CheckFail, fmt.Sprintf("%d changes were interrupted (pending)", pending),
-			"run the interrupted command again; gash hte uninstall undoes them as far as they went")
+			"run the interrupted command again; gash localweb uninstall undoes them as far as they went")
 		return
 	}
 	r.add("receipt", CheckOK, fmt.Sprintf("%d changes, both copies equal", len(rc.Changes)), "")
@@ -234,7 +234,7 @@ func (e *Engine) doctorReceipt(v *env, r *report) {
 // the sudoers drop-in, the port setting, linger.
 func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *report) {
 	if !e.Sysroot.IsRegular(rootops.HelperPath) {
-		r.add("hosts helper", CheckFail, rootops.HelperPath+" is missing", "run gash hte install")
+		r.add("hosts helper", CheckFail, rootops.HelperPath+" is missing", "run gash localweb install")
 	} else if sum, err := sha256File(e.Helper); err == nil {
 		inst, ierr := e.Sysroot.ReadFile(rootops.HelperPath)
 		switch {
@@ -242,7 +242,7 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 			r.add("hosts helper", CheckWarn, "cannot read "+rootops.HelperPath+": "+ierr.Error(), "")
 		case sumBytes(inst) != sum:
 			r.add("hosts helper", CheckWarn, rootops.HelperPath+" differs from the helper of this gash ("+e.Helper+")",
-				"run gash hte install to update it")
+				"run gash localweb install to update it")
 		default:
 			r.add("hosts helper", CheckOK, rootops.HelperPath, "")
 		}
@@ -258,7 +258,7 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 			r.add("ports setting", CheckWarn, "cannot read "+rootops.PortSysctl, "")
 		case n > set.Ports.HTTP:
 			r.add("ports setting", CheckFail, fmt.Sprintf("%s is %d: ports %d and %d need root", rootops.PortSysctl, n, set.Ports.HTTP, set.Ports.HTTPS),
-				"run gash hte install (it sets the value in "+rootops.SysctlFile+"), or install --ports high")
+				"run gash localweb install (it sets the value in "+rootops.SysctlFile+"), or install --ports high")
 		default:
 			r.add("ports setting", CheckOK, fmt.Sprintf("%s = %d", rootops.PortSysctl, n), "")
 		}
@@ -281,9 +281,9 @@ func (e *Engine) doctorPF(set state.Settings, r *report) {
 	switch {
 	case to.HTTP != set.Ports.HTTP || to.HTTPS != set.Ports.HTTPS:
 		r.add("ports setting", CheckFail, fmt.Sprintf("the pf redirect sends ports 80 and 443 to %d and %d, but the stack listens on %d and %d",
-			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in hte.toml back, or run gash hte uninstall and install again")
+			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in hte.toml back, or run gash localweb uninstall and install again")
 	case string(anchor) != string(rootops.PFRules(to.HTTP, to.HTTPS)) || string(daemon) != string(rootops.PFDaemon()):
-		r.add("ports setting", CheckFail, rootops.PFAnchorFile+" or "+rootops.PFDaemonPath+" is missing or changed", "run gash hte uninstall, then gash hte install")
+		r.add("ports setting", CheckFail, rootops.PFAnchorFile+" or "+rootops.PFDaemonPath+" is missing or changed", "run gash localweb uninstall, then gash localweb install")
 	default:
 		r.add("ports setting", CheckOK, fmt.Sprintf("pf redirects ports 80 and 443 of the loopback to %d and %d (anchor %s, loaded at boot by %s)",
 			to.HTTP, to.HTTPS, rootops.PFAnchor, rootops.PFDaemonPath), "")
@@ -323,7 +323,7 @@ func (e *Engine) doctorPorts(v *env, set state.Settings, st *service.Status, r *
 				who = append(who, e.holder(h))
 			}
 			r.add(fmt.Sprintf("port %d", p), CheckFail, "held by "+strings.Join(who, ", "),
-				"stop that service; for the system Apache run gash hte migrate (it stops it once its vhosts moved)")
+				"stop that service; for the system Apache run gash localweb migrate (it stops it once its vhosts moved)")
 		}
 	}
 }
@@ -418,7 +418,7 @@ func (e *Engine) doctorStack(ctx context.Context, v *env, st service.Status, stE
 		return
 	}
 	if st.Generation == 0 {
-		r.add("stack", CheckWarn, "nothing is rendered yet", "run gash hte service start")
+		r.add("stack", CheckWarn, "nothing is rendered yet", "run gash localweb service start")
 		return
 	}
 	sup := e.supervisor(v)
@@ -440,23 +440,23 @@ func (e *Engine) doctorStack(ctx context.Context, v *env, st service.Status, stE
 	}
 	switch {
 	case len(down) == len(masters):
-		r.add("stack", CheckWarn, "stopped", "run gash hte service start")
+		r.add("stack", CheckWarn, "stopped", "run gash localweb service start")
 		return
 	case len(down) > 0:
-		r.add("stack", CheckFail, "not running: "+strings.Join(down, ", "), "run gash hte service restart, then gash hte service logs")
+		r.add("stack", CheckFail, "not running: "+strings.Join(down, ", "), "run gash localweb service restart, then gash localweb service logs")
 	default:
 		r.add("stack", CheckOK, fmt.Sprintf("apache pid %d, %d FPM masters", st.Apache.PID, len(st.FPM)), "")
 	}
 	for _, ms := range masters {
 		for _, a := range ms.Addrs {
 			if ms.Running && !a.Accepts {
-				r.add(ms.Name, CheckFail, a.Addr+" does not accept connections", "run gash hte service restart")
+				r.add(ms.Name, CheckFail, a.Addr+" does not accept connections", "run gash localweb service restart")
 			}
 		}
 	}
 	for _, s := range st.Sites {
 		if err := answered(s); err != nil {
-			r.add("site "+s.Domain, CheckFail, err.Error(), "run gash hte service logs --site "+s.Domain)
+			r.add("site "+s.Domain, CheckFail, err.Error(), "run gash localweb service logs --site "+s.Domain)
 		} else {
 			r.add("site "+s.Domain, CheckOK, "answers", "")
 		}
@@ -468,7 +468,7 @@ func (e *Engine) doctorAutostart(ctx context.Context, v *env, set state.Settings
 	switch set.Autostart {
 	case service.AutostartSystemd:
 		if _, err := os.Stat(service.UnitPath(v.dirs.ConfigHome)); err != nil {
-			r.add("autostart", CheckFail, service.UnitPath(v.dirs.ConfigHome)+" is missing", "run gash hte install")
+			r.add("autostart", CheckFail, service.UnitPath(v.dirs.ConfigHome)+" is missing", "run gash localweb install")
 			return
 		}
 		if err := e.systemctlUser(ctx, v, "is-enabled", "--quiet", service.UnitName); err != nil {
@@ -476,7 +476,7 @@ func (e *Engine) doctorAutostart(ctx context.Context, v *env, set state.Settings
 			return
 		}
 		if !e.Sysroot.Exists(filepath.Join("/var/lib/systemd/linger", e.User)) {
-			r.add("autostart", CheckWarn, "linger is off: the stack starts at login, not at boot", "run gash hte install")
+			r.add("autostart", CheckWarn, "linger is off: the stack starts at login, not at boot", "run gash localweb install")
 			return
 		}
 		r.add("autostart", CheckOK, "systemd user unit, linger on", "")
@@ -500,11 +500,11 @@ func (e *Engine) doctorHosts(ctx context.Context, v *env, sites []state.Site, r 
 	case d.InSync:
 		r.add("hosts", CheckOK, "the gash block of /etc/hosts is in sync", "")
 	case !e.Sysroot.IsRegular(hosts.HelperPath) || e.EUID == 0:
-		r.add("hosts", CheckFail, driftText(d), "run gash hte hosts apply")
+		r.add("hosts", CheckFail, driftText(d), "run gash localweb hosts apply")
 	default:
 		_, err := e.locked(v, "doctor", "", func() (any, error) { return nil, e.applyHosts(ctx, v, sites) })
 		if err != nil {
-			r.add("hosts", CheckFail, driftText(d)+"; the repair failed: "+err.Error(), "run gash hte hosts apply")
+			r.add("hosts", CheckFail, driftText(d)+"; the repair failed: "+err.Error(), "run gash localweb hosts apply")
 		} else {
 			r.add("hosts", CheckFixed, driftText(d)+"; the block was written again", "")
 		}
@@ -565,10 +565,10 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 		name := "certificate " + s.Domain
 		h := cm.Check(ctx, s)
 		for _, p := range h.Problems {
-			r.add(name, CheckFail, p, "run gash hte cert renew --domain "+s.Domain)
+			r.add(name, CheckFail, p, "run gash localweb cert renew --domain "+s.Domain)
 		}
 		for _, w := range h.Warnings {
-			r.add(name, CheckWarn, w, "run gash hte cert renew --domain "+s.Domain)
+			r.add(name, CheckWarn, w, "run gash localweb cert renew --domain "+s.Domain)
 		}
 		if len(h.Problems) == 0 && len(h.Warnings) == 0 && h.Info != nil {
 			r.add(name, CheckOK, "valid until "+h.Info.NotAfter.UTC().Format("2006-01-02"), "")
@@ -585,7 +585,7 @@ func (e *Engine) doctorSudoers(ctx context.Context, r *report) {
 	_, err := e.Sysroot.Stat(rootops.SudoersPath)
 	hidden := err != nil && errors.Is(err, fs.ErrPermission)
 	if err != nil && !hidden {
-		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash hte install")
+		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash localweb install")
 		return
 	}
 	sudo := e.find("sudo")
@@ -598,7 +598,7 @@ func (e *Engine) doctorSudoers(ctx context.Context, r *report) {
 	res, err := child.Run(ctx, e.Runner, rootopsListCmd(sudo))
 	switch {
 	case err != nil || !res.Success():
-		r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash hte install")
+		r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash localweb install")
 	case hidden:
 		r.add("sudoers", CheckOK, rootops.SudoersPath+" (not readable by you; sudo allows the hosts helper)", "")
 	default:

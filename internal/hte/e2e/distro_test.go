@@ -157,7 +157,7 @@ func TestE2EDistro(t *testing.T) {
 		if len(blocking) == 0 && !res.Started {
 			t.Errorf("the stack did not start: %+v", res)
 		}
-		if len(blocking) > 0 && (res.Started || res.Next != "gash hte migrate") {
+		if len(blocking) > 0 && (res.Started || res.Next != "gash localweb migrate") {
 			t.Errorf("started %v, next %q, with blocking vhosts", res.Started, res.Next)
 		}
 		again, err := e.Install(ctx, hte.InstallOptions{Yes: true})

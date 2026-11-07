@@ -17,7 +17,7 @@ Ask Claude or Gemini from the terminal, with the context of this system. The gui
 
 Ask the AI one question from the terminal.
 
-Shortcut: `ask`. Former name: `ai_ask` (works through 3.x).
+Shortcut: `ask`. Former name: `ai_ask` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -104,7 +104,7 @@ See also: [`gash ai query`](../ai/reference.md#gash-ai-query), [`gash ai sysinfo
 
 List configured AI providers.
 
-Former name: `gash_ai_list` (works through 3.x).
+Former name: `gash_ai_list` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -134,7 +134,7 @@ See also: [`gash ai ask`](../ai/reference.md#gash-ai-ask), [`gash ai query`](../
 
 Non-interactive AI query with optional piped input.
 
-Former name: `ai_query` (works through 3.x).
+Former name: `ai_query` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -230,7 +230,7 @@ See also: [`gash ai ask`](../ai/reference.md#gash-ai-ask), [`gash ai sysinfo`](.
 
 AI-powered system security and configuration analysis.
 
-Shortcut: `sysinfo_ai`. Former name: `ai_sysinfo` (works through 3.x).
+Shortcut: `sysinfo_ai`. Former name: `ai_sysinfo` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

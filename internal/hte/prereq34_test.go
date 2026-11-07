@@ -45,7 +45,7 @@ func debianCopy(t *testing.T, add, remove []string) platform.Sysroot {
 	return sr
 }
 
-// A program gash hte runs as the user is found in Homebrew's directory,
+// A program gash localweb runs as the user is found in Homebrew's directory,
 // ~/.local/bin or the user's PATH; sudo only in the system directories
 // (3.4: an openssl outside the base PATH was "not installed").
 func TestFindUserDirs(t *testing.T) {

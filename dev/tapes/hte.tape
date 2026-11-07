@@ -1,4 +1,4 @@
-# gash hte: local HTTPS sites with Apache and PHP-FPM, run as your user.
+# gash localweb: local HTTPS sites with Apache and PHP-FPM, run as your user.
 # Changes the machine (one sudo at install): render.sh records it only with
 # GASH_DEMO_HTE=1, and the hidden tail uninstalls again. The tail also saves
 # the page to /tmp/gash-demo-hte.check, which render.sh checks.
@@ -21,13 +21,13 @@ Enter
 Wait
 Show
 
-Type "gash hte install --yes --autostart none"
+Type "gash localweb install --yes --autostart none"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
-Type "clear; gash hte site create --domain shop.test --docroot public"
+Type "clear; gash localweb site create --domain shop.test --docroot public"
 Sleep 300ms
 Enter
 Wait
@@ -39,20 +39,20 @@ Enter
 Wait
 Sleep 3s
 
-Type "clear; gash hte site list"
+Type "clear; gash localweb site list"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
-Type "gash hte service status"
+Type "gash localweb service status"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
 Hide
-Type "clear; curl -sk https://shop.test/ >/tmp/gash-demo-hte.check; gash hte site remove --domain shop.test --yes >/dev/null 2>&1; gash hte uninstall --yes >/dev/null 2>&1"
+Type "clear; curl -sk https://shop.test/ >/tmp/gash-demo-hte.check; gash localweb site remove --domain shop.test --yes >/dev/null 2>&1; gash localweb uninstall --yes >/dev/null 2>&1"
 Enter
 Wait
 

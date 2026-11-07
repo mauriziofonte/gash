@@ -133,7 +133,7 @@ func TestSettingsAndTopics(t *testing.T) {
 			require.False(t, s.Passed, s.Name)
 		}
 	}
-	require.Len(t, names, 21)
+	require.Len(t, names, 22)
 	require.ElementsMatch(t, []string{"GASH_DB_TIMEOUT", "GASH_AI_CONFIRM", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI"}, headless)
 	var topics []string
 	for _, tp := range Topics() {
@@ -226,13 +226,13 @@ func TestRegistry_ReadmeCounts(t *testing.T) {
 	}
 	helpers := len(CardAliases("git")) - gitAliases
 	if *updateDocs {
-		readme = regexp.MustCompile(`Gash adds \d+ functions and \d+ aliases`).ReplaceAllString(readme,
-			"Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases")
+		readme = regexp.MustCompile(`Gash adds \d+ commands and \d+ aliases`).ReplaceAllString(readme,
+			"Gash adds "+strconv.Itoa(fns)+" commands and "+strconv.Itoa(len(Aliases()))+" aliases")
 		readme = regexp.MustCompile(`\d+ read-only JSON functions for agents`).ReplaceAllString(readme,
 			strconv.Itoa(llm)+" read-only JSON functions for agents")
 		require.NoError(t, os.WriteFile("../../README.md", []byte(readme), 0o644))
 	}
-	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
+	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" commands and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
 	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
 	require.Contains(t, readme, strconv.Itoa(llm)+" read-only JSON functions for agents")
 }

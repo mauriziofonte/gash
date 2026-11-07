@@ -17,7 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// gash runs `gash hte ARGS...` through the command line (htecmd) on the
+// gash runs `gash localweb ARGS...` through the command line (htecmd) on the
 // engine of a rig.
 type gash struct {
 	t     *testing.T
@@ -60,7 +60,7 @@ func (g *gash) ok(args ...string) outcome {
 	g.t.Helper()
 	o := g.run(args...)
 	if o.status != 0 {
-		g.t.Fatalf("gash hte %s: status %d\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), o.status, o.stdout, o.stderr)
+		g.t.Fatalf("gash localweb %s: status %d\nstdout:\n%s\nstderr:\n%s", strings.Join(args, " "), o.status, o.stdout, o.stderr)
 	}
 	return o
 }
@@ -71,7 +71,7 @@ func (g *gash) fails(code string, args ...string) map[string]any {
 	o := g.run(args...)
 	env := envelopeOf(g.t, o.stderr)
 	if o.status != 1 || env["error"] != code {
-		g.t.Fatalf("gash hte %s: status %d, envelope %v, want %s\nstdout:\n%s\nstderr:\n%s",
+		g.t.Fatalf("gash localweb %s: status %d, envelope %v, want %s\nstdout:\n%s\nstderr:\n%s",
 			strings.Join(args, " "), o.status, env, code, o.stdout, o.stderr)
 	}
 	return env
@@ -126,25 +126,25 @@ func TestCLIHelpAndUsage(t *testing.T) {
 		}
 	}
 	help := g.run("--help").stdout
-	contains(t, "gash hte --help", help, "gash hte [command]", "install", "uninstall", "doctor", "migrate", "site", "php",
+	contains(t, "gash localweb --help", help, "gash localweb [command]", "install", "uninstall", "doctor", "migrate", "site", "php",
 		"apache", "service", "cert", "hosts", "--json")
 	if strings.Contains(help, "__") || strings.Contains(help, "completion") {
 		t.Errorf("hidden commands listed:\n%s", help)
 	}
-	contains(t, "site create --help", g.run("site", "create", "--help").stdout, "gash hte site create [flags]",
+	contains(t, "site create --help", g.run("site", "create", "--help").stdout, "gash localweb site create [flags]",
 		"--domain", "--docroot", "--no-https", "--force-https-bypass", "--extra-https-port")
 
 	for _, c := range []struct {
 		args       []string
 		code, hint string
 	}{
-		{[]string{"install", "--bogus"}, "unknown_option", "Run: gash hte install --help"},
-		{[]string{"site", "create", "--domain"}, "missing_value", "Run: gash hte site create --help"},
-		{[]string{"php", "ini", "set", "--domain", "a.test", "memory_limit"}, "missing_value", "Run: gash hte php ini set --help"},
-		{[]string{"doctor", "extra"}, "unexpected_argument", "Run: gash hte doctor --help"},
-		{[]string{"frobnicate"}, "unexpected_argument", "Run: gash hte --help"},
-		{[]string{"site", "frob"}, "unexpected_argument", "Run: gash hte site --help"},
-		{[]string{"help"}, "unexpected_argument", "Run: gash hte --help"},
+		{[]string{"install", "--bogus"}, "unknown_option", "Run: gash localweb install --help"},
+		{[]string{"site", "create", "--domain"}, "missing_value", "Run: gash localweb site create --help"},
+		{[]string{"php", "ini", "set", "--domain", "a.test", "memory_limit"}, "missing_value", "Run: gash localweb php ini set --help"},
+		{[]string{"doctor", "extra"}, "unexpected_argument", "Run: gash localweb doctor --help"},
+		{[]string{"frobnicate"}, "unexpected_argument", "Run: gash localweb --help"},
+		{[]string{"site", "frob"}, "unexpected_argument", "Run: gash localweb site --help"},
+		{[]string{"help"}, "unexpected_argument", "Run: gash localweb --help"},
 	} {
 		env := g.fails(c.code, c.args...)
 		if env["action"] != "RETRY" || env["hint"] != c.hint {
@@ -170,7 +170,7 @@ func TestCLIBeforeInstall(t *testing.T) {
 	if vs, ok := v["versions"].([]any); !ok || len(vs) == 0 || v["problems"] == nil {
 		t.Errorf("php versions --json: %v", v)
 	}
-	contains(t, "migrate", g.ok("migrate").stdout, "gash hte migrate: plan for", "http.test")
+	contains(t, "migrate", g.ok("migrate").stdout, "gash localweb migrate: plan for", "http.test")
 
 	g.fails("conflicting_options", "install", "--restore-stage", "/x", "--no-restore")
 	g.fails("conflicting_options", "site", "create", "--domain", "a.test", "--docroot", "/srv", "--https", "--no-https")
@@ -219,7 +219,7 @@ func TestCLI(t *testing.T) {
 	o := g.ok("install", "--ports", "high", "--autostart", "none")
 	contains(t, "install stdout", o.stdout, "Ports", "8080 and 8443", "Started", "yes", "Recorded in the receipt:", "file_created /etc/sudoers.d/gash-hte")
 	contains(t, "install stderr", o.stderr, "Info: sudo runs these steps as root:", "  1. install /usr/local/libexec/gash/gash-hosts-helper",
-		"OK: gash hte is installed and the stack runs")
+		"OK: gash localweb is installed and the stack runs")
 	if g.rig.Running() == 0 {
 		t.Fatal("the stack does not run")
 	}
@@ -235,7 +235,7 @@ func TestCLI(t *testing.T) {
 
 	o = g.ok("migrate")
 	contains(t, "migrate", o.stdout, "Every root step of --apply, in order (one sudo):", "apachectl configtest")
-	contains(t, "migrate", o.stderr, "Hint: Apply it: gash hte migrate --apply")
+	contains(t, "migrate", o.stderr, "Hint: Apply it: gash localweb migrate --apply")
 	g.fails("confirmation_required", "migrate", "--apply")
 	mig := object(t, g.ok("migrate", "--apply", "--yes", "--json"))
 	if mig["applied"] != true || len(mig["imported"].([]any)) != 2 {

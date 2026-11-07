@@ -6,6 +6,53 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [4.0.0] - 2026-11-07
+
+The former flat names leave the default. A new shell defines the commands
+(`gash files largest`), their shortcuts (`flf`), the agent functions
+(`llm_*`, `agent_*`) and the script helpers; the 3.x flat names
+(`files_largest`, `git_sync`, `sysinfo`) come back with
+`GASH_LEGACY_NAMES=1`, for the whole 4.x series. `gash hte` is now
+`gash localweb`. [docs/migration-4.0.md](docs/migration-4.0.md) has what
+changed and the table of every former name.
+
+### Removed
+
+- The 63 former flat names of Gash 3.x, `gash_migrate` included, from the
+  default load, interactive and headless: a script or a habit that calls
+  `files_largest` gets `command not found`. `GASH_LEGACY_NAMES=1` (the
+  environment, or `~/.gash_env`) defines them again, with the output and
+  the tip of 3.5. `gash_username` stays defined: prompts call it, and the
+  update of a 3.x install runs it to check the tree it moves to.
+
+### Changed
+
+- `gash hte` is `gash localweb`: the local Apache and PHP-FPM sites.
+  `gash hte` still runs it through 4.x and, typed at the prompt, prints a
+  tip once per session. HTE (*homelab test environment*, the name of
+  hte-cli, the standalone PHP tool the stack began as) stays, for
+  historical reasons, in the folders and files of the stack
+  (`~/.config/gash/hte`, `hte.toml`), the hosts file markers, the error
+  codes (`hte_not_installed`) and `docs/hte`.
+- `gash run -- gash files largest .` runs the command in the binary
+  itself, as `gash run -- files_largest .` did.
+- The shell keeps the function of each former name as `__gash_fn_NAME`,
+  which the `gash` function runs; `gash unload` removes it.
+- `install.sh` and the docs name the commands only (`gash doctor
+  --install`).
+
+### Added
+
+- `gash doctor --legacy [--json] [FILE...]`: the lines of your files (by
+  default `~/.bashrc`, `~/.bash_local` and the other startup files) that
+  call a former name, with the command that replaces each. Status 1 when
+  it finds one.
+- An interactive shell whose startup files call a former name says so on
+  stderr, at most once a day, until they are clean or
+  `GASH_LEGACY_NAMES=1` is set.
+- `GASH_LEGACY_NAMES` in `docs/configuration.md`, and
+  `docs/migration-4.0.md`.
+
 ## [3.5.0] - 2026-11-07
 
 One name per command. Every command of Gash is now `gash NAMESPACE
@@ -1213,6 +1260,7 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[4.0.0]: https://github.com/mauriziofonte/gash/compare/v3.5.0...v4.0.0
 [3.5.0]: https://github.com/mauriziofonte/gash/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/mauriziofonte/gash/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/mauriziofonte/gash/compare/v3.4.0...v3.4.1

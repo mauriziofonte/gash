@@ -83,7 +83,7 @@ func Systems(ciYAML, hteRun string) (string, error) {
 		return "amd64"
 	}
 	var b strings.Builder
-	b.WriteString("| System | Version | amd64 | arm64 | Local sites (`gash hte`) |\n|---|---|---|---|---|\n")
+	b.WriteString("| System | Version | amd64 | arm64 | Local sites (`gash localweb`) |\n|---|---|---|---|---|\n")
 	for _, image := range m.Image {
 		repo, tag, _ := strings.Cut(image, ":")
 		name, ok := systemNames[repo]

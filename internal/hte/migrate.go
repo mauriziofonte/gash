@@ -98,7 +98,7 @@ func (e *Engine) verify(ctx context.Context, v *env, domains []string, res *Migr
 		}
 	}
 	if len(failed) > 0 {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs --site DOMAIN",
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs --site DOMAIN",
 			"the migrated sites do not answer: %s", strings.Join(failed, "; "))
 	}
 	return nil
@@ -136,7 +136,7 @@ func (e *Engine) Migrate(ctx context.Context, opt MigrateOptions) (*MigrateResul
 	}
 	if opt.Apply && e.EUID == 0 {
 		return nil, hteerr.New(hteerr.RootNotAllowed, "migrate --apply moves the sites into your own userland stack",
-			"Run gash hte as your own user; it asks for sudo itself when a step needs root")
+			"Run gash localweb as your own user; it asks for sudo itself when a step needs root")
 	}
 	v, err := e.resolve()
 	if err != nil {
@@ -527,7 +527,7 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		} else if w.apache != "" {
 			errs = append(errs, run(rootops.OpUndoUnitStop, w.apache))
 		}
-		return hteerr.Newf(hteerr.ReloadFailed, "the sites stay imported; fix the cause (gash hte doctor), then run gash hte migrate --apply again",
+		return hteerr.Newf(hteerr.ReloadFailed, "the sites stay imported; fix the cause (gash localweb doctor), then run gash localweb migrate --apply again",
 			"after the switch: %v; %s", errors.Join(errs...), after)
 	}
 	res.Switched = true

@@ -7,6 +7,7 @@ package help
 
 import (
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -99,10 +100,14 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 			line("")
 			heading("FUNCTION")
 			line("    " + a + f.Name + r + m + "  the same tool, a stable name for agents and scripts" + r)
-		} else if former := cmd.FormerNames(); len(former) > 0 {
+		} else if former := cmd.FormerNames(); len(former) > 0 && slices.Contains(registry.Kept, former[0]) {
+			line("")
+			heading("FUNCTION")
+			line("    " + a + former[0] + r + m + "  the same command, still a function for prompts and scripts" + r)
+		} else if len(former) > 0 {
 			line("")
 			heading("FORMER NAME")
-			line("    " + a + strings.Join(former, ", ") + r + m + "  works through Gash 3.x" + r)
+			line("    " + a + strings.Join(former, ", ") + r + m + "  the Gash 3.x name, defined with GASH_LEGACY_NAMES=1" + r)
 		}
 	}
 	if h.SeeAlso != "" {

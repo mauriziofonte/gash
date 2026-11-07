@@ -125,7 +125,7 @@ func (e *Engine) ApacheModuleEnable(ctx context.Context, name string) (*ModuleRe
 	return e.moduleChange(ctx, "apache modules enable", name, func(a discover.Apache, set *state.Settings) (bool, []string, error) {
 		file := path.Join(a.ModuleDir, "mod_"+name+".so")
 		if !state.ModuleName(name) || !e.Sysroot.IsRegular(file) {
-			return false, nil, hteerr.Newf(hteerr.ApacheModuleMissing, "gash hte apache modules list shows the modules of "+a.ModuleDir,
+			return false, nil, hteerr.Newf(hteerr.ApacheModuleMissing, "gash localweb apache modules list shows the modules of "+a.ModuleDir,
 				"%s has no module %q (no %s)", a.ModuleDir, name, path.Base(file))
 		}
 		switch {

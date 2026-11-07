@@ -482,7 +482,7 @@ func TestLedger_HTE72(t *testing.T) {
 		"php ini set":   func() error { _, err := f.e.PHPIniSet(ctx, "raw.test", "memory_limit", "1G"); return err },
 		"php ini unset": func() error { _, err := f.e.PHPIniUnset(ctx, "raw.test", "memory_limit"); return err },
 	} {
-		check(name+" on a site without PHP", run(), want{hteerr.PHPNotEnabled, hteerr.Retry, "raw.test has no PHP", "gash hte site modify --domain raw.test --php VERSION"})
+		check(name+" on a site without PHP", run(), want{hteerr.PHPNotEnabled, hteerr.Retry, "raw.test has no PHP", "gash localweb site modify --domain raw.test --php VERSION"})
 	}
 }
 

@@ -144,7 +144,7 @@ schema error stderr
 schema error stderr
 ! exec gash version --bogus
 schema error stderr
-! exec gash hte site list --json
+! exec gash localweb site list --json
 schema error stderr
 
 -- setup.sh --

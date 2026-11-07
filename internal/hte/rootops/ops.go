@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package rootops is the privileged side of gash hte (design/hte.md 7): a
+// Package rootops is the privileged side of gash localweb (design/hte.md 7): a
 // closed, typed set of operations that install, migrate --apply and
 // uninstall run as root through one interactive sudo per command,
 //
@@ -248,7 +248,7 @@ func wire(err error) *WireError {
 	if e, ok := hteerr.As(err); ok {
 		return &WireError{Code: e.Code, Details: e.Details, Hint: e.Hint}
 	}
-	return &WireError{Code: hteerr.PrivilegedStepRequired, Details: err.Error(), Hint: "run gash hte doctor"}
+	return &WireError{Code: hteerr.PrivilegedStepRequired, Details: err.Error(), Hint: "run gash localweb doctor"}
 }
 
 // Err turns a wire error back into an error.

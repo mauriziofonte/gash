@@ -103,8 +103,9 @@ ones to call: `llm_NAME` is also `gash llm NAME` and `agent_NAME` is also
 `gash agent NAME`, with `_` written `-` (`llm_db_query` is `gash llm
 db-query`), with the same output. The other functions of this page are
 named by their command (`gash files largest`, `gash doctor`); their flat
-names of 3.4 (`files_largest`) keep working through 3.x and never print a
-tip in headless mode or to a pipe. `gash help NAME` takes any of the names.
+names of 3.x (`files_largest`) are defined only with `GASH_LEGACY_NAMES=1`
+since Gash 4.0, and never print a tip in headless mode or to a pipe.
+`gash help NAME` takes any of the names.
 
 ## 3. Function catalog
 
@@ -585,7 +586,7 @@ functions):
 | Command | Effect |
 |---|---|
 | `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
-| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime node:24\|php:8.4\|php:project] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--plain` drops escape sequences (colors, cursor moves, titles) and keeps the last state of a line redrawn with carriage returns (progress bars), before the budget and `--test-summary` read the output; `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
+| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime node:24\|php:8.4\|php:project] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--plain` drops escape sequences (colors, cursor moves, titles) and keeps the last state of a line redrawn with carriage returns (progress bars), before the budget and `--test-summary` read the output; `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash command (`gash run --max-lines 20 -- gash files largest .`), run in the binary itself. gash's own errors are envelopes |
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","command","family","short","usage","flags","replaces"}]`, family `read` or `write`, command the same function as `gash llm WORD` or `gash agent WORD`; a table without `--json` |
 
 ### 3.12 Remote hosts
@@ -1350,23 +1351,25 @@ out=$(gash llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
 }
 ```
 
-## 10. Local sites (`gash hte`)
+## 10. Local sites (`gash localweb`)
 
-`gash hte` manages the user's local Apache and PHP-FPM sites
+`gash localweb` manages the user's local Apache and PHP-FPM sites
 ([docs/hte/README.md](docs/hte/README.md)). It is not read-only: call it when the user asks
 for a site change, and read with `site list`, `site show` and `doctor` the
-rest of the time.
+rest of the time. It was `gash hte` (homelab test environment, the name of
+the hte-cli tool it began as) until 4.0; `gash hte` still runs it through
+4.x, and its error codes and files keep the `hte` name.
 
 ```bash
-GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash hte site list --json'
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash localweb site list --json'
 ```
 
-* Every `gash hte` command takes `--json` (one JSON object on stdout) and
+* Every `gash localweb` command takes `--json` (one JSON object on stdout) and
   `--help`. Errors are the envelope of section 5 on stderr, exit status 1.
 * Headless calls never prompt: a missing required flag is `missing_value`
   (RETRY with the flag), a destructive step without `--yes` is
   `confirmation_required` (RETRY with `--yes`, once the user agreed).
-* `gash hte install` needs `sudo` once and changes system files: leave it
+* `gash localweb install` needs `sudo` once and changes system files: leave it
   to the user. Without an install every other command fails with
   `hte_not_installed` (STOP).
 

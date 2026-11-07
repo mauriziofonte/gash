@@ -253,5 +253,5 @@ usually the fastest way to the fix.
 - [reference.md](reference.md): every function and command of this area with all its options.
 - [configuration](../configuration.md#environment-only-variables): `GASH_WIN_TIMEOUT`.
 - [security](../security.md): the Windows secret files, and what `llm_exec` refuses under WSL.
-- [Local web stack (HTE)](../hte/README.md): `gash hte hosts windows` prints the lines for the Windows hosts file.
+- [Local web stack (HTE)](../hte/README.md): `gash localweb hosts windows` prints the lines for the Windows hosts file.
 - [capture.ps1](capture.ps1): for contributors, a read-only PowerShell script that records what the `gash win` scripts read on a real Windows machine, to pin the test fixtures.

@@ -20,7 +20,7 @@ Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_en
 
 Run a command or script on a remote host via multiplexed SSH.
 
-Shortcut: `rex`. Former name: `remote_exec` (works through 3.x).
+Shortcut: `rex`. Former name: `remote_exec` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -63,7 +63,7 @@ See also: [`gash remote hosts`](../remote/reference.md#gash-remote-hosts), [`gas
 
 List configured remote host aliases.
 
-Shortcut: `rh`. Former name: `remote_hosts` (works through 3.x).
+Shortcut: `rh`. Former name: `remote_hosts` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -92,7 +92,7 @@ See also: [`gash remote exec`](../remote/reference.md#gash-remote-exec), [`gash 
 
 Copy a remote file/dir to the local machine via scp.
 
-Shortcut: `rpull`. Former name: `remote_pull` (works through 3.x).
+Shortcut: `rpull`. Former name: `remote_pull` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -131,7 +131,7 @@ See also: [`gash remote push`](../remote/reference.md#gash-remote-push), [`gash 
 
 Copy a local file/dir to a remote host via scp.
 
-Shortcut: `rpush`. Former name: `remote_push` (works through 3.x).
+Shortcut: `rpush`. Former name: `remote_push` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -170,7 +170,7 @@ See also: [`gash remote pull`](../remote/reference.md#gash-remote-pull), [`gash 
 
 Sync a remote directory to the local machine via rsync.
 
-Shortcut: `rspull`. Former name: `remote_sync_pull` (works through 3.x).
+Shortcut: `rspull`. Former name: `remote_sync_pull` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -215,7 +215,7 @@ See also: [`gash remote sync push`](../remote/reference.md#gash-remote-sync-push
 
 Sync a local directory to a remote host via rsync.
 
-Shortcut: `rspush`. Former name: `remote_sync_push` (works through 3.x).
+Shortcut: `rspush`. Former name: `remote_sync_push` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -257,7 +257,7 @@ See also: [`gash remote sync pull`](../remote/reference.md#gash-remote-sync-pull
 
 Auto-unlock SSH keys from ~/.gash_env on shell startup.
 
-Former name: `gash_ssh_auto_unlock` (works through 3.x).
+Former name: `gash_ssh_auto_unlock` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

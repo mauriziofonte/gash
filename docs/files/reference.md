@@ -20,7 +20,7 @@ Find what fills a disk, summarize a tree, extract any archive and back up a file
 
 Create a timestamped backup of a file.
 
-Shortcut: `fbk`. Former name: `file_backup` (works through 3.x).
+Shortcut: `fbk`. Former name: `file_backup` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -61,7 +61,7 @@ See also: [`gash files extract`](../files/reference.md#gash-files-extract)
 
 Find directories exceeding a size threshold (single-walk aggregation).
 
-Shortcut: `dfl`. Former name: `dirs_find_large` (works through 3.x).
+Shortcut: `dfl`. Former name: `dirs_find_large` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -130,7 +130,7 @@ See also: [`gash files largest-dirs`](../files/reference.md#gash-files-largest-d
 
 List empty directories with depth, prune and count options.
 
-Shortcut: `dle`. Former name: `dirs_list_empty` (works through 3.x).
+Shortcut: `dle`. Former name: `dirs_list_empty` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -188,7 +188,7 @@ See also: [`gash files largest`](../files/reference.md#gash-files-largest), [`ga
 
 Extract archives (tar, zip, gz, bz2, xz, zst, Z, rar, 7z).
 
-Shortcut: `axe`. Former name: `archive_extract` (works through 3.x).
+Shortcut: `axe`. Former name: `archive_extract` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -248,7 +248,7 @@ See also: [`gash files backup`](../files/reference.md#gash-files-backup)
 
 List the largest files under a path with size/exclude/json filters.
 
-Shortcut: `flf`. Former name: `files_largest` (works through 3.x).
+Shortcut: `flf`. Former name: `files_largest` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -313,7 +313,7 @@ See also: [`gash files largest-dirs`](../files/reference.md#gash-files-largest-d
 
 List the largest directories with depth and filter control.
 
-Shortcut: `dld`. Former name: `dirs_largest` (works through 3.x).
+Shortcut: `dld`. Former name: `dirs_largest` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 
@@ -377,7 +377,7 @@ See also: [`gash files largest`](../files/reference.md#gash-files-largest), [`ga
 
 Compact filesystem stats: totals, top extensions, depth, empty dirs.
 
-Shortcut: `tls`. Former name: `tree_stats` (works through 3.x).
+Shortcut: `tls`. Former name: `tree_stats` (with `GASH_LEGACY_NAMES=1`).
 
 #### Usage
 

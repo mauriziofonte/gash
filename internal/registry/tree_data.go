@@ -16,7 +16,10 @@ var namespaces = []Namespace{
 	{Name: "runtime", Group: GroupEveryday, Area: "runtimes", Summary: "PHP and Node.js versions, headless Chrome",
 		Packs: []string{"php"}, Delegate: "runtime", Topics: []string{"dev", "php", "node"}},
 	{Name: "ai", Group: GroupEveryday, Area: "ai", Summary: "Ask Claude or Gemini from the terminal"},
-	{Name: "hte", Group: GroupPlatform, Area: "hte", Summary: "Local Apache and PHP-FPM sites with HTTPS", Delegate: "hte"},
+	// 4.0: localweb was hte (homelab test environment, the name of the
+	// standalone PHP tool it began as); the docs area and the code keep
+	// the old name, and gash localweb still runs it through 4.x.
+	{Name: "localweb", Group: GroupPlatform, Area: "hte", Summary: "Local Apache and PHP-FPM sites with HTTPS", Delegate: "localweb", Topics: []string{"hte"}},
 	{Name: "wsl", Group: GroupPlatform, Area: "windows", Summary: "The WSL distribution: info, doctor, paths, restart, compact", Delegate: "wsl"},
 	{Name: "win", Group: GroupPlatform, Area: "windows", Summary: "The Windows host, read from WSL; Explorer, Task Manager", Delegate: "win"},
 	{Name: "logs", Group: GroupPlatform, Area: "logs", Summary: "Find and reclaim disk space from log files", Delegate: "logs"},

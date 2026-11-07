@@ -6,7 +6,7 @@ installation and every tool Gash uses, and names what is missing.
 
 Platforms: Linux, macOS and WSL. The [macOS](#macos) section covers what
 differs there; the WSL helpers have their own
-[guide](windows/README.md), and `gash hte` its
+[guide](windows/README.md), and `gash localweb` its
 [own list of errors](hte/README.md#when-something-goes-wrong).
 
 ## The installer stops
@@ -261,6 +261,6 @@ State lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`). See
 `gash unload` removes Gash from the current shell; `gash uninstall`
 removes it for good, and asks first (without a terminal it prints
 `Info: Uninstall cancelled.` and removes nothing). Run
-`gash hte uninstall --yes` before it if you installed `gash hte`. What
+`gash localweb uninstall --yes` before it if you installed `gash localweb`. What
 each removes, and what it leaves behind, is in the
 [Gash guide](gash/README.md#remove-gash).

@@ -132,7 +132,7 @@ func TestUsernameHelp(t *testing.T) {
 		"  USAGE\n    gash shell username\n\n  EXAMPLES\n    # The name the banner and the prompt show\n    gash shell username\n\n"+
 		"  NOTES\n    Tries whoami, then id -un, then the /etc/passwd entry of the\n"+
 		"    current user id; prints UNKNOWN_USERNAME when all of them fail.\n\n"+
-		"  FORMER NAME\n    gash_username  works through Gash 3.x\n\n", out)
+		"  FUNCTION\n    gash_username  the same command, still a function for prompts and scripts\n\n", out)
 	// Registry not loaded in the caller's shell: the needs_help fallback.
 	out, rc = run(t, p.module(t, "", nil), map[string]string{"GASH__HELP": "0"}, "-h")
 	require.Equal(t, 0, rc)

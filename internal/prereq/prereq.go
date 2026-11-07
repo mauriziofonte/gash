@@ -122,7 +122,7 @@ type Tool struct {
 	NoInstall bool
 	// Locate, when set, finds it when PATH has none of Commands: the gash
 	// hte daemons live outside a user's PATH (/usr/sbin) and under
-	// versioned names (php-fpm8.3), where gash hte looks for them. Its
+	// versioned names (php-fpm8.3), where gash localweb looks for them. Its
 	// Packages list only the systems where Locate can find it.
 	Locate func(sr platform.Sysroot, o platform.OS) (string, bool)
 }

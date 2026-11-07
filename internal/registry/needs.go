@@ -126,7 +126,7 @@ var needs = map[string][]Need{
 	"gash init":     {{"bc", "the calc alias"}},
 
 	// Local web stack.
-	"gash hte": {{"apache", ""}, {"php-fpm", "PHP sites"}, {"openssl", ""}, {"sudo", ""}},
+	"gash localweb": {{"apache", ""}, {"php-fpm", "PHP sites"}, {"openssl", ""}, {"sudo", ""}},
 
 	// Windows, under WSL.
 	"gash win":        {{"powershell.exe", ""}},

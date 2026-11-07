@@ -109,6 +109,7 @@ func (e *Emitter) Emit(c *invoke.Call) (string, error) {
 	st.aliasPacks(&b)
 	st.timed(&b, "lib/shell/banner.sh", st.banner)
 	st.migrateReminder(&b)
+	st.legacyReminder(&b)
 	st.hteAutostart(&b)
 	// Keep the eval's status 0 for a set -e caller.
 	b.WriteString("true\n")

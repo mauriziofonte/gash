@@ -206,7 +206,7 @@ func (k cardWriter) scriptingPage() {
 
 // migratePage is the table of the former flat names.
 func (k cardWriter) migratePage() {
-	k.title("From the flat names to the commands", "the former names work through Gash 3.x")
+	k.title("From the flat names to the commands", "Gash 4 defines the former names only with GASH_LEGACY_NAMES=1")
 	type row struct{ old, now, sc string }
 	var rows []row
 	for i := range registry.Tree() {

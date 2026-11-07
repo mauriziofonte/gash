@@ -146,7 +146,7 @@ func (st Store) LoadSettings() (Settings, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Settings{}, fmt.Errorf("%w: %w", ErrNotInstalled,
-			hteerr.New(hteerr.HTENotInstalled, path+" does not exist", "run gash hte install"))
+			hteerr.New(hteerr.HTENotInstalled, path+" does not exist", "run gash localweb install"))
 	}
 	if err != nil {
 		return Settings{}, err
@@ -174,7 +174,7 @@ func (st Store) LoadSite(arg string) (Site, error) {
 	path := st.Paths.SiteFile(domain)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Site{}, hteerr.Newf(hteerr.SiteNotFound, "gash hte site list", "no site %s", domain)
+		return Site{}, hteerr.Newf(hteerr.SiteNotFound, "gash localweb site list", "no site %s", domain)
 	}
 	if err != nil {
 		return Site{}, err
@@ -234,7 +234,7 @@ func (st Store) SaveSite(s Site) error {
 func (st Store) RemoveSite(domain string) error {
 	err := os.Remove(st.Paths.SiteFile(domain))
 	if errors.Is(err, fs.ErrNotExist) {
-		return hteerr.Newf(hteerr.SiteNotFound, "gash hte site list", "no site %s", domain)
+		return hteerr.Newf(hteerr.SiteNotFound, "gash localweb site list", "no site %s", domain)
 	}
 	return err
 }

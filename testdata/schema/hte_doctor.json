@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. gash hte doctor --json (hte.md 9): ok is false exactly when a check failed.",
-  "title": "gash hte doctor",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. gash localweb doctor --json (hte.md 9): ok is false exactly when a check failed.",
+  "title": "gash localweb doctor",
   "type": "object",
   "required": ["ok", "checks"],
   "properties": {

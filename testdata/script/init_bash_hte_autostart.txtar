@@ -2,7 +2,7 @@
 # covers: none (3.0 HTE surface; no 2.x spec)
 #
 # hte.toml autostart = "shell" (design hte.md 5): the interactive layer of
-# gash init bash starts the HTE stack with `gash hte __autostart`, once
+# gash init bash starts the HTE stack with `gash localweb __autostart`, once
 # per shell, in the background, quietly, and a failed start never fails
 # the shell load. Without hte.toml, or with another mode, the layer has no
 # such line. The binary the layer calls is wrap.sh: it records the call,

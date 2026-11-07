@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package state is the declarative state of gash hte: one TOML file per
+// Package state is the declarative state of gash localweb: one TOML file per
 // site, the hte.toml settings, their strict validation, atomic load and
 // save, the mutation lock, and the file layout of design/hte.md section 2.
 package state
@@ -55,7 +55,7 @@ func (p Paths) PHPOverlayDir(version string) string {
 	return filepath.Join(p.ConfigDir, "php", version)
 }
 
-// PHPOverlay is the file of the overlay directory that `gash hte php
+// PHPOverlay is the file of the overlay directory that `gash localweb php
 // global set|unset` edits.
 func (p Paths) PHPOverlay(version string) string {
 	return filepath.Join(p.PHPOverlayDir(version), "global.ini")

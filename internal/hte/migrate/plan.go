@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package migrate builds the plan of `gash hte migrate` (design/hte.md
+// Package migrate builds the plan of `gash localweb migrate` (design/hte.md
 // section 10) from what package legacy read: which vhosts become managed
 // or raw sites, with which state, pool profile and certificate, which
 // root steps --apply would run, and everything hte-cli never noticed
@@ -26,7 +26,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/platform"
 )
 
-// Options are the flags of `gash hte migrate`.
+// Options are the flags of `gash localweb migrate`.
 type Options struct {
 	Sites []string // --site D: import only these domains
 	// Exclude are the --exclude values: a domain (every vhost serving it)
@@ -115,7 +115,7 @@ type CertPlan struct {
 	Dest   string     `json:"dest"` // the site's userland certificate directory
 }
 
-// RootOp is a step --apply runs through `sudo gash hte __root`.
+// RootOp is a step --apply runs through `sudo gash localweb __root`.
 type RootOp struct {
 	Op     string `json:"op"` // copy_key
 	Domain string `json:"domain"`

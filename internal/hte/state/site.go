@@ -178,7 +178,7 @@ func ModifySite(cur Site, f Flags, env Env, existing []Site) (next Site, changed
 		return Site{}, false, err
 	}
 	if domain != cur.Domain {
-		return Site{}, false, hteerr.Newf(hteerr.SiteNotFound, "gash hte site list", "site %s is not %s", cur.Domain, domain)
+		return Site{}, false, hteerr.Newf(hteerr.SiteNotFound, "gash localweb site list", "site %s is not %s", cur.Domain, domain)
 	}
 	next = cur
 	next.Aliases = slices.Clone(cur.Aliases)
@@ -291,7 +291,7 @@ func Equal(a, b Site) bool {
 func CheckUnique(s Site, others []Site) error {
 	for _, o := range others {
 		if o.Domain == s.Domain {
-			return hteerr.Newf(hteerr.SiteExists, "change it with gash hte site modify --domain "+s.Domain, "site %s already exists", s.Domain)
+			return hteerr.Newf(hteerr.SiteExists, "change it with gash localweb site modify --domain "+s.Domain, "site %s already exists", s.Domain)
 		}
 		for _, n := range s.Names() {
 			if slices.Contains(o.Names(), n) {

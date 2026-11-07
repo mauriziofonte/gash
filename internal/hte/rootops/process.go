@@ -15,7 +15,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// ProcessEnv is the root side's Env of the running process (gash hte
+// ProcessEnv is the root side's Env of the running process (gash localweb
 // __root under sudo).
 func ProcessEnv() Env {
 	sr := platform.Real()

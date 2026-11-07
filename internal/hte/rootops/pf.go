@@ -103,7 +103,7 @@ func (s *server) pfRedirect(ctx context.Context, o Op) ([]string, error) {
 	conf, err := os.ReadFile(s.host(PFConf))
 	if err != nil || !rdrAnchorRE.Match(conf) {
 		return nil, hteerr.New(hteerr.PlatformUnsupported, PFConf+` does not evaluate the com.apple anchors (rdr-anchor "com.apple/*")`,
-			"restore the stock "+PFConf+", or use gash hte install --ports high (gash never edits "+PFConf+")")
+			"restore the stock "+PFConf+", or use gash localweb install --ports high (gash never edits "+PFConf+")")
 	}
 	if err := s.ensureDirs(path.Dir(PFAnchorFile)); err != nil {
 		return nil, err

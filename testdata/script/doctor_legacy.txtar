@@ -1,0 +1,51 @@
+# Gash 4.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (4.0 names)
+#
+# gash doctor --legacy lists the former flat names of 3.x that files call
+# (comment lines aside), with the command that replaces each; status 1
+# when it finds one. Without FILE it reads the startup files of HOME. An
+# interactive shell whose startup files call one prints one line on
+# stderr, at most once a day, and nothing with GASH_LEGACY_NAMES=1.
+
+env GASH_BANNER=0 GASH_LEGACY_NAMES=
+
+! exec gash doctor --legacy
+stdout '^~/.bash_local:2 +files_largest +gash files largest \(shortcut flf\)$'
+stdout '^~/.bash_local:3 +git_sync +gash git sync \(shortcut gsync\)$'
+! stdout 'comment'
+stderr '^Warning: 2 former names of Gash 3.x in 1 file: Gash 4 does not define them.$'
+
+exec gash doctor --legacy clean.sh
+stderr '^OK: No former name of Gash 3.x in 1 file.$'
+! stdout .
+
+! exec gash doctor --legacy --json clean.sh $HOME/.bash_local
+stdout '^\{"files":\[\{"path":"clean.sh","names":\[\]\},\{"path":".*/home/.bash_local","names":\[\{"line":2,"name":"files_largest","command":"gash files largest","shortcut":"flf"\},\{"line":3,"name":"git_sync","command":"gash git sync","shortcut":"gsync"\}\]\}\],"found":2\}$'
+
+! exec gash doctor --legacy nosuch.sh
+stderr '^Error: Cannot read nosuch.sh: no such file or directory$'
+
+! exec gash doctor --legacy --install
+stderr 'usage: gash_doctor'
+
+# The reminder: once, then not again the same day; never with the setting.
+exec bash --norc --noprofile -i load.sh
+stderr -count=1 '^gash: ~/.bash_local calls files_largest, git_sync, former names of Gash 3.x that Gash 4 no longer defines; gash doctor --legacy lists them, GASH_LEGACY_NAMES=1 keeps them$'
+exists home/.local/state/gash/legacy-notice
+exec bash --norc --noprofile -i load.sh
+! stderr 'former names'
+rm home/.local/state/gash/legacy-notice
+env GASH_LEGACY_NAMES=1
+exec bash --norc --noprofile -i load.sh
+! stderr 'former names'
+! exists home/.local/state/gash/legacy-notice
+
+-- home/.bash_local --
+# files_largest in a comment
+alias big='files_largest ~ --limit 5'
+git_sync && echo synced
+-- clean.sh --
+gash files largest ~ --limit 5
+-- load.sh --
+source "$GASH_SH"
