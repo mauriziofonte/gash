@@ -137,9 +137,15 @@ func Reference(a Area, help HelpFunc) string {
 	}
 
 	if len(a.Commands) > 0 && help != nil {
+		// A subcommand that is also a function of the area has its section
+		// above already.
+		done := map[string]bool{}
+		for _, f := range fns {
+			done[title(f)] = true
+		}
 		w("", "## Command trees")
 		for _, c := range a.Commands {
-			command(w, help, []string{c})
+			command(w, help, []string{c}, done)
 		}
 	}
 	return b.String()
@@ -252,20 +258,29 @@ func link(name string) string {
 	return "`" + name + "`"
 }
 
-// command renders a gash command and, recursively, its subcommands.
-func command(w func(...string), help HelpFunc, path []string) {
+// command renders a gash command and, recursively, its subcommands. A
+// subcommand whose section done names (a function of the area, listed by
+// a namespace page) is not repeated; the commands of the area always are,
+// with their full help.
+func command(w func(...string), help HelpFunc, path []string, done map[string]bool) {
+	name := "gash " + strings.Join(path, " ")
+	if len(path) > 1 && done[name] {
+		return
+	}
+	done[name] = true
 	out := strings.TrimRight(help(path...), "\n")
-	w("", "### gash "+strings.Join(path, " "), "", "```text", out, "```")
+	w("", "### "+name, "", "```text", out, "```")
 	for _, sub := range subcommands(out) {
-		command(w, help, append(append([]string{}, path...), sub))
+		command(w, help, append(append([]string{}, path...), sub), done)
 	}
 }
 
 // subcommands are the names under "Available Commands:" in a cobra help
-// text, without help and completion.
+// text, without help and completion, or the COMMAND column of a namespace
+// page (gash wsl --help prints the table of its commands).
 func subcommands(help string) []string {
 	var out []string
-	in := false
+	in, table := false, false
 	for _, line := range strings.Split(help, "\n") {
 		switch {
 		case strings.HasPrefix(line, "Available Commands:"):
@@ -277,6 +292,13 @@ func subcommands(help string) []string {
 			}
 		case in:
 			in = false
+		case strings.HasPrefix(strings.TrimSpace(line), "COMMAND ") && strings.Contains(line, "DESCRIPTION"):
+			table = true
+		case table && strings.HasPrefix(strings.TrimSpace(line), "─"):
+		case table && strings.HasPrefix(line, "  ") && strings.TrimSpace(line) != "":
+			out = append(out, strings.Fields(line)[0])
+		case table:
+			table = false
 		}
 	}
 	return out

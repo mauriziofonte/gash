@@ -197,6 +197,75 @@ See also: [`gash wsl restart`](../windows/reference.md#gash-wsl-restart)
   Details: gash wsl COMMAND --help · Guide: docs/windows/README.md
 ```
 
+### gash wsl config
+
+```text
+Show the effective wsl.conf and .wslconfig settings
+
+Usage:
+  gash wsl config [FILE] [flags]
+
+Flags:
+  -h, --help[=true|false]   help for config
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash wsl doctor
+
+```text
+Check WSL, interop, drives, networking and configuration
+
+Usage:
+  gash wsl doctor [flags]
+
+Flags:
+  -h, --help[=true|false]   help for doctor
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash wsl info
+
+```text
+A quick summary of the WSL environment
+
+Usage:
+  gash wsl info [flags]
+
+Flags:
+  -h, --help[=true|false]   help for info
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash wsl interop
+
+```text
+Report the Windows interop of this shell
+
+Usage:
+  gash wsl interop [flags]
+
+Flags:
+      --export[=true|false]   print only export WSL_INTEROP=… for eval
+  -h, --help[=true|false]     help for interop
+      --json[=true|false]     one JSON object on stdout
+```
+
+### gash wsl path
+
+```text
+Convert a path between its Linux and Windows forms
+
+Usage:
+  gash wsl path PATH [flags]
+
+Flags:
+  -h, --help[=true|false]      help for path
+      --json[=true|false]      one JSON object on stdout
+      --linux[=true|false]     force the Linux form (/mnt/c/Users/me)
+      --mixed[=true|false]     force the Windows form with forward slashes (C:/Users/me)
+      --windows[=true|false]   force the Windows form (C:\Users\me)
+```
+
 ### gash win
 
 ```text
@@ -225,4 +294,221 @@ See also: [`gash wsl restart`](../windows/reference.md#gash-wsl-restart)
   updates                     Installed hotfixes and pending reboot
 
   Details: gash win COMMAND --help · Guide: docs/windows/README.md
+```
+
+### gash win apps
+
+```text
+Installed programs (optionally filtered)
+
+Usage:
+  gash win apps [FILTER] [flags]
+
+Flags:
+  -h, --help[=true|false]   help for apps
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win defender
+
+```text
+Microsoft Defender status
+
+Usage:
+  gash win defender [flags]
+
+Flags:
+  -h, --help[=true|false]   help for defender
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win disk
+
+```text
+Fixed drives with size and free space
+
+Usage:
+  gash win disk [flags]
+
+Flags:
+  -h, --help[=true|false]   help for disk
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win doctor
+
+```text
+A composed health check of the Windows host
+
+Usage:
+  gash win doctor [flags]
+
+Flags:
+  -h, --help[=true|false]   help for doctor
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win events
+
+```text
+Windows event log entries
+
+Usage:
+  gash win events [flags]
+
+Flags:
+  -h, --help[=true|false]   help for events
+      --json[=true|false]   one JSON object on stdout
+      --level string        error, warning, information or critical
+  -n, --limit int           maximum entries (default 50)
+      --log string          the log name (System, Application, Security, …) (default "System")
+      --since string        only entries newer than this (e.g. 1h, 24h, 7d)
+```
+
+### gash win file
+
+```text
+A file's metadata, owner, ACL and signature
+
+Usage:
+  gash win file PATH [flags]
+
+Flags:
+  -h, --help[=true|false]   help for file
+      --json[=true|false]   one JSON object on stdout
+  -n, --limit int
+```
+
+### gash win fix
+
+```text
+Apply an elevated Windows correction (human-only, asks for UAC)
+
+Usage:
+  gash win fix [ACTION] [ARGS...] [flags]
+
+Flags:
+      --dry-run[=true|false]   print the exact elevated command without running it
+  -h, --help[=true|false]      help for fix
+      --json[=true|false]      with --dry-run, emit the command as JSON
+      --yes[=true|false]       skip the in-shell question (Windows still asks for UAC)
+```
+
+### gash win hosts
+
+```text
+The Windows hosts file
+
+Usage:
+  gash win hosts [flags]
+
+Flags:
+  -h, --help[=true|false]   help for hosts
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win info
+
+```text
+Windows build, edition, host, user and elevation
+
+Usage:
+  gash win info [flags]
+
+Flags:
+  -h, --help[=true|false]   help for info
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win net
+
+```text
+Network adapters, DNS and proxy
+
+Usage:
+  gash win net [flags]
+
+Flags:
+  -h, --help[=true|false]   help for net
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win policy
+
+```text
+Where policy is set (registry roots) and the device join
+
+Usage:
+  gash win policy [flags]
+
+Flags:
+  -h, --help[=true|false]   help for policy
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win ports
+
+```text
+Listening and established TCP ports with the owning process
+
+Usage:
+  gash win ports [flags]
+
+Flags:
+  -h, --help[=true|false]   help for ports
+      --json[=true|false]   one JSON object on stdout
+      --port int            only this local port
+```
+
+### gash win procs
+
+```text
+Top processes by memory (optionally filtered)
+
+Usage:
+  gash win procs [FILTER] [flags]
+
+Flags:
+  -h, --help[=true|false]   help for procs
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win reg
+
+```text
+Query a registry key (HKLM\…, HKCU\…)
+
+Usage:
+  gash win reg KEY [flags]
+
+Flags:
+  -h, --help[=true|false]   help for reg
+      --json[=true|false]   one JSON object on stdout
+      --value string        read only this value
+```
+
+### gash win services
+
+```text
+Windows services (optionally filtered by name)
+
+Usage:
+  gash win services [FILTER] [flags]
+
+Flags:
+  -h, --help[=true|false]   help for services
+      --json[=true|false]   one JSON object on stdout
+```
+
+### gash win updates
+
+```text
+Installed hotfixes and pending reboot
+
+Usage:
+  gash win updates [flags]
+
+Flags:
+  -h, --help[=true|false]   help for updates
+      --json[=true|false]   one JSON object on stdout
 ```
