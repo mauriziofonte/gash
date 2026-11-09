@@ -140,11 +140,11 @@ func (e *Engine) moveTree(ctx context.Context, v, old *env, mv *LayoutMove) erro
 	var done []moved
 	undo := func(cause error) error {
 		if err := undoMoves(done); err != nil {
-			cause = fmt.Errorf("%w; putting the files back failed: %v", cause, err)
+			cause = fmt.Errorf("%w; putting the files back failed: %w", cause, err)
 		}
 		if running {
 			if err := e.startStack(ctx, old, set); err != nil {
-				return fmt.Errorf("%w; starting the stack again from %s failed: %v", cause, old.paths.ConfigDir, err)
+				return fmt.Errorf("%w; starting the stack again from %s failed: %w", cause, old.paths.ConfigDir, err)
 			}
 		}
 		return cause
