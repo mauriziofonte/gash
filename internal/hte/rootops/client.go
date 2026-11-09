@@ -19,7 +19,8 @@ import (
 )
 
 // RootArgs are the arguments of the gash binary that serve a root session.
-var RootArgs = []string{"hte", "__root"}
+// (gash hte __root, of Gash 4.0 and older, works through 4.x.)
+var RootArgs = []string{"localweb", "__root"}
 
 // SessionTimeout bounds one root session (migrate --apply verifies sites
 // while it is open).

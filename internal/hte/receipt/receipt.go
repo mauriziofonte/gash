@@ -3,7 +3,7 @@
 // Package receipt is the install receipt of design/hte.md section 8: every
 // system change install and migrate --apply made, with what was there
 // before, so that uninstall restores it. Root keeps its own copy
-// (/var/lib/gash-hte/receipt-<user>.json, written only by the root step);
+// (/var/lib/gash-localweb/receipt-<user>.json, written only by the root step);
 // the user copy mirrors it, and a difference is receipt_mismatch, so a
 // process running as the user cannot steer what root restores.
 package receipt
@@ -32,13 +32,39 @@ const Schema = 1
 
 // Root-owned locations (design/hte.md 8).
 const (
-	RootDir    = "/var/lib/gash-hte"
+	RootDir    = "/var/lib/gash-localweb"
 	BackupDir  = RootDir + "/backup"
 	ArchiveDir = RootDir + "/archive"
+	// LegacyRootDir is the root directory of Gash 4.0 and older (gash
+	// localweb was gash hte): its receipts stay valid where they are until
+	// install moves them.
+	LegacyRootDir = "/var/lib/gash-hte"
 )
 
 // RootPath is the root copy of a user's receipt.
-func RootPath(user string) string { return path.Join(RootDir, "receipt-"+user+".json") }
+func RootPath(user string) string { return RootPathIn(RootDir, user) }
+
+// LegacyRootPath is the root copy of a user's receipt of Gash 4.0 and
+// older.
+func LegacyRootPath(user string) string { return RootPathIn(LegacyRootDir, user) }
+
+// RootPathIn is the root copy of a user's receipt in root directory dir.
+func RootPathIn(dir, user string) string { return path.Join(dir, "receipt-"+user+".json") }
+
+// ReadRoot reads the root copy of a user's receipt through read (a
+// sysroot's ReadFile): the current one, else the one of Gash 4.0 and
+// older. It returns the path it read; a missing receipt is the error of
+// the current path.
+func ReadRoot(read func(string) ([]byte, error), user string) ([]byte, string, error) {
+	data, err := read(RootPath(user))
+	if !errors.Is(err, fs.ErrNotExist) {
+		return data, RootPath(user), err
+	}
+	if legacy, lerr := read(LegacyRootPath(user)); lerr == nil {
+		return legacy, LegacyRootPath(user), nil
+	}
+	return nil, RootPath(user), err
+}
 
 // Kind is the kind of one change.
 type Kind string
@@ -219,7 +245,9 @@ func (r *Receipt) Validate() error {
 		if c.Path != "" && !absClean(c.Path) {
 			return bad("change %d: path %q", c.ID, c.Path)
 		}
-		inRoot := func(p string) bool { return absClean(p) && strings.HasPrefix(p, RootDir+"/") }
+		inRoot := func(p string) bool {
+			return absClean(p) && (strings.HasPrefix(p, RootDir+"/") || strings.HasPrefix(p, LegacyRootDir+"/"))
+		}
 		switch c.Kind {
 		case FileCreated, FileModified:
 			if c.Path == "" || !sha256RE.MatchString(c.SHA256) || !modeRE.MatchString(c.Mode) {

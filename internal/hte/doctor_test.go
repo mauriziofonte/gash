@@ -81,7 +81,7 @@ func TestDoctorSudoersUnreadableDir(t *testing.T) {
 		t.Skip("root reads a 0750 directory; run as a regular user")
 	}
 	dir := t.TempDir()
-	for rel, mode := range map[string]os.FileMode{"usr/bin/sudo": 0o755, "etc/sudoers.d/gash-hte": 0o440} {
+	for rel, mode := range map[string]os.FileMode{"usr/bin/sudo": 0o755, "etc/sudoers.d/gash-localweb": 0o440} {
 		p := filepath.Join(dir, rel)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -104,7 +104,7 @@ func TestDoctorSudoersUnreadableDir(t *testing.T) {
 			return runner.Expect{}
 		})
 		r := &report{}
-		(&Engine{Sysroot: sr, Runner: run}).doctorSudoers(context.Background(), r)
+		(&Engine{Sysroot: sr, Runner: run}).doctorSudoers(context.Background(), r, rootops.SudoersPath)
 		if len(r.checks) != 1 {
 			t.Fatalf("checks %+v", r.checks)
 		}
@@ -117,7 +117,7 @@ func TestDoctorSudoersUnreadableDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(sudoersD, 0o755) })
-	if _, err := os.Stat(filepath.Join(sudoersD, "gash-hte")); !errors.Is(err, fs.ErrPermission) {
+	if _, err := os.Stat(filepath.Join(sudoersD, "gash-localweb")); !errors.Is(err, fs.ErrPermission) {
 		t.Skipf("the directory does not hide the file: %v", err)
 	}
 	if c := check(t, true); c.Status != CheckOK || !strings.Contains(c.Details, "not readable by you") {
@@ -132,7 +132,7 @@ func TestDoctorSudoersUnreadableDir(t *testing.T) {
 	if c := check(t, true); c.Status != CheckOK || c.Details != rootops.SudoersPath {
 		t.Errorf("readable: %+v", c)
 	}
-	if err := os.Remove(filepath.Join(sudoersD, "gash-hte")); err != nil {
+	if err := os.Remove(filepath.Join(sudoersD, "gash-localweb")); err != nil {
 		t.Fatal(err)
 	}
 	if c := check(t, true); c.Status != CheckFail || !strings.Contains(c.Details, "is missing") {

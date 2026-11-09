@@ -30,7 +30,7 @@ const (
 // Autostart modes recorded by install (auto is resolved at install time).
 var autostartModes = []string{"systemd", "launchd", "shell", "none"}
 
-// Settings is hte.toml: ports, listen addresses, default PHP, enabled
+// Settings is localweb.toml: ports, listen addresses, default PHP, enabled
 // extra Apache modules, autostart mode (design/hte.md section 2).
 type Settings struct {
 	Ports      Ports    `toml:"ports" json:"ports"`
@@ -52,15 +52,15 @@ func DefaultSettings(ports Ports, autostart string) Settings {
 
 var moduleNameRE = lazyre.MustCompile(`^[a-z0-9_]+$`)
 
-// ModuleName reports an Apache module name as hte.toml takes it: the
+// ModuleName reports an Apache module name as localweb.toml takes it: the
 // file mod_<name>.so without its prefix and suffix ("ssl", "proxy_fcgi").
 func ModuleName(name string) bool { return moduleNameRE.MatchString(name) }
 
 func invalidSettings(format string, a ...any) error {
-	return hteerr.Newf(hteerr.InvalidState, "fix hte.toml or run gash localweb install again", format, a...)
+	return hteerr.Newf(hteerr.InvalidState, "fix localweb.toml or run gash localweb install again", format, a...)
 }
 
-// Validate applies the strict rules to hte.toml.
+// Validate applies the strict rules to localweb.toml.
 func (s Settings) Validate() error {
 	for _, p := range []struct {
 		name string

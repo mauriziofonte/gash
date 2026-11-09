@@ -81,7 +81,7 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-// install writes hte.toml as install would, without the root steps, with
+// install writes localweb.toml as install would, without the root steps, with
 // the high ports.
 func (f *fixture) install(t *testing.T) *env {
 	t.Helper()
@@ -93,7 +93,7 @@ func (f *fixture) installPorts(t *testing.T, ports state.Ports) *env {
 	if err := os.MkdirAll(f.env["XDG_RUNTIME_DIR"], 0o700); err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.e.resolve()
+	v, err := f.e.resolve(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,14 +129,14 @@ func TestLedger_HTE19(t *testing.T) {
 	f := newFixture(t)
 	delete(f.env, "XDG_RUNTIME_DIR")
 	f.e.UID = 4242
-	v, err := f.e.resolve()
+	v, err := f.e.resolve(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.paths.RuntimeDir != "/tmp/gash-hte-4242" {
+	if v.paths.RuntimeDir != "/tmp/gash-localweb-4242" {
 		t.Errorf("runtime dir %q, want the one of uid 4242", v.paths.RuntimeDir)
 	}
-	if v.paths.ConfigDir != filepath.Join(f.home, ".config", "gash", "hte") {
+	if v.paths.ConfigDir != filepath.Join(f.home, ".config", "gash", "localweb") {
 		t.Errorf("config dir %q", v.paths.ConfigDir)
 	}
 
@@ -284,20 +284,20 @@ func TestLedger_HTE12(t *testing.T) {
 }
 
 // Before install every command but install, migrate and doctor is
-// hte_not_installed.
+// localweb_not_installed.
 func TestNotInstalled(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
-	if _, err := f.e.SiteList(ctx); code(err) != hteerr.HTENotInstalled {
+	if _, err := f.e.SiteList(ctx); code(err) != hteerr.NotInstalled {
 		t.Errorf("site list: %v", err)
 	}
-	if _, err := f.e.ServiceStart(ctx); code(err) != hteerr.HTENotInstalled {
+	if _, err := f.e.ServiceStart(ctx); code(err) != hteerr.NotInstalled {
 		t.Errorf("service start: %v", err)
 	}
-	if _, err := f.e.Uninstall(ctx, UninstallOptions{Yes: true}); code(err) != hteerr.HTENotInstalled {
+	if _, err := f.e.Uninstall(ctx, UninstallOptions{Yes: true}); code(err) != hteerr.NotInstalled {
 		t.Errorf("uninstall: %v", err)
 	}
-	if _, err := f.e.ApacheModuleEnable(ctx, "status"); code(err) != hteerr.HTENotInstalled {
+	if _, err := f.e.ApacheModuleEnable(ctx, "status"); code(err) != hteerr.NotInstalled {
 		t.Errorf("apache modules enable: %v", err)
 	}
 }
@@ -487,9 +487,9 @@ func TestLedger_HTE72(t *testing.T) {
 }
 
 // apache modules list, enable and disable: the userland list, the extra
-// modules of hte.toml and the other modules of the system directory; an
+// modules of localweb.toml and the other modules of the system directory; an
 // enable or disable moves to a generation that loads exactly them, and a
-// failed one puts hte.toml back.
+// failed one puts localweb.toml back.
 func TestApacheModules(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
@@ -562,7 +562,7 @@ func TestApacheModules(t *testing.T) {
 		t.Errorf("disable cgi (not enabled): %+v %v", res, err)
 	}
 
-	// A config test that fails puts hte.toml back.
+	// A config test that fails puts localweb.toml back.
 	f.failTest = "apache2"
 	if _, err := f.e.ApacheModuleEnable(ctx, "cgi"); code(err) != hteerr.ConfigTestFailed {
 		t.Errorf("enable cgi with a failing test: %v", err)

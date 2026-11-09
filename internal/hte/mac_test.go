@@ -56,7 +56,7 @@ func TestMacOSInstall(t *testing.T) {
 			if res.Settings.Ports != wantPorts || res.Redirect != wantRedirect || pfPlanned != refused || m.pfLoaded != refused || !res.Started {
 				t.Fatalf("ports %+v redirect %q pf planned %v loaded %v started %v; plan %q", res.Settings.Ports, res.Redirect, pfPlanned, m.pfLoaded, res.Started, res.Plan)
 			}
-			if refused != slices.Contains(root, "pfctl -E -a com.apple/gash-hte -f /etc/pf.anchors/gash-hte") ||
+			if refused != slices.Contains(root, "pfctl -E -a com.apple/gash-localweb -f /etc/pf.anchors/gash-localweb") ||
 				refused != (m.read(rootops.PFAnchorFile) == string(rootops.PFRules(8080, 8443))) ||
 				refused != (m.read(rootops.PFDaemonPath) == string(rootops.PFDaemon())) {
 				t.Errorf("pf files or load: root %v", root)
@@ -66,7 +66,7 @@ func TestMacOSInstall(t *testing.T) {
 			}
 
 			// The LaunchAgent.
-			v, err := m.e.resolve()
+			v, err := m.e.resolve(context.Background())
 			must(t, err)
 			agent := service.LaunchAgentPath(m.home)
 			want, err := service.LaunchAgent(m.e.Self, service.AgentEnv(v.dirs.ConfigHome, v.dirs.StateHome, v.dirs.DataHome, v.dirs.RuntimeDir))
@@ -160,7 +160,7 @@ func TestMacOSHighPorts(t *testing.T) {
 	}
 	_, err = m.e.SiteCreate(ctx, state.Flags{Domain: "mac.test", Docroot: ptr(m.docroot(t)), ForceHTTPS: ptr(true)})
 	must(t, err)
-	v, err := m.e.resolve()
+	v, err := m.e.resolve(context.Background())
 	must(t, err)
 	data, _ := os.ReadFile(filepath.Join(v.paths.RenderDir(), "current/sites/mac.test.conf"))
 	if !strings.Contains(string(data), "https://%{SERVER_NAME}:8443%{REQUEST_URI}") {

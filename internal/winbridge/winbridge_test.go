@@ -68,6 +68,27 @@ func TestScriptTextWrapping(t *testing.T) {
 	}
 }
 
+// TestScriptTextArraysStayArrays: Windows PowerShell 5.1 serializes an array
+// held by a calculated property (gash win net's dns) as {"value":[...],
+// "Count":N} unless the session drops the System.Array type data before
+// ConvertTo-Json runs; every script gets the removal, ahead of its body.
+func TestScriptTextArraysStayArrays(t *testing.T) {
+	const fix = "Remove-TypeData System.Array -ErrorAction SilentlyContinue;"
+	for _, s := range Registry {
+		txt := scriptText(s)
+		i := strings.Index(txt, fix)
+		if i < 0 {
+			t.Fatalf("script %q lacks %q: %s", s.Name, fix, txt)
+		}
+		if body := strings.Index(txt, s.Body); body < i {
+			t.Errorf("script %q: the type data removal must precede the body", s.Name)
+		}
+		if tail := strings.LastIndex(txt, "ConvertTo-Json"); tail < i {
+			t.Errorf("script %q: the type data removal must precede ConvertTo-Json", s.Name)
+		}
+	}
+}
+
 func TestDecode(t *testing.T) {
 	// UTF-8 with CRLF.
 	if got := Decode([]byte("a\r\nb\r\n")); got != "a\nb\n" {

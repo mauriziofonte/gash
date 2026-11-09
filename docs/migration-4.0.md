@@ -15,15 +15,7 @@ lists every former name with the command that replaces it.
   script helpers (`needs_help`, `needs_confirm_prompt`, `path_add`). A
   former name typed or called from a script is `command not found`.
   `gash_migrate` goes too; `gash migrate` stays.
-- **`gash hte` is `gash localweb`.** The local Apache and PHP-FPM sites
-  have a namespace that says what they are: `gash localweb install`,
-  `gash localweb site create shop.test`. `gash hte` still runs it through
-  4.x; typed at the prompt it prints a tip once per session. HTE stands for
-  *homelab test environment*, the name of hte-cli, the standalone PHP tool
-  the stack began as: for that historical reason the name stays in the
-  guide's folder ([docs/hte](hte/README.md)), in your files
-  (`~/.config/gash/hte`, `hte.toml`), in the markers of the hosts file and
-  in the error codes (`hte_not_installed`).
+- **`gash hte` is `gash localweb`.** The local Apache and PHP-FPM sites have a namespace that says what they are: `gash localweb install`, `gash localweb site create shop.test`. `gash hte` still runs it through 4.x; typed at the prompt it prints a tip once per session. HTE stands for *homelab test environment*, the name of hte-cli, the standalone PHP tool the stack began as: in 4.0 the name stayed in the guide's folder, in your files (`~/.config/gash/hte`, `hte.toml`), in the markers of the hosts file and in the error codes (`hte_not_installed`). Gash 4.1 renames all of them and moves an existing install ([Files of Gash 4.0](localweb/README.md#files-of-gash-40)); `gash hte` is deprecated there and goes away in 5.0.
 - **`gash doctor --legacy`** lists the lines of your files that call a
   former name, with the command to use instead.
 

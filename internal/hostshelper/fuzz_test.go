@@ -60,6 +60,8 @@ func FuzzSplice(f *testing.F) {
 		BeginMarker + "\n" + BeginMarker + "\n" + EndMarker + "\n",
 		"# " + BeginMarker + "\n",
 		BeginMarker + " \n" + EndMarker + "\n",
+		"127.0.0.1 localhost\n" + LegacyBeginMarker + "\n127.0.0.1 old.test\n" + LegacyEndMarker + "\n",
+		LegacyBeginMarker + "\n" + EndMarker + "\n",
 	}
 	for _, h := range hostsSeeds {
 		f.Add([]byte(h), []byte("127.0.0.1 shop.test\n"))
@@ -72,7 +74,7 @@ func FuzzSplice(f *testing.F) {
 		}
 		block := FormatBlock(entries)
 		out, err := Splice(hosts, block)
-		_, _, hadRegion, rerr := region(hosts)
+		_, _, _, hadRegion, rerr := region(hosts)
 		if err != nil {
 			if rerr == nil {
 				t.Fatalf("Splice(%q) failed (%v) on a hosts file whose markers are fine", hosts, err)

@@ -26,7 +26,7 @@ func (e *Engine) PHPVersions(ctx context.Context) (*discover.PHPResult, error) {
 	if err := e.CheckIdentity("php versions"); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (e *Engine) PHPVersions(ctx context.Context) (*discover.PHPResult, error) {
 
 // PHPIniGet is php ini get: the site's [php_ini] value of key.
 func (e *Engine) PHPIniGet(ctx context.Context, domain, key string) (string, bool, error) {
-	v, err := e.ready("php ini get")
+	v, err := e.ready(ctx, "php ini get")
 	if err != nil {
 		return "", false, err
 	}
@@ -118,7 +118,7 @@ func overlayLine(key, value string) string {
 
 // PHPGlobalGet is php global get: the overlay value of key for version.
 func (e *Engine) PHPGlobalGet(ctx context.Context, version, key string) (string, bool, error) {
-	v, err := e.ready("php global get")
+	v, err := e.ready(ctx, "php global get")
 	if err != nil {
 		return "", false, err
 	}
@@ -164,7 +164,7 @@ func (e *Engine) PHPGlobalUnset(ctx context.Context, version, key string) (*Glob
 }
 
 func (e *Engine) phpGlobal(ctx context.Context, command, version string, edit func([][]byte) [][]byte) (*GlobalResult, error) {
-	v, err := e.ready(command)
+	v, err := e.ready(ctx, command)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (e *Engine) phpGlobal(ctx context.Context, command, version string, edit fu
 // user edits, never written by gash; every generation includes a copy of
 // it, made when the generation is rendered (LEDGER HTE-71).
 func (e *Engine) ApacheConfigPath(ctx context.Context) (string, error) {
-	v, err := e.ready("apache config path")
+	v, err := e.ready(ctx, "apache config path")
 	if err != nil {
 		return "", err
 	}

@@ -65,16 +65,19 @@ func sandboxed() bool {
 }
 
 // TestMain is also the root step: sudo runs this binary as
-// `gash-e2e hte __root`, as it runs gash; and the systemd user unit runs
-// it as `gash-e2e hte __unit start|stop`.
+// `gash-e2e localweb __root`, as it runs gash; and the systemd user unit
+// runs it as `gash-e2e localweb __unit start|stop` (hte, the word of Gash
+// 4.0, as well).
 func TestMain(m *testing.M) {
-	if len(os.Args) == 4 && os.Args[1] == "hte" && os.Args[2] == "__unit" {
+	word := len(os.Args) > 1 && (os.Args[1] == "localweb" || os.Args[1] == "hte")
+	if word && len(os.Args) == 4 && os.Args[2] == "__unit" {
 		if !sandboxed() {
 			fmt.Fprintln(os.Stderr, "the E2E unit runs only inside the E2E container")
 			os.Exit(2)
 		}
 		e, err := hte.ProcessEngine(false)
 		if err == nil {
+			e.KeepLayout = true
 			switch os.Args[3] {
 			case "start":
 				_, err = e.UnitStart(context.Background())
@@ -90,7 +93,7 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
-	if len(os.Args) == 3 && os.Args[1] == "hte" && os.Args[2] == "__root" {
+	if word && len(os.Args) == 3 && os.Args[2] == "__root" {
 		if !sandboxed() {
 			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container or on a marked macOS CI runner")
 			os.Exit(2)
@@ -1016,7 +1019,7 @@ func TestE2ESystemd(t *testing.T) {
 	uninstallOnFailure(t, e)
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
 	unitState := func() string {
-		out, _ := exec.Command("systemctl", "--user", "is-active", "gash-hte.service").Output()
+		out, _ := exec.Command("systemctl", "--user", "is-active", "gash-localweb.service").Output()
 		return strings.TrimSpace(string(out))
 	}
 	// pidOf returns the PID a master's PID file names, 0 when none runs.
@@ -1039,7 +1042,7 @@ func TestE2ESystemd(t *testing.T) {
 		for _, n := range names {
 			pid := pidOf(n)
 			cg, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
-			if pid == 0 || !strings.Contains(string(cg), "/gash-hte.service\n") {
+			if pid == 0 || !strings.Contains(string(cg), "/gash-localweb.service\n") {
 				t.Errorf("%s (pid %d) is not in the unit's cgroup:\n%s", n, pid, cg)
 			}
 			pids[n] = pid
@@ -1113,7 +1116,7 @@ func TestE2ESystemd(t *testing.T) {
 		if len(res.Warnings) != 0 {
 			t.Errorf("warnings %v", res.Warnings)
 		}
-		if unitState() == "active" || pidOf("httpd.pid") != 0 || exists(filepath.Join(os.Getenv("HOME"), ".config/systemd/user/gash-hte.service")) {
+		if unitState() == "active" || pidOf("httpd.pid") != 0 || exists(filepath.Join(os.Getenv("HOME"), ".config/systemd/user/gash-localweb.service")) {
 			t.Errorf("unit %s, apache pid %d", unitState(), pidOf("httpd.pid"))
 		}
 		if exists("/var/lib/systemd/linger/dev") {
@@ -1150,7 +1153,7 @@ func dumpState(t *testing.T) {
 	if err != nil {
 		return
 	}
-	state := filepath.Join(home, ".local", "state", "gash", "hte")
+	state := filepath.Join(home, ".local", "state", "gash", "localweb")
 	if b, err := os.ReadFile(filepath.Join(state, "render", "current", "httpd.conf")); err == nil {
 		for _, line := range strings.Split(string(b), "\n") {
 			if f := strings.Fields(line); len(f) > 0 && (f[0] == "Listen" || f[0] == "ServerName" || f[0] == "PidFile") {
@@ -1183,8 +1186,8 @@ func dumpState(t *testing.T) {
 			{"/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"},
 			{"sudo", "-n", "/sbin/pfctl", "-s", "info"},
 			{"sudo", "-n", "/sbin/pfctl", "-s", "rules"},
-			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-hte", "-s", "nat"},
-			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-hte", "-s", "rules"},
+			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-localweb", "-s", "nat"},
+			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-localweb", "-s", "rules"},
 			{"sudo", "-n", "/sbin/pfctl", "-s", "state"},
 		} {
 			out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()

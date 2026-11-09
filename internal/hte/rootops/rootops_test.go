@@ -274,9 +274,13 @@ func installPlan() []Op {
 
 func uninstall(t *testing.T, f *fixture) {
 	t.Helper()
-	r, ok, err := receipt.Load(filepath.Join(f.root, receipt.RootPath("me")))
-	if err != nil || !ok {
-		t.Fatalf("root receipt: %v %v", ok, err)
+	data, p, err := receipt.ReadRoot(f.sr.ReadFile, "me")
+	if err != nil {
+		t.Fatalf("root receipt: %v", err)
+	}
+	r, err := receipt.Parse(data, p)
+	if err != nil {
+		t.Fatal(err)
 	}
 	var plan []Op
 	for i := len(r.Changes) - 1; i >= 0; i-- {
@@ -462,7 +466,7 @@ func TestLedger_HTE17(t *testing.T) {
 	f := newFixture(t)
 	plan := []Op{
 		{ID: 1, Op: OpArchiveVhost, Path: "/etc/passwd.conf"},
-		{ID: 2, Op: OpCopyKey, Src: "/etc/shadow", Dst: "/home/me/.local/share/gash/hte/certs/x.test/.new-1/key.pem"},
+		{ID: 2, Op: OpCopyKey, Src: "/etc/shadow", Dst: "/home/me/.local/share/gash/localweb/certs/x.test/.new-1/key.pem"},
 		{ID: 3, Op: OpArchivePool, Path: "/etc/php/8.3/fpm/pool.d/none.conf"},
 		{ID: 4, Op: OpInstallHelper, Src: "/home/me/bin/gash-hosts-helper", SHA256: sha("other bytes")},
 		{ID: 5, Op: OpCopyKey, Src: "/etc/apache2/certs-selfsigned/https.test.key", Dst: "/tmp/k/key.pem"},

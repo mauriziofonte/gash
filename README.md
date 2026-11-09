@@ -139,16 +139,7 @@ locally or on a remote host. Guides: [Docker](docs/docker/README.md),
 
 ### PHP, Node.js and local sites
 
-`gash runtime detect php` and `gash runtime detect node` read which version a
-project wants; `gash run --runtime node:project -- npm test` runs a
-command under it. `gash localweb` runs local Apache and PHP-FPM sites with HTTPS, one
-pool per PHP version, as your own user; installing it needs `sudo` once,
-for a few system steps it lists first. It was `gash hte` until 4.0: HTE,
-*homelab test environment*, is the name of hte-cli, the standalone PHP tool
-it began as, and stays for historical reasons in its folders and files
-(`~/.config/gash/hte`); `gash hte` still runs it through 4.x.
-Guides: [runtimes](docs/runtimes/README.md),
-[local sites](docs/hte/README.md)
+`gash runtime detect php` and `gash runtime detect node` read which version a project wants; `gash run --runtime node:project -- npm test` runs a command under it. `gash localweb` runs local Apache and PHP-FPM sites with HTTPS, one pool per PHP version, as your own user; installing it needs `sudo` once, for a few system steps it lists first. It was `gash hte` until 4.0 (HTE, *homelab test environment*, is the name of hte-cli, the standalone PHP tool it began as): `gash hte` is deprecated, still runs it through 4.x and goes away in 5.0, and Gash 4.1 moves the files of an existing install to their localweb names. Guides: [runtimes](docs/runtimes/README.md), [local sites](docs/localweb/README.md)
 
 ![gash localweb install, site create, curl https://shop.test, site list, service status](docs/assets/hte.gif)
 
@@ -265,7 +256,7 @@ the shell:
 | [Remote hosts](docs/remote/README.md) | Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. | [reference](docs/remote/reference.md) |
 | [Databases](docs/databases/README.md) | The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. | [reference](docs/databases/reference.md) |
 | [PHP, Node.js and Chrome](docs/runtimes/README.md) | Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. | [reference](docs/runtimes/reference.md) |
-| [Local web stack (localweb)](docs/hte/README.md) | gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](docs/hte/reference.md) |
+| [Local web stack (localweb)](docs/localweb/README.md) | gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](docs/localweb/reference.md) |
 | [Windows and WSL](docs/windows/README.md) | Inspect and repair WSL, and read the Windows host from inside it. | [reference](docs/windows/reference.md) |
 | [Logs](docs/logs/README.md) | gash logs: find the log files that fill a disk and reclaim the space safely. | [reference](docs/logs/reference.md) |
 | [AI assistants](docs/ai/README.md) | Ask Claude or Gemini from the terminal, with the context of this system. | [reference](docs/ai/reference.md) |

@@ -6,6 +6,31 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [4.1.0] - 2026-11-09
+
+`gash localweb` drops the hte name everywhere: its files, its system files, the markers of the hosts block and its error code now say localweb, and an install of Gash 4.0 moves to them on its own. `gash hte` is deprecated. `gash win net` works again under Windows PowerShell 5.1.
+
+### Changed
+
+- The files of `gash localweb` have localweb names: `~/.config/gash/localweb` (with `localweb.toml`, formerly `hte.toml`), `~/.local/state/gash/localweb`, `~/.local/share/gash/localweb`, the runtime directory `gash-localweb`, the uninstall stage `localweb-stage-TIMESTAMP`, the systemd user unit `gash-localweb.service` and the macOS LaunchAgent `io.github.mauriziofonte.gash.localweb`. The first `gash localweb` command after the update (any but `doctor`) moves an install of Gash 4.0: it stops a running stack, moves the directories, rewrites the raw sites that name them, replaces the unit or the LaunchAgent, and starts the stack again. When the move cannot finish, everything stays where it was and the stack runs as before. Your overlay files are never edited: the command names any that still mention an old directory. Until the move, the autostart of Gash 4.0 keeps working on the old files, and a stage left by `gash localweb uninstall` of Gash 4.0 is still offered by `install`.
+- The system files have localweb names too: `/var/lib/gash-localweb` (the receipt, with the backups and archives it names), `/etc/sudoers.d/gash-localweb`, `/etc/sysctl.d/50-gash-localweb.conf`, the macOS pf anchor `com.apple/gash-localweb` and its LaunchDaemon. `gash localweb install` moves those of Gash 4.0 as the first step of its plan, shown before `sudo` asks, and both copies of the receipt follow. Until then they keep working under their old names, `uninstall` included.
+- The hosts block is written between `# >>> gash localweb >>>` and `# <<< gash localweb <<<`. A block between the `gash hte` markers is read as before, and gets the new markers once `gash localweb install` has put the hosts helper of 4.1 in place (the helper of 4.0 knows only the old ones).
+- The error code `hte_not_installed` is `localweb_not_installed` (still STOP). Scripts and agents that match the old code need the new one. This is a declared exception to the rule that only a major release changes an error code ([AGENTS.md](AGENTS.md), section 13): the code belongs to `gash localweb` alone, and the release renames everything else of that command too.
+- `gash doctor --json` puts the prerequisites of `gash localweb` in the area `localweb` (was `hte`), and the guide moved to [docs/localweb](docs/localweb/README.md).
+- The autostart units run `gash localweb __unit`, the shell autostart `gash localweb __autostart`, and install's root step `gash localweb __root`.
+
+### Added
+
+- `gash localweb doctor` reports files and system files that keep the names of Gash 4.0 (the checks `layout` and `system files`), with the command that moves them.
+
+### Deprecated
+
+- `gash hte`. It still runs `gash localweb` through 4.x, and says so on stderr: `warning: gash hte is deprecated and goes away in Gash 5.0: use gash localweb` (not in headless mode, not with `GASH_LEGACY_HINTS=0`, and not for the hidden commands the units of Gash 4.0 run). The shell no longer adds its own tip for it. Gash 5.0 removes it.
+
+### Fixed
+
+- `gash win net` failed with `interop_unavailable` ("could not read the Windows answer") under Windows PowerShell 5.1, which writes an array held by a calculated property as `{"value":[...],"Count":N}`. Every `gash win` script now drops that type data from its own PowerShell session before it prints JSON, and `dns` is an array again.
+
 ## [4.0.0] - 2026-11-07
 
 The former flat names leave the default. A new shell defines the commands
@@ -611,7 +636,7 @@ Linux, macOS and WSL on amd64 and arm64.
 - **`gash hte` is built in.** HTE, formerly the separate hte-cli tool, runs a
   user-owned Apache and PHP-FPM with no sudo at runtime, and
   `gash hte migrate` takes over an hte-cli setup
-  ([docs/hte/README.md](docs/hte/README.md)).
+  ([docs/localweb/README.md](docs/localweb/README.md)).
 - **Fewer dependencies.** The `llm_*`, database and scanner functions run
   inside the binary: no `jq`, `sqlite3`, `mysql`, `psql`, `rg` or GNU `find`.
 - **Verified upgrades.** Release binaries are pinned by SHA-256 in the
@@ -664,7 +689,7 @@ Breaking).
   interactive Bash layer that `gash.sh` evaluates.
 - `gash hte`: install, sites, certificates, PHP-FPM pools per PHP version,
   `doctor`, `migrate` from hte-cli and a clean `uninstall`; see
-  [docs/hte/README.md](docs/hte/README.md). Ports 80 and 443 are made bindable by the
+  [docs/localweb/README.md](docs/localweb/README.md). Ports 80 and 443 are made bindable by the
   user through `net.ipv4.ip_unprivileged_port_start`, asked for and undone
   by uninstall.
 - `gash update` installs and verifies the new release's binary before it
@@ -694,7 +719,7 @@ Breaking).
   error as a hint when the connection fails.
 - `gash hte site create|modify --http2` turns HTTP/2 back on after
   `--no-http2`; every `gash hte` command has its own `--help`, and
-  [docs/hte/README.md](docs/hte/README.md) has a WSL section.
+  [docs/localweb/README.md](docs/localweb/README.md) has a WSL section.
 
 ### Changed
 

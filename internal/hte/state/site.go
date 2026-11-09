@@ -53,8 +53,8 @@ func (s Site) HasPool() bool { return s.PHP != "" }
 type Env struct {
 	Cwd        string                            // a relative --docroot resolves against it
 	Installed  []string                          // discovered PHP-FPM versions ("8.3")
-	DefaultPHP string                            // default_php of hte.toml, "" when unset
-	Ports      Ports                             // the stack's ports of hte.toml; zero skips that check
+	DefaultPHP string                            // default_php of localweb.toml, "" when unset
+	Ports      Ports                             // the stack's ports of localweb.toml; zero skips that check
 	Stat       func(string) (fs.FileInfo, error) // os.Stat when nil
 }
 
@@ -105,7 +105,7 @@ func checkHTTPS(https, force bool, f Flags) error {
 // domain, docroot, php, profile, the HTTPS pair, aliases, then the names
 // already served by existing sites (LEDGER HTE-02). Absent flags take the
 // defaults of LEDGER HTE-55 (https on, force-https off, bypass off, http2
-// on, profile dev, PHP from hte.toml else the highest installed).
+// on, profile dev, PHP from localweb.toml else the highest installed).
 func NewSite(f Flags, env Env, existing []Site) (Site, error) {
 	domain, err := NormalizeDomain(f.Domain)
 	if err != nil {

@@ -89,7 +89,7 @@ func (s *server) undo(ctx context.Context, c receipt.Change) ([]string, error) {
 		}
 		return nil, nil
 	case receipt.PFRedirect:
-		return s.pfUndo(ctx)
+		return s.pfUndo(ctx, c)
 	case receipt.Linger:
 		var prior bool
 		_ = receipt.Decode(c.Prior, &prior)

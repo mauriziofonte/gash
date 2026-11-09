@@ -396,8 +396,8 @@ func TestLedger_HTE57(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"Type=oneshot\n", "RemainAfterExit=yes\n", "WantedBy=default.target\n",
-		`ExecStart="/home/me/.local/bin/ga sh%%$$" "hte" "__unit" "start"` + "\n",
-		`ExecStop="/home/me/.local/bin/ga sh%%$$" "hte" "__unit" "stop"` + "\n"} {
+		`ExecStart="/home/me/.local/bin/ga sh%%$$" "localweb" "__unit" "start"` + "\n",
+		`ExecStop="/home/me/.local/bin/ga sh%%$$" "localweb" "__unit" "stop"` + "\n"} {
 		if !strings.Contains(string(unit), want) {
 			t.Errorf("unit lacks %q:\n%s", want, unit)
 		}

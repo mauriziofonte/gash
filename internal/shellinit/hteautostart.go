@@ -10,16 +10,18 @@ import (
 	"github.com/mauriziofonte/gash/internal/platform"
 )
 
-// autostartShell is the hte.toml autostart mode this section serves
+// autostartShell is the localweb.toml autostart mode this section serves
 // (service.AutostartShell; the service package is not imported for one
 // string).
 const autostartShell = "shell"
 
 // hteAutostart emits the shell autostart of gash localweb (design hte.md 5):
-// when hte.toml says autostart = "shell", the interactive shell starts the
-// stack in the background when it is down. The binary reads hte.toml here,
+// when localweb.toml says autostart = "shell", the interactive shell starts the
+// stack in the background when it is down. The binary reads localweb.toml here,
 // so a shell without it gets no line at all; a file that does not decode
-// is left to `gash localweb doctor` and gets none either.
+// is left to `gash localweb doctor` and gets none either. A tree of Gash
+// 4.0 not moved yet (hte.toml) is read where it is: __autostart serves it
+// there.
 //
 // The emitted block runs once per shell (a re-evaluation of the layer
 // skips it; gash_unload sweeps the __GASH_ guard), only when the shell is
@@ -37,7 +39,10 @@ func (st *state) hteAutostart(b *strings.Builder) {
 	paths := htestate.NewPaths(dirs, os.Getuid())
 	data, err := st.e.readFile(paths.Settings())
 	if err != nil {
-		return
+		paths = htestate.LegacyPaths(dirs, os.Getuid())
+		if data, err = st.e.readFile(paths.Settings()); err != nil {
+			return
+		}
 	}
 	set, err := htestate.DecodeSettings(data, paths.Settings())
 	if err != nil || set.Autostart != autostartShell {
@@ -49,8 +54,8 @@ func (st *state) hteAutostart(b *strings.Builder) {
 	if st.isDir(paths.LogsDir()) {
 		log = quote(paths.LogsDir() + "/autostart.log")
 	}
-	b.WriteString(`if [[ $- == *i* && -z "${__GASH_HTE_AUTOSTART-}" && -n "${__GASH_BIN-}" ]]; then` + "\n")
-	b.WriteString("    __GASH_HTE_AUTOSTART=1\n")
-	b.WriteString(`    ("$__GASH_BIN" hte __autostart </dev/null >/dev/null 2>` + log + ` &) 2>/dev/null || true` + "\n")
+	b.WriteString(`if [[ $- == *i* && -z "${__GASH_LOCALWEB_AUTOSTART-}" && -n "${__GASH_BIN-}" ]]; then` + "\n")
+	b.WriteString("    __GASH_LOCALWEB_AUTOSTART=1\n")
+	b.WriteString(`    ("$__GASH_BIN" localweb __autostart </dev/null >/dev/null 2>` + log + ` &) 2>/dev/null || true` + "\n")
 	b.WriteString("fi\n")
 }

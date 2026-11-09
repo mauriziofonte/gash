@@ -1134,9 +1134,9 @@ var baseFunctions = []Function{
 				"\n" +
 				"NAMESPACES\n" +
 				"  files, system, shell, git, docker, remote, db, runtime, ai,\n" +
-				"  hte, wsl, win, logs, llm, agent\n" +
-				"  (the former card topics nav, navigation, dev, php and node still open\n" +
-				"  their namespace page)\n" +
+				"  localweb, wsl, win, logs, llm, agent\n" +
+				"  (the former card topics nav, navigation, dev, php and node, and hte,\n" +
+				"  still open their namespace page)\n" +
 				"\n" +
 				"  The pages are built from the command tree and the alias files. In an\n" +
 				"  interactive shell they list only the shortcuts the shell defines (one\n" +

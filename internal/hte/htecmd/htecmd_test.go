@@ -21,7 +21,7 @@ func call(build func(*invoke.Call, bool) (*hte.Engine, error), args ...string) (
 	var out, errb bytes.Buffer
 	env := invoke.EnvMap(nil)
 	status = Handler(Options{Engine: build})(&invoke.Call{
-		Ctx: context.Background(), Name: "hte", Args: args, Env: env,
+		Ctx: context.Background(), Name: "localweb", Args: args, Env: env,
 		Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb, Term: term.Fixed(env, false, false, false),
 	})
 	return out.String(), errb.String(), status

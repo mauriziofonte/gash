@@ -37,9 +37,9 @@ gash all             Every namespace page
 
 ```text
 files, system, shell, git, docker, remote, db, runtime, ai,
-hte, wsl, win, logs, llm, agent
-(the former card topics nav, navigation, dev, php and node still open
-their namespace page)
+localweb, wsl, win, logs, llm, agent
+(the former card topics nav, navigation, dev, php and node, and hte,
+still open their namespace page)
 
 The pages are built from the command tree and the alias files. In an
 interactive shell they list only the shortcuts the shell defines (one

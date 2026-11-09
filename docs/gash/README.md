@@ -238,7 +238,7 @@ file
 
 If you installed `gash localweb`, run `gash localweb uninstall --yes` first: it stops
 the stack and restores the system files it changed (see the
-[HTE guide](../hte/README.md)). Then:
+[localweb guide](../localweb/README.md)). Then:
 
 ```bash
 gash uninstall

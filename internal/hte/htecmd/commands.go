@@ -19,10 +19,10 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/state"
 )
 
-// tree is `gash localweb` (4.0; `gash localweb` before, still accepted through
-// 4.x) and every command of design/hte.md 9. The code keeps the name hte
-// (homelab test environment) for historical reasons: the stack began as
-// hte-cli, a standalone PHP tool.
+// tree is `gash localweb` (4.0; `gash hte` before, deprecated, accepted
+// through 4.x) and every command of design/hte.md 9. The Go packages keep
+// the name hte (homelab test environment), an internal name: the stack
+// began as hte-cli, a standalone PHP tool.
 func (r *run) tree() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "localweb",
@@ -475,9 +475,14 @@ func (r *run) rootStep() *cobra.Command {
 // unit is the hidden `__unit start|stop` the systemd unit and the
 // LaunchAgent run: the masters, directly.
 func (r *run) unit() *cobra.Command {
+	// The unit of Gash 4.0 runs gash hte __unit: a tree not moved yet is
+	// served where it is (Engine.KeepLayout).
 	sub := func(use string, fn func(*hte.Engine, context.Context) (*hte.ServiceResult, error)) *cobra.Command {
 		return &cobra.Command{Use: use, Args: cobra.NoArgs,
-			RunE: do(r, func(ctx context.Context, e *hte.Engine) (*hte.ServiceResult, error) { return fn(e, ctx) }, func(*hte.ServiceResult) {})}
+			RunE: do(r, func(ctx context.Context, e *hte.Engine) (*hte.ServiceResult, error) {
+				e.KeepLayout = true
+				return fn(e, ctx)
+			}, func(*hte.ServiceResult) {})}
 	}
 	c := group("__unit", "", sub("start", (*hte.Engine).UnitStart), sub("stop", (*hte.Engine).UnitStop))
 	c.Hidden = true
@@ -490,6 +495,7 @@ func (r *run) autostart() *cobra.Command {
 	return &cobra.Command{Use: "__autostart", Hidden: true, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		e, err := r.engine()
 		if err == nil {
+			e.KeepLayout = true
 			err = e.Autostart(cmd.Context())
 		}
 		if err != nil {

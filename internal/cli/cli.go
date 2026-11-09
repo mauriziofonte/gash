@@ -8,13 +8,14 @@
 //     argument, as the 2.x gash function received them.
 //   - `gash NAME ARGS...` for a 2.x function: a cobra command with
 //     DisableFlagParsing, the arguments handed raw to the handler.
-//   - The 3.x commands (version, init, update, hte, hidden __compat and
+//   - The 3.x commands (version, init, update, localweb, hidden __compat and
 //     __complete) use ordinary cobra flags.
 package cli
 
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -341,33 +342,37 @@ func updateCmd(p *Process, status *int) *cobra.Command {
 
 func hteCmd(p *Process, status *int) *cobra.Command {
 	return &cobra.Command{
-		// 4.0: gash localweb; gash localweb is its former name through 4.x.
-		// "hte" (homelab test environment) stays the name of the handler
-		// and of the code, for historical reasons: it began as hte-cli, a
-		// standalone PHP tool.
+		// 4.0: gash localweb. gash hte, its former name, is deprecated: it
+		// runs gash localweb through 4.x and goes away in 5.0. The Go
+		// packages keep the name hte (homelab test environment), an
+		// internal name: the stack began as hte-cli, a standalone PHP tool.
 		Use:                "localweb",
 		Aliases:            []string{"hte"},
 		Short:              "Manage the local Apache and PHP-FPM test environment",
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
-		// The hte tree lives in its handler: gash __complete hte WORDS asks
-		// it (htecmd answers a leading __complete) and relays the answer.
+		// The localweb tree lives in its handler: gash __complete localweb
+		// WORDS asks it (htecmd answers a leading __complete) and relays
+		// the answer.
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
-			h, ok := p.Table.LookupCommand("hte")
+			h, ok := p.Table.LookupCommand("localweb")
 			if !ok {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 			var out bytes.Buffer
 			h(&invoke.Call{
-				Ctx: p.Ctx, Name: "hte", Args: append(append([]string{cobra.ShellCompRequestCmd}, args...), toComplete),
+				Ctx: p.Ctx, Name: "localweb", Args: append(append([]string{cobra.ShellCompRequestCmd}, args...), toComplete),
 				Env: p.Env, Stdin: p.Stdin, Stdout: &out, Stderr: io.Discard, Term: p.Term, Handlers: p.Table,
 			})
 			return parseCompletion(out.String())
 		},
-		RunE: func(_ *cobra.Command, args []string) error {
-			if h, ok := p.Table.LookupCommand("hte"); ok {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.CalledAs() == "hte" {
+				hteDeprecated(p, args)
+			}
+			if h, ok := p.Table.LookupCommand("localweb"); ok {
 				*status = h(&invoke.Call{
-					Ctx: p.Ctx, Name: "hte", Args: args, Env: p.Env,
+					Ctx: p.Ctx, Name: "localweb", Args: args, Env: p.Env,
 					Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr, Term: p.Term, Handlers: p.Table,
 				})
 				return nil
@@ -376,6 +381,23 @@ func hteCmd(p *Process, status *int) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// HTEDeprecation is the line gash hte prints on stderr (4.1).
+const HTEDeprecation = "warning: gash hte is deprecated and goes away in Gash 5.0: use gash localweb"
+
+// hteDeprecated prints HTEDeprecation, except in headless mode, with
+// GASH_LEGACY_HINTS=0, and for the hidden commands the system runs (the
+// autostart units and the root step of Gash 4.0 call gash hte __unit,
+// gash hte __root): their callers are not people.
+func hteDeprecated(p *Process, args []string) {
+	if len(args) > 0 && strings.HasPrefix(args[0], "__") {
+		return
+	}
+	if (p.Term != nil && p.Term.Headless()) || p.Env.Get("GASH_HEADLESS") == "1" || p.Env.Get("GASH_LEGACY_HINTS") == "0" {
+		return
+	}
+	fmt.Fprintln(p.Stderr, HTEDeprecation)
 }
 
 // compatCmd is the hidden plumbing of the generated Bash: the operation

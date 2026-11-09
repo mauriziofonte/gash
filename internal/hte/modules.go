@@ -17,7 +17,7 @@ import (
 // Module states of apache modules list.
 const (
 	ModuleBase      = "base"      // in the userland list: every generation loads it
-	ModuleEnabled   = "enabled"   // an extra module of hte.toml (apache modules enable)
+	ModuleEnabled   = "enabled"   // an extra module of localweb.toml (apache modules enable)
 	ModuleAvailable = "available" // in the system module directory, not loaded
 )
 
@@ -48,10 +48,10 @@ type ModuleResult struct {
 }
 
 // ApacheModulesList is apache modules list: the userland list, the extra
-// modules of hte.toml, then the other modules of the system module
+// modules of localweb.toml, then the other modules of the system module
 // directory, each with its state.
 func (e *Engine) ApacheModulesList(ctx context.Context) (*ModulesResult, error) {
-	v, err := e.ready("apache modules list")
+	v, err := e.ready(ctx, "apache modules list")
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +116,8 @@ func (e *Engine) systemModules(a discover.Apache) []string {
 }
 
 // ApacheModuleEnable is apache modules enable NAME: a module of the system
-// module directory joins the extra modules of hte.toml, and the stack
-// moves to a generation that loads it (rolled back, and hte.toml put
+// module directory joins the extra modules of localweb.toml, and the stack
+// moves to a generation that loads it (rolled back, and localweb.toml put
 // back, when it fails). A module the directory lacks is
 // apache_module_missing; one of the userland list or already enabled
 // changes nothing.
@@ -140,7 +140,7 @@ func (e *Engine) ApacheModuleEnable(ctx context.Context, name string) (*ModuleRe
 }
 
 // ApacheModuleDisable is apache modules disable NAME: an extra module
-// leaves hte.toml and the stack moves to a generation without it. A
+// leaves localweb.toml and the stack moves to a generation without it. A
 // module of the userland list cannot be disabled (conflicting_options);
 // one that is not enabled changes nothing.
 func (e *Engine) ApacheModuleDisable(ctx context.Context, name string) (*ModuleResult, error) {
@@ -159,7 +159,7 @@ func (e *Engine) ApacheModuleDisable(ctx context.Context, name string) (*ModuleR
 }
 
 func (e *Engine) moduleChange(ctx context.Context, command, name string, edit func(discover.Apache, *state.Settings) (bool, []string, error)) (*ModuleResult, error) {
-	v, err := e.ready(command)
+	v, err := e.ready(ctx, command)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (e *Engine) moduleChange(ctx context.Context, command, name string, edit fu
 			}
 		}
 		if rerr := v.store.SaveSettings(set); rerr != nil {
-			return nil, hteerr.Newf(hteerr.InvalidState, "", "%v; putting hte.toml back failed: %v", err, rerr)
+			return nil, hteerr.Newf(hteerr.InvalidState, "", "%v; putting localweb.toml back failed: %v", err, rerr)
 		}
 		return nil, err
 	})

@@ -34,12 +34,12 @@ fi
 install -m 0755 /e2e/gash-e2e /usr/local/bin/gash-e2e
 install -m 0755 /e2e/gash-hosts-helper /usr/local/bin/gash-hosts-helper
 # The test binary is also the root step (gash localweb __root).
-printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e hte __root\n' >/etc/sudoers.d/e2e
+printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e localweb __root\n' >/etc/sudoers.d/e2e
 chmod 0440 /etc/sudoers.d/e2e
 visudo -c >/dev/null
 # The root step must be reachable as dev before the stories start; when it
 # is not, show what sudo's PAM stack sees instead of failing inside a story.
-if ! runuser -u dev -- sudo -n -l /usr/local/bin/gash-e2e hte __root >/dev/null 2>"$out/sudo.err"; then
+if ! runuser -u dev -- sudo -n -l /usr/local/bin/gash-e2e localweb __root >/dev/null 2>"$out/sudo.err"; then
     echo "== sudo as dev refused" >&2
     cat "$out/sudo.err" >&2
     for f in /etc/pam.d/sudo /etc/pam.d/system-auth /etc/nsswitch.conf; do
@@ -53,7 +53,7 @@ if ! runuser -u dev -- sudo -n -l /usr/local/bin/gash-e2e hte __root >/dev/null 
     echo "-- as dev through runuser" >&2
     runuser -u dev -- sh -c 'id; grep -E "^(Cap|NoNewPrivs|Seccomp)" /proc/self/status; /usr/sbin/unix_chkpwd dev chkexpiry </dev/null; echo "unix_chkpwd chkexpiry: $?"' >&2 || true
     echo "-- sudo through su" >&2
-    su -s /bin/sh dev -c 'sudo -n -l /usr/local/bin/gash-e2e hte __root' >&2 || true
+    su -s /bin/sh dev -c 'sudo -n -l /usr/local/bin/gash-e2e localweb __root' >&2 || true
     rpm -V pam sudo util-linux-core >&2 || true
     exit 1
 fi
@@ -66,7 +66,7 @@ cp /etc/hosts /tmp/hosts.orig
 printf '127.0.0.1 repro.test\n' | /usr/local/bin/gash-hosts-helper apply
 grep -qx '127.0.0.1 repro.test' /etc/hosts
 grep -q ' /etc/hosts ' /proc/self/mountinfo
-if ls /etc/.hosts.gash-hte-* >/dev/null 2>&1; then
+if ls /etc/.hosts.gash-localweb-* >/dev/null 2>&1; then
     echo "the helper left a temporary file" >&2
     exit 1
 fi
@@ -173,6 +173,7 @@ fi
 
 snapshot() {
     local roots=(/etc /usr/local)
+    [ -d /var/lib/gash-localweb ] && roots+=(/var/lib/gash-localweb)
     [ -d /var/lib/gash-hte ] && roots+=(/var/lib/gash-hte)
     find "${roots[@]}" -xdev | LC_ALL=C sort | while IFS= read -r p; do
         if [ -L "$p" ]; then
@@ -209,7 +210,7 @@ rc=$?
 set -e
 if [ "$rc" != 0 ]; then
     echo "== logs"
-    for f in /home/dev/.local/state/gash/hte/logs/*.log /home/dev/.local/state/gash/hte/logs/*/*.log /var/log/apache2/error.log /var/log/php*-fpm.log /var/log/httpd/*; do
+    for f in /home/dev/.local/state/gash/localweb/logs/*.log /home/dev/.local/state/gash/localweb/logs/*/*.log /var/log/apache2/error.log /var/log/php*-fpm.log /var/log/httpd/*; do
         [ -f "$f" ] && {
             echo "-- $f"
             tail -n 20 "$f"

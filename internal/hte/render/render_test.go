@@ -28,9 +28,9 @@ const goldenRoot = "../../../testdata/hte/golden"
 
 func paths(home, runtime string) state.Paths {
 	return state.Paths{
-		ConfigDir:  home + "/.config/gash/hte",
-		StateDir:   home + "/.local/state/gash/hte",
-		DataDir:    home + "/.local/share/gash/hte",
+		ConfigDir:  home + "/.config/gash/localweb",
+		StateDir:   home + "/.local/state/gash/localweb",
+		DataDir:    home + "/.local/share/gash/localweb",
 		RuntimeDir: runtime,
 	}
 }
@@ -68,7 +68,7 @@ func site(domain string, mut func(*state.Site)) state.Site {
 // debianStandard is Debian/Ubuntu with standard ports and IPv6 loopback:
 // every site variant.
 func debianStandard() Input {
-	p := paths("/home/me", "/run/user/1000/gash-hte")
+	p := paths("/home/me", "/run/user/1000/gash-localweb")
 	return Input{
 		GenDir: p.RenderDir() + "/gen-7",
 		Paths:  p,
@@ -126,7 +126,7 @@ func withSession(dir string) PHPVersion {
 // fedoraHigh is Fedora with high ports, IPv4 loopback only, every module
 // loadable, and a per-version session directory (HTE-41).
 func fedoraHigh() Input {
-	p := paths("/home/dev", "/run/user/1001/gash-hte")
+	p := paths("/home/dev", "/run/user/1001/gash-localweb")
 	return Input{
 		GenDir: p.RenderDir() + "/gen-1",
 		Paths:  p,
@@ -150,7 +150,7 @@ func fedoraHigh() Input {
 // macosPF is Homebrew on macOS: high ports behind the pf redirect, so the
 // redirect target is port 443; the runtime directory falls back to /tmp.
 func macosPF() Input {
-	p := paths("/Users/me", "/tmp/gash-hte-501")
+	p := paths("/Users/me", "/tmp/gash-localweb-501")
 	return Input{
 		GenDir: p.RenderDir() + "/gen-3",
 		Paths:  p,
@@ -355,9 +355,9 @@ func TestValidateRefuses(t *testing.T) {
 		want hteerr.Code
 	}{
 		{"relative gen dir", func(in *Input) { in.GenDir = "render/gen-1" }, hteerr.PlatformUnsupported},
-		{"dollar in home", func(in *Input) { in.Paths.ConfigDir = "/home/$me/.config/gash/hte" }, hteerr.PlatformUnsupported},
+		{"dollar in home", func(in *Input) { in.Paths.ConfigDir = "/home/$me/.config/gash/localweb" }, hteerr.PlatformUnsupported},
 		{"quote in runtime", func(in *Input) { in.Paths.RuntimeDir = `/run/user/1000/"x` }, hteerr.PlatformUnsupported},
-		{"semicolon in state", func(in *Input) { in.Paths.StateDir = "/home/a;b/.local/state/gash/hte" }, hteerr.PlatformUnsupported},
+		{"semicolon in state", func(in *Input) { in.Paths.StateDir = "/home/a;b/.local/state/gash/localweb" }, hteerr.PlatformUnsupported},
 		{"glob in module", func(in *Input) { in.Apache.Modules[0].Path = "/usr/lib/apache2/modules/*.so" }, hteerr.PlatformUnsupported},
 		{"no mime types", func(in *Input) { in.Apache.MimeTypes = "" }, hteerr.PlatformUnsupported},
 		{"wildcard listen", func(in *Input) { in.Listen = []string{"0.0.0.0"} }, hteerr.InvalidState},
@@ -379,7 +379,7 @@ func TestValidateRefuses(t *testing.T) {
 			f.ScanDir = "/etc/php/8.3/fpm/conf.d:/tmp"
 			in.PHP["8.3"] = f
 		}, hteerr.PlatformUnsupported},
-		{"config dir with colon", func(in *Input) { in.Paths.ConfigDir = "/home/a:b/.config/gash/hte" }, hteerr.PlatformUnsupported},
+		{"config dir with colon", func(in *Input) { in.Paths.ConfigDir = "/home/a:b/.config/gash/localweb" }, hteerr.PlatformUnsupported},
 		{"no fpm binary", func(in *Input) { in.PHP["8.3"] = PHPVersion{INI: "/etc/php/8.3/fpm/php.ini"} }, hteerr.PHPVersionNotInstalled},
 		{"relative apache", func(in *Input) { in.Apache.Binary = "apache2" }, hteerr.ApacheNotFound},
 		{"php_ini key", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"memory limit": "1G"} }, hteerr.InvalidState},
@@ -758,12 +758,12 @@ func TestLedger_HTE34(t *testing.T) {
 			}
 		}
 		for d, v := range managedVhosts(in, g) {
-			if !strings.Contains(v, "    # Managed by gash hte. Edit the site with `gash localweb site modify`, or add directives to the overlay named below.\n") {
+			if !strings.Contains(v, "    # Managed by gash localweb. Edit the site with `gash localweb site modify`, or add directives to the overlay named below.\n") {
 				t.Errorf("%s: no managed header", d)
 			}
 		}
 		for p, pool := range pools(g) {
-			if !regexp.MustCompile(`^\[[a-z0-9.-]+\]\n; Managed by gash hte\. Profile: (dev|staging|hardened)\n`).MatchString(pool) {
+			if !regexp.MustCompile(`^\[[a-z0-9.-]+\]\n; Managed by gash localweb\. Profile: (dev|staging|hardened)\n`).MatchString(pool) {
 				t.Errorf("%s: no managed header", p)
 			}
 		}
@@ -1078,7 +1078,7 @@ func TestPoolPHPIni(t *testing.T) {
 		}
 	}
 	want := `
-; php_ini of /home/me/.config/gash/hte/sites/shop.test.toml
+; php_ini of /home/me/.config/gash/localweb/sites/shop.test.toml
 php_value[auto_prepend_file] = ""
 php_value[opcache.enable] = "0"
 php_value[session.name] = "S;ID"
@@ -1117,7 +1117,7 @@ func TestManifest(t *testing.T) {
 	}
 	f, ok := m.Master("8.3")
 	if !ok || f.Binary != "/usr/sbin/php-fpm8.3" || f.INI != "/etc/php/8.3/fpm/php.ini" ||
-		f.Env()[0] != "PHP_INI_SCAN_DIR=/etc/php/8.3/fpm/conf.d:/home/me/.config/gash/hte/php/8.3" ||
+		f.Env()[0] != "PHP_INI_SCAN_DIR=/etc/php/8.3/fpm/conf.d:/home/me/.config/gash/localweb/php/8.3" ||
 		f.Config != "fpm/8.3/php-fpm.conf" || len(f.Sockets) != 3 {
 		t.Fatalf("8.3: %+v", f)
 	}
@@ -1131,7 +1131,7 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("forced.test endpoint: %+v", e)
 	}
 	// No system scan directory: only the overlay directory.
-	if v := ScanDirEnv(in.Paths, PHPVersion{}, "8.4"); v != "/home/me/.config/gash/hte/php/8.4" {
+	if v := ScanDirEnv(in.Paths, PHPVersion{}, "8.4"); v != "/home/me/.config/gash/localweb/php/8.4" {
 		t.Fatal(v)
 	}
 	must(t, os.WriteFile(filepath.Join(dir, ManifestFile), []byte(`{"schema":9}`), 0o600))

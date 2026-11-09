@@ -7,7 +7,7 @@ installation and every tool Gash uses, and names what is missing.
 Platforms: Linux, macOS and WSL. The [macOS](#macos) section covers what
 differs there; the WSL helpers have their own
 [guide](windows/README.md), and `gash localweb` its
-[own list of errors](hte/README.md#when-something-goes-wrong).
+[own list of errors](localweb/README.md#when-something-goes-wrong).
 
 ## The installer stops
 

@@ -3,8 +3,8 @@
   "apache": {
     "binary": "/opt/homebrew/bin/httpd",
     "config": "httpd.conf",
-    "pid_file": "/tmp/gash-hte-501/httpd.pid",
-    "error_log": "/Users/me/.local/state/gash/hte/logs/error.log",
+    "pid_file": "/tmp/gash-localweb-501/httpd.pid",
+    "error_log": "/Users/me/.local/state/gash/localweb/logs/error.log",
     "listen": [
       "127.0.0.1:8080",
       "[::1]:8080",
@@ -18,11 +18,11 @@
       "binary": "/opt/homebrew/opt/php/sbin/php-fpm",
       "config": "fpm/8.4/php-fpm.conf",
       "ini": "/opt/homebrew/etc/php/8.4/php.ini",
-      "scan_dir": "/Users/me/.config/gash/hte/php/8.4",
-      "pid_file": "/tmp/gash-hte-501/php-fpm-8.4.pid",
-      "error_log": "/Users/me/.local/state/gash/hte/logs/php-fpm-8.4.log",
+      "scan_dir": "/Users/me/.config/gash/localweb/php/8.4",
+      "pid_file": "/tmp/gash-localweb-501/php-fpm-8.4.pid",
+      "error_log": "/Users/me/.local/state/gash/localweb/logs/php-fpm-8.4.log",
       "sockets": [
-        "/tmp/gash-hte-501/8.4-6edefd745e.sock"
+        "/tmp/gash-localweb-501/8.4-6edefd745e.sock"
       ]
     }
   ],
@@ -38,7 +38,7 @@
         "127.0.0.1:8443",
         "[::1]:8443"
       ],
-      "socket": "/tmp/gash-hte-501/8.4-6edefd745e.sock"
+      "socket": "/tmp/gash-localweb-501/8.4-6edefd745e.sock"
     }
   ]
 }

@@ -44,7 +44,7 @@ var Areas = []struct{ Key, Title string }{
 	{"runtimes", "Runtimes and linters"},
 	{"exec", "Agent command runner (llm_exec)"},
 	{"system", "System"},
-	{"hte", "Local web stack (gash localweb)"},
+	{"localweb", "Local web stack (gash localweb)"},
 	{"windows", "Windows (WSL)"},
 	{"release", "Release signatures"},
 }
@@ -170,13 +170,13 @@ var catalog = []Tool{
 
 	// Local web stack.
 	{Name: "apache", Commands: []string{"apache2", "httpd"}, Purpose: "serves the gash localweb sites",
-		Level: Feature, Area: "hte", Code: "apache_not_found", Locate: locateApache, Note: hteNote,
+		Level: Feature, Area: "localweb", Code: "apache_not_found", Locate: locateApache, Note: hteNote,
 		Packages: map[Manager]string{Apt: "apache2", Dnf: "httpd mod_ssl mod_http2", Pacman: "apache", Brew: "httpd"}},
 	{Name: "php-fpm", Purpose: "runs PHP for the gash localweb sites: one master per PHP version, one pool per site",
-		Level: Feature, Area: "hte", Locate: locateFPM, Note: hteNote,
+		Level: Feature, Area: "localweb", Locate: locateFPM, Note: hteNote,
 		Packages: map[Manager]string{Apt: "php-fpm", Dnf: "php-fpm", Pacman: "php-fpm", Brew: "php"}},
 	{Name: "openssl", Purpose: "makes the self-signed certificate of each gash localweb site",
-		Level: Feature, Area: "hte", Code: "openssl_not_found", Packages: pkgs("openssl", "brew", "openssl@3")},
+		Level: Feature, Area: "localweb", Code: "openssl_not_found", Packages: pkgs("openssl", "brew", "openssl@3")},
 
 	// Windows, under WSL: these come with Windows.
 	{Name: "powershell.exe", Purpose: "answers the gash win queries and edits the Windows hosts file",

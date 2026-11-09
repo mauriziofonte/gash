@@ -23,25 +23,42 @@ const (
 )
 
 // UnitName is the systemd user unit.
-const UnitName = "gash-hte.service"
+const UnitName = "gash-localweb.service"
+
+// LegacyUnitName is the user unit of Gash 4.0 and older: it runs
+// gash hte __unit, which works through 4.x, until the engine replaces it.
+const LegacyUnitName = "gash-hte.service"
 
 // LaunchAgentLabel is the label of the macOS LaunchAgent.
-const LaunchAgentLabel = "io.github.mauriziofonte.gash.hte"
+const LaunchAgentLabel = "io.github.mauriziofonte.gash.localweb"
+
+// LegacyLaunchAgentLabel is the LaunchAgent of Gash 4.0 and older.
+const LegacyLaunchAgentLabel = "io.github.mauriziofonte.gash.hte"
 
 // UnitArgs are the arguments the unit and the LaunchAgent run gash with:
 // the hidden command that starts or stops the masters directly. (The
 // public service start delegates to systemctl when the unit is in use, so
 // the unit cannot run it without recursion.)
-func UnitArgs(action string) []string { return []string{"hte", "__unit", action} }
+func UnitArgs(action string) []string { return []string{"localweb", "__unit", action} }
 
 // UnitPath is the user unit under $XDG_CONFIG_HOME/systemd/user.
-func UnitPath(configHome string) string {
-	return filepath.Join(configHome, "systemd", "user", UnitName)
+func UnitPath(configHome string) string { return unitPath(configHome, UnitName) }
+
+// LegacyUnitPath is the user unit of Gash 4.0 and older.
+func LegacyUnitPath(configHome string) string { return unitPath(configHome, LegacyUnitName) }
+
+func unitPath(configHome, name string) string {
+	return filepath.Join(configHome, "systemd", "user", name)
 }
 
 // LaunchAgentPath is the LaunchAgent plist under ~/Library/LaunchAgents.
-func LaunchAgentPath(home string) string {
-	return filepath.Join(home, "Library", "LaunchAgents", LaunchAgentLabel+".plist")
+func LaunchAgentPath(home string) string { return agentPath(home, LaunchAgentLabel) }
+
+// LegacyLaunchAgentPath is the LaunchAgent plist of Gash 4.0 and older.
+func LegacyLaunchAgentPath(home string) string { return agentPath(home, LegacyLaunchAgentLabel) }
+
+func agentPath(home, label string) string {
+	return filepath.Join(home, "Library", "LaunchAgents", label+".plist")
 }
 
 func checkProgram(gash string) error {
@@ -72,9 +89,9 @@ func SystemdUnit(gash string) ([]byte, error) {
 	if err := checkProgram(gash); err != nil {
 		return nil, err
 	}
-	return fmt.Appendf(nil, `# Managed by gash hte install; gash hte uninstall removes it.
+	return fmt.Appendf(nil, `# Managed by gash localweb install; gash localweb uninstall removes it.
 [Unit]
-Description=Gash HTE userland web stack (Apache and PHP-FPM)
+Description=Gash localweb userland web stack (Apache and PHP-FPM)
 
 [Service]
 Type=oneshot
@@ -115,7 +132,7 @@ func LaunchAgent(gash string, env []string) ([]byte, error) {
 	}
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Managed by gash hte install; gash hte uninstall removes it. -->
+<!-- Managed by gash localweb install; gash localweb uninstall removes it. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>

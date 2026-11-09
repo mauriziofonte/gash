@@ -47,7 +47,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q jq sqlite3 apache2-bin php-fpm
 
-      # hte.tape runs gash hte install on ports 80 and 443. The runner is
+      # hte.tape runs gash localweb install on ports 80 and 443. The runner is
       # thrown away afterwards, so the system web servers are stopped and
       # their stock vhosts removed rather than migrated.
       - name: Free ports 80 and 443

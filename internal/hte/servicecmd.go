@@ -26,11 +26,20 @@ type ServiceResult struct {
 	Running bool     `json:"running"`
 }
 
-// systemdUnit reports whether service commands go through the user unit:
-// autostart systemd and the unit file in place.
-func (e *Engine) systemdUnit(v *env, set state.Settings) bool {
-	_, err := os.Stat(service.UnitPath(v.dirs.ConfigHome))
-	return set.Autostart == service.AutostartSystemd && err == nil
+// systemdUnit is the user unit service commands go through: autostart
+// systemd and its unit file in place, the current one or, until moveLayout
+// replaces it, the one of Gash 4.0 and older; "" when they go direct.
+func (e *Engine) systemdUnit(v *env, set state.Settings) string {
+	if set.Autostart != service.AutostartSystemd {
+		return ""
+	}
+	if _, err := os.Stat(service.UnitPath(v.dirs.ConfigHome)); err == nil {
+		return service.UnitName
+	}
+	if _, err := os.Stat(service.LegacyUnitPath(v.dirs.ConfigHome)); err == nil {
+		return service.LegacyUnitName
+	}
+	return ""
 }
 
 // userEnv is the environment of systemctl --user: the base one plus what
@@ -114,26 +123,26 @@ func (e *Engine) unitLocked(v *env, command string, fn func() (any, error)) (any
 // unitStart starts the stack through the user unit: a unit that stayed
 // active while its masters ended is restarted. locked says whether the
 // caller holds the state lock.
-func (e *Engine) unitStart(ctx context.Context, v *env, locked bool) error {
+func (e *Engine) unitStart(ctx context.Context, v *env, unit string, locked bool) error {
 	run := e.systemctlUser
 	if locked {
 		run = e.unitJob
 	}
-	if err := run(ctx, v, "start", service.UnitName); err != nil {
+	if err := run(ctx, v, "start", unit); err != nil {
 		return err
 	}
 	if all, err := e.supervisor(v).AllRunning(); err != nil || all {
 		return err
 	}
-	return run(ctx, v, "restart", service.UnitName)
+	return run(ctx, v, "restart", unit)
 }
 
 // startStack starts the stack from a command that holds the state lock:
 // through systemctl --user when the systemd unit is in use, else directly
 // (LEDGER HTE-73).
 func (e *Engine) startStack(ctx context.Context, v *env, set state.Settings) error {
-	if e.systemdUnit(v, set) {
-		return e.unitStart(ctx, v, true)
+	if unit := e.systemdUnit(v, set); unit != "" {
+		return e.unitStart(ctx, v, unit, true)
 	}
 	return e.supervisor(v).Start(ctx)
 }
@@ -142,8 +151,8 @@ func (e *Engine) startStack(ctx context.Context, v *env, set state.Settings) err
 // through systemctl --user when the systemd unit is in use, then any
 // master still running (one the unit did not start) by its PID file.
 func (e *Engine) stopStack(ctx context.Context, v *env, set state.Settings) error {
-	if e.systemdUnit(v, set) {
-		if err := e.unitJob(ctx, v, "stop", service.UnitName); err != nil {
+	if unit := e.systemdUnit(v, set); unit != "" {
+		if err := e.unitJob(ctx, v, "stop", unit); err != nil {
 			return err
 		}
 	}
@@ -172,7 +181,7 @@ func (e *Engine) ServiceRestart(ctx context.Context) (*ServiceResult, error) {
 }
 
 func (e *Engine) serviceVia(ctx context.Context, command, verb string, direct func(context.Context) (*ServiceResult, error)) (*ServiceResult, error) {
-	v, err := e.ready(command)
+	v, err := e.ready(ctx, command)
 	if err != nil {
 		return nil, err
 	}
@@ -180,13 +189,14 @@ func (e *Engine) serviceVia(ctx context.Context, command, verb string, direct fu
 	if err != nil {
 		return nil, err
 	}
-	if !e.systemdUnit(v, set) {
+	unit := e.systemdUnit(v, set)
+	if unit == "" {
 		return direct(ctx)
 	}
 	if verb == "start" {
-		err = e.unitStart(ctx, v, false)
+		err = e.unitStart(ctx, v, unit, false)
 	} else {
-		err = e.systemctlUser(ctx, v, verb, service.UnitName)
+		err = e.systemctlUser(ctx, v, verb, unit)
 	}
 	if err != nil {
 		return nil, err
@@ -200,7 +210,7 @@ func (e *Engine) serviceVia(ctx context.Context, command, verb string, direct fu
 // hosts block. Run by the unit for a command that holds the lock, it
 // works under that command's lock.
 func (e *Engine) UnitStart(ctx context.Context) (*ServiceResult, error) {
-	v, err := e.ready("service start")
+	v, err := e.ready(ctx, "service start")
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +240,7 @@ func (e *Engine) UnitStart(ctx context.Context) (*ServiceResult, error) {
 
 // UnitStop stops the stack directly.
 func (e *Engine) UnitStop(ctx context.Context) (*ServiceResult, error) {
-	v, err := e.ready("service stop")
+	v, err := e.ready(ctx, "service stop")
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +256,7 @@ func (e *Engine) UnitStop(ctx context.Context) (*ServiceResult, error) {
 // ServiceReload is service reload: render, test, swap, reload, roll back
 // on failure.
 func (e *Engine) ServiceReload(ctx context.Context) (*ServiceResult, error) {
-	v, err := e.ready("service reload")
+	v, err := e.ready(ctx, "service reload")
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +291,7 @@ func (e *Engine) ServiceReload(ctx context.Context) (*ServiceResult, error) {
 
 // ServiceStatus is service status, with every site probed.
 func (e *Engine) ServiceStatus(ctx context.Context) (*service.Status, error) {
-	v, err := e.ready("service status")
+	v, err := e.ready(ctx, "service status")
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +302,7 @@ func (e *Engine) ServiceStatus(ctx context.Context) (*service.Status, error) {
 // ServiceLogs is service logs: the last lines of the logs, of one site
 // with site.
 func (e *Engine) ServiceLogs(ctx context.Context, site string, lines int) ([]service.LogFile, error) {
-	v, err := e.ready("service logs")
+	v, err := e.ready(ctx, "service logs")
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +323,7 @@ func (e *Engine) ServiceLogs(ctx context.Context, site string, lines int) ([]ser
 // Autostart is what the first interactive shell runs when autostart is
 // "shell": start the stack when it is down; nothing otherwise.
 func (e *Engine) Autostart(ctx context.Context) error {
-	v, err := e.ready("service start")
+	v, err := e.ready(ctx, "service start")
 	if err != nil {
 		return err
 	}

@@ -2,8 +2,8 @@
 
 // Package hostshelper is the core of gash-hosts-helper, the only program
 // gash runs as root without a password (design/hte.md section 7.1). It
-// edits one region of the hosts file, between "# >>> gash hte >>>" and
-// "# <<< gash hte <<<", and accepts only loopback addresses and validated
+// edits one region of the hosts file, between "# >>> gash localweb >>>" and
+// "# <<< gash localweb <<<", and accepts only loopback addresses and validated
 // hostnames. It never takes a path from its caller: the hosts file is a
 // constant of the binary, and Config.HostsPath exists only for tests.
 //
@@ -25,11 +25,17 @@ import (
 
 // Markers of the managed region, each a full line of the hosts file.
 const (
-	// The markers keep the 3.x name (gash localweb was gash hte): the
-	// hosts files of existing installs carry them.
-	BeginMarker = "# >>> gash hte >>>"
-	EndMarker   = "# <<< gash hte <<<"
+	BeginMarker = "# >>> gash localweb >>>"
+	EndMarker   = "# <<< gash localweb <<<"
+	// The markers of Gash 4.0 and older (gash localweb was gash hte): a
+	// region between them is the managed region too, and the next write
+	// gives it the current markers.
+	LegacyBeginMarker = "# >>> gash hte >>>"
+	LegacyEndMarker   = "# <<< gash hte <<<"
 )
+
+// markerPairs are the begin and end lines of a region, current first.
+var markerPairs = [][2]string{{BeginMarker, EndMarker}, {LegacyBeginMarker, LegacyEndMarker}}
 
 // Limits of the input grammar.
 const (
@@ -73,7 +79,7 @@ func (e *InputError) Error() string {
 
 // ErrCorruptBlock is returned when the hosts file holds the markers in any
 // shape other than one begin line followed later by one end line.
-var ErrCorruptBlock = errors.New("the gash hte markers in the hosts file are broken")
+var ErrCorruptBlock = errors.New("the gash localweb markers in the hosts file are broken")
 
 // ValidHostname reports whether name is a lowercase hostname gash accepts
 // for a site or alias: labels [a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?, at least
@@ -182,11 +188,14 @@ func FormatBlock(entries []Entry) []byte {
 }
 
 // region locates the managed region: the byte offsets of the begin marker
-// line and of the end of the end marker line. found is false when neither
-// marker is present.
-func region(hosts []byte) (start, end int, found bool, err error) {
+// line and of the end of the end marker line, and the pair of markers it
+// uses (current or legacy). found is false when no marker is present. Any
+// shape other than one begin line followed later by the end line of the
+// same pair is ErrCorruptBlock.
+func region(hosts []byte) (start, end int, pair [2]string, found bool, err error) {
 	begins, ends := 0, 0
 	start, end = -1, -1
+	beginPair, endPair := -1, -1
 	off := 0
 	for off < len(hosts) {
 		nl := bytes.IndexByte(hosts[off:], '\n')
@@ -196,42 +205,52 @@ func region(hosts []byte) (start, end int, found bool, err error) {
 			next = off + nl + 1
 			line = hosts[off : off+nl]
 		}
-		switch string(line) {
-		case BeginMarker:
-			begins++
-			start = off
-		case EndMarker:
-			ends++
-			end = next
+		for i, p := range markerPairs {
+			switch string(line) {
+			case p[0]:
+				begins++
+				start, beginPair = off, i
+			case p[1]:
+				ends++
+				end, endPair = next, i
+			}
 		}
 		off = next
 	}
 	switch {
 	case begins == 0 && ends == 0:
-		return 0, 0, false, nil
-	case begins == 1 && ends == 1 && start < end:
-		return start, end, true, nil
+		return 0, 0, pair, false, nil
+	case begins == 1 && ends == 1 && start < end && beginPair == endPair:
+		return start, end, markerPairs[beginPair], true, nil
 	}
-	return 0, 0, false, ErrCorruptBlock
+	return 0, 0, pair, false, ErrCorruptBlock
 }
 
 // Extract returns the inner lines of the managed region of hosts.
 func Extract(hosts []byte) (block []byte, found bool, err error) {
-	start, end, found, err := region(hosts)
+	start, end, pair, found, err := region(hosts)
 	if err != nil || !found {
 		return nil, false, err
 	}
-	inner := hosts[start+len(BeginMarker)+1 : end]
-	inner = bytes.TrimSuffix(inner, []byte(EndMarker+"\n"))
-	inner = bytes.TrimSuffix(inner, []byte(EndMarker))
+	inner := hosts[start+len(pair[0])+1 : end]
+	inner = bytes.TrimSuffix(inner, []byte(pair[1]+"\n"))
+	inner = bytes.TrimSuffix(inner, []byte(pair[1]))
 	return inner, true, nil
 }
 
+// Legacy reports whether the managed region of hosts carries the markers
+// of Gash 4.0 and older.
+func Legacy(hosts []byte) bool {
+	_, _, pair, found, err := region(hosts)
+	return err == nil && found && pair[0] == LegacyBeginMarker
+}
+
 // Splice returns hosts with the managed region replaced by block (inner
-// lines), or with the region appended when it is absent. Every byte outside
-// the region is kept.
+// lines) between the current markers (a legacy region gets them), or with
+// the region appended when it is absent. Every byte outside the region is
+// kept.
 func Splice(hosts, block []byte) ([]byte, error) {
-	start, end, found, err := region(hosts)
+	start, end, _, found, err := region(hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +277,7 @@ func Splice(hosts, block []byte) ([]byte, error) {
 // every other byte kept. Uninstall uses it when no block existed before
 // install; hosts without a region is returned unchanged.
 func Strip(hosts []byte) ([]byte, error) {
-	start, end, found, err := region(hosts)
+	start, end, _, found, err := region(hosts)
 	if err != nil || !found {
 		return hosts, err
 	}
@@ -314,7 +333,7 @@ var rename = os.Rename
 // HTE-69).
 func writeAtomic(path string, data []byte, orig os.FileInfo) (err error) {
 	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, ".hosts.gash-hte-*")
+	f, err := os.CreateTemp(dir, ".hosts.gash-localweb-*")
 	if err != nil {
 		return err
 	}

@@ -537,11 +537,11 @@ uninstall plays back:
 * the hosts helper, copied to `/usr/local/libexec/gash/gash-hosts-helper`,
   root-owned, mode 0755, after its SHA-256 is checked against the one the
   printed plan names;
-* `/etc/sudoers.d/gash-hte`, checked with `visudo -c -f` before it is put
+* `/etc/sudoers.d/gash-localweb`, checked with `visudo -c -f` before it is put
   in place, which lets your user run exactly `gash-hosts-helper apply` and
   `gash-hosts-helper check` without a password, and nothing else;
 * `net.ipv4.ip_unprivileged_port_start = 80` in
-  `/etc/sysctl.d/50-gash-hte.conf`, so that the stack can listen on ports
+  `/etc/sysctl.d/50-gash-localweb.conf`, so that the stack can listen on ports
   80 and 443 without root. **Every local user** can then bind ports 80 to
   1023 while HTE is installed; on a shared machine, install with
   `--ports high` (8080 and 8443), which skips this step. On macOS a `pf`
@@ -550,14 +550,7 @@ uninstall plays back:
 * the autostart unit, when one is asked for, and stopping the system Apache
   when `migrate --apply` takes its sites over.
 
-**At runtime, the hosts helper.** It takes no path and ignores its
-environment: the file it writes is `/etc/hosts`, a constant of the binary,
-and it edits only the lines between `# >>> gash hte >>>` and
-`# <<< gash hte <<<`. It accepts only `127.0.0.1` and `::1` as addresses and
-only lowercase hostnames of at least two labels, with no wildcard and no
-numeric last label (which a resolver would read as an address). Input over
-its size limits, or a hosts file whose markers are broken, is refused and
-nothing is written.
+**At runtime, the hosts helper.** It takes no path and ignores its environment: the file it writes is `/etc/hosts`, a constant of the binary, and it edits only the lines between `# >>> gash localweb >>>` and `# <<< gash localweb <<<` (or the `gash hte` markers Gash 4.0 wrote). It accepts only `127.0.0.1` and `::1` as addresses and only lowercase hostnames of at least two labels, with no wildcard and no numeric last label (which a resolver would read as an address). Input over its size limits, or a hosts file whose markers are broken, is refused and nothing is written.
 
 The rest runs as you:
 

@@ -140,7 +140,7 @@ func phpHint(installed []string) string {
 }
 
 // ResolvePHP returns the PHP version of a site: the flag when given (it
-// must be installed), else the hte.toml default (which must be installed
+// must be installed), else the localweb.toml default (which must be installed
 // too), else the highest installed version (LEDGER HTE-55, option a). An
 // invalid value never falls back to a default.
 func ResolvePHP(flag *string, env Env) (string, error) {
@@ -154,7 +154,7 @@ func ResolvePHP(flag *string, env Env) (string, error) {
 	if env.DefaultPHP != "" {
 		if !slices.Contains(env.Installed, env.DefaultPHP) {
 			return "", hteerr.Newf(hteerr.PHPVersionNotInstalled, phpHint(env.Installed),
-				"the default PHP %s of hte.toml is not installed", env.DefaultPHP)
+				"the default PHP %s of localweb.toml is not installed", env.DefaultPHP)
 		}
 		return env.DefaultPHP, nil
 	}

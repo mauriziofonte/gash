@@ -56,6 +56,9 @@ type server struct {
 	plan map[int]Op
 	done map[int]bool
 	r    *receipt.Receipt
+	// dir is the root directory the receipt lives in: receipt.RootDir, or
+	// receipt.LegacyRootDir until OpMigrateNames moves it.
+	dir string
 	// made are the receipt changes this session recorded.
 	made  map[int]bool
 	stamp string
@@ -105,19 +108,27 @@ func open(env Env) (*server, error) {
 			"run gash localweb as your own user")
 	}
 	s := &server{env: env, user: user, uid: uid, gid: gid, plan: map[int]Op{}, done: map[int]bool{}, made: map[int]bool{},
-		stamp: env.Now().UTC().Format("20060102T150405Z")}
-	r, ok, err := receipt.Load(s.host(receipt.RootPath(user)))
+		stamp: env.Now().UTC().Format("20060102T150405Z"), dir: receipt.RootDir}
+	// The receipt of Gash 4.0 and older is read where it is: uninstall
+	// undoes its changes there, install moves it first (OpMigrateNames).
+	if !exists(s.host(receipt.RootPath(user))) && exists(s.host(receipt.LegacyRootPath(user))) {
+		s.dir = receipt.LegacyRootDir
+	}
+	r, ok, err := receipt.Load(s.host(s.receiptPath()))
 	if err != nil {
 		return nil, err
 	}
 	if ok {
 		if r.User != user || r.UID != uid {
-			return nil, hteerr.Newf(hteerr.ReceiptMismatch, "", "%s belongs to %s (uid %d)", receipt.RootPath(user), r.User, r.UID)
+			return nil, hteerr.Newf(hteerr.ReceiptMismatch, "", "%s belongs to %s (uid %d)", s.receiptPath(), r.User, r.UID)
 		}
 		s.r = r
 	}
 	return s, nil
 }
+
+// receiptPath is the root copy of the user's receipt, where it lives.
+func (s *server) receiptPath() string { return receipt.RootPathIn(s.dir, s.user) }
 
 func (s *server) hello(dec *json.Decoder) error {
 	var req Request
@@ -172,7 +183,7 @@ func (s *server) changes() []receipt.Change {
 }
 
 func (s *server) receiptText() string {
-	data, err := os.ReadFile(s.host(receipt.RootPath(s.user)))
+	data, err := os.ReadFile(s.host(s.receiptPath()))
 	if err != nil {
 		return ""
 	}
@@ -211,6 +222,8 @@ func (s *server) exec(ctx context.Context, o Op) ([]string, error) {
 		return s.restore(ctx, o.Change)
 	case OpFinish:
 		return s.finish()
+	case OpMigrateNames:
+		return s.migrateNames(ctx)
 	}
 	return nil, fmt.Errorf("rootops: %s", o.Op)
 }
@@ -270,10 +283,10 @@ func (s *server) commit(c receipt.Change) error {
 }
 
 func (s *server) save() error {
-	if err := os.MkdirAll(s.host(receipt.RootDir), 0o755); err != nil {
+	if err := os.MkdirAll(s.host(s.dir), 0o755); err != nil {
 		return err
 	}
-	return receipt.Save(s.host(receipt.RootPath(s.user)), s.r, 0o644)
+	return receipt.Save(s.host(s.receiptPath()), s.r, 0o644)
 }
 
 func sum(data []byte) string {
@@ -283,11 +296,11 @@ func sum(data []byte) string {
 
 // backupPath is where the prior content of path is kept.
 func (s *server) backupPath(sys string) string {
-	return path.Join(receipt.BackupDir, s.stamp, strings.TrimPrefix(sys, "/"))
+	return path.Join(s.dir, "backup", s.stamp, strings.TrimPrefix(sys, "/"))
 }
 
 func (s *server) archivePath(sys string) string {
-	return path.Join(receipt.ArchiveDir, s.stamp, strings.TrimPrefix(sys, "/"))
+	return path.Join(s.dir, "archive", s.stamp, strings.TrimPrefix(sys, "/"))
 }
 
 // ensureDirs creates dir and its missing ancestors (0755), each recorded,
@@ -318,7 +331,7 @@ func (s *server) ensureDirs(dir string) error {
 
 // writeAtomic writes data to a temporary file next to sys, then renames it.
 func writeAtomic(host string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(host), ".gash-hte-*")
+	tmp, err := os.CreateTemp(filepath.Dir(host), ".gash-localweb-*")
 	if err != nil {
 		return err
 	}
@@ -493,7 +506,7 @@ var includedirRE = lazyre.MustCompile(`(?m)^[ \t]*[#@]includedir[ \t]+(/private)
 // SudoersContent is the drop-in for user: the helper, with its exact
 // arguments, and nothing else.
 func SudoersContent(user string) []byte {
-	return fmt.Appendf(nil, "# Managed by gash hte install; gash hte uninstall removes it.\n"+
+	return fmt.Appendf(nil, "# Managed by gash localweb install; gash localweb uninstall removes it.\n"+
 		"%[1]s ALL=(root) NOPASSWD: %[2]s apply\n%[1]s ALL=(root) NOPASSWD: %[2]s check\n", user, HelperPath)
 }
 
@@ -516,6 +529,11 @@ func (s *server) writeSudoers(ctx context.Context) ([]string, error) {
 		}
 		return nil
 	})
+}
+
+// sysctlContent is the sysctl drop-in that sets the first unprivileged port.
+func sysctlContent(value string) []byte {
+	return fmt.Appendf(nil, "# Managed by gash localweb install; gash localweb uninstall removes it.\n%s = %s\n", PortSysctl, value)
 }
 
 func (s *server) sysctlPorts(ctx context.Context, value int) ([]string, error) {
@@ -544,7 +562,7 @@ func (s *server) sysctlPorts(ctx context.Context, value int) ([]string, error) {
 	}
 	applied := strconv.Itoa(value)
 	fp := &receipt.FilePrior{Path: SysctlFile}
-	content := fmt.Appendf(nil, "# Managed by gash hte install; gash hte uninstall removes it.\n%s = %s\n", PortSysctl, applied)
+	content := sysctlContent(applied)
 	if prior, err := os.ReadFile(s.host(SysctlFile)); err == nil {
 		b := s.backupPath(SysctlFile)
 		if err := os.MkdirAll(s.host(path.Dir(b)), 0o700); err != nil {
@@ -668,7 +686,7 @@ func (s *server) unitReload(ctx context.Context, name string) ([]string, error) 
 		if err := s.configTest(ctx); err != nil {
 			warnings, uerr := s.undoArchivedVhosts(ctx)
 			if uerr != nil {
-				return warnings, hteerr.Newf(hteerr.ConfigTestFailed, "put the vhosts back from "+receipt.ArchiveDir+" by hand",
+				return warnings, hteerr.Newf(hteerr.ConfigTestFailed, "put the vhosts back from "+path.Join(s.dir, "archive")+" by hand",
 					"%v; putting the archived vhosts back failed: %v", err, uerr)
 			}
 			return warnings, err
@@ -859,11 +877,11 @@ func (s *server) finish() ([]string, error) {
 	if s.r != nil && len(s.r.Changes) > 0 {
 		return nil, hteerr.Newf(hteerr.InvalidState, "", "%d changes are not undone yet", len(s.r.Changes))
 	}
-	if err := os.Remove(s.host(receipt.RootPath(s.user))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := os.Remove(s.host(s.receiptPath())); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
 	s.r = nil
-	for _, d := range []string{receipt.BackupDir, receipt.ArchiveDir, receipt.RootDir} {
+	for _, d := range []string{receipt.RootDir, receipt.LegacyRootDir} {
 		removeEmptyDirs(s.host(d))
 	}
 	return nil, nil

@@ -87,14 +87,14 @@ func rewriteRaw(v legacy.Vhost, domain string, env Env) (rawResult, error) {
 	httpsAddrs := addrs(env.Listen, env.Ports.HTTPS)
 	for _, d := range v.Conf.Outside {
 		if d.Is("Listen") {
-			return res, fmt.Errorf("line %d: Listen in a vhost file; ports come from hte.toml", d.Line)
+			return res, fmt.Errorf("line %d: Listen in a vhost file; ports come from localweb.toml", d.Line)
 		}
 	}
 	certLines := map[int]string{} // line → directive name
 	for _, vh := range v.Conf.Vhosts {
 		for _, d := range vh.Directives {
 			if d.Is("Listen") {
-				return res, fmt.Errorf("line %d: Listen in a vhost file; ports come from hte.toml", d.Line)
+				return res, fmt.Errorf("line %d: Listen in a vhost file; ports come from localweb.toml", d.Line)
 			}
 			if !sslPathLines[strings.ToLower(d.Name)] {
 				continue

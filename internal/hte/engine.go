@@ -70,6 +70,13 @@ type Engine struct {
 	// BindLow replaces install's bind of 127.0.0.1:80 and :443 on macOS
 	// (net.Listen) in tests.
 	BindLow func(addr string) error
+	// KeepLayout reads a tree of Gash 4.0 and older where it is instead of
+	// moving it (moveLayout): the hidden commands the system runs (the
+	// autostart unit, the shell autostart) and doctor.
+	KeepLayout bool
+	// OnLayoutMove, when set, receives what moving such a tree did: the
+	// command line tells the user.
+	OnLayoutMove func(LayoutMove)
 }
 
 func (e *Engine) now() time.Time {
@@ -103,13 +110,27 @@ type env struct {
 	reissue []string
 }
 
-func (e *Engine) resolve() (*env, error) {
+// resolve is the environment of a command: the directories of the user
+// and the tree under them. A tree of Gash 4.0 and older is moved to the
+// current names first (moveLayout), except as root and with KeepLayout,
+// which read it where it is.
+func (e *Engine) resolve(ctx context.Context) (*env, error) {
 	dirs, err := platform.ResolveDirs(e.Getenv)
 	if err != nil {
 		return nil, hteerr.New(hteerr.PlatformUnsupported, "HOME is not set to an absolute path", "")
 	}
-	paths := state.NewPaths(dirs, e.UID)
-	return &env{dirs: dirs, paths: paths, os: platform.DetectOS(e.Sysroot, e.GOOS), store: state.Store{Paths: paths}}, nil
+	v := e.newEnv(dirs, state.NewPaths(dirs, e.UID))
+	old := e.newEnv(dirs, state.LegacyPaths(dirs, e.UID))
+	if !legacyTree(v.paths, old.paths) {
+		return v, nil
+	}
+	if e.KeepLayout || e.EUID == 0 {
+		return old, nil
+	}
+	if err := e.moveLayout(ctx, v, old); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // probe runs a system binary with fixed arguments for discovery.
@@ -219,11 +240,11 @@ func (e *Engine) redirectHTTPSPort(v *env, set state.Settings) int {
 // pfRedirect is the pf redirect of the root receipt, if any.
 func (e *Engine) pfRedirect() (receipt.Redirect, bool) {
 	var to receipt.Redirect
-	data, err := e.Sysroot.ReadFile(receipt.RootPath(e.User))
+	data, file, err := receipt.ReadRoot(e.Sysroot.ReadFile, e.User)
 	if err != nil {
 		return to, false
 	}
-	r, err := receipt.Parse(data, receipt.RootPath(e.User))
+	r, err := receipt.Parse(data, file)
 	if err != nil {
 		return to, false
 	}
@@ -367,7 +388,10 @@ func desiredHosts(v *env, sites []state.Site) ([]hostshelper.Entry, error) {
 }
 
 // applyHosts writes the block through the helper when it differs; before
-// install (no helper) it does nothing.
+// install (no helper) it does nothing. A block between the markers of Gash
+// 4.0 is written again once the installed helper is this gash's own (the
+// helper of Gash 4.0 knows only those markers): it then gets the current
+// ones.
 func (e *Engine) applyHosts(ctx context.Context, v *env, sites []state.Site) error {
 	if !e.Sysroot.IsRegular(hosts.HelperPath) {
 		return nil
@@ -376,7 +400,7 @@ func (e *Engine) applyHosts(ctx context.Context, v *env, sites []state.Site) err
 	if err != nil {
 		return err
 	}
-	if hosts.Check(e.Sysroot, desired).InSync {
+	if hosts.Check(e.Sysroot, desired).InSync && !e.legacyMarkers() {
 		return nil
 	}
 	sudo := e.find("sudo")
@@ -386,15 +410,39 @@ func (e *Engine) applyHosts(ctx context.Context, v *env, sites []state.Site) err
 	return hosts.Applier{Runner: e.Runner, Sudo: sudo, Helper: hosts.HelperPath}.Apply(ctx, desired)
 }
 
+// legacyMarkers reports a hosts block between the markers of Gash 4.0
+// while the installed helper is this gash's own, which writes the current
+// markers.
+func (e *Engine) legacyMarkers() bool {
+	data, err := e.Sysroot.ReadFile(hostshelper.HostsFile)
+	if err != nil || !hostshelper.Legacy(data) {
+		return false
+	}
+	ours, err := sha256File(e.Helper)
+	if err != nil {
+		return false
+	}
+	inst, err := e.Sysroot.ReadFile(hosts.HelperPath)
+	return err == nil && sumBytes(inst) == ours
+}
+
 // locked runs fn under the state lock and appends the audit line.
 func (e *Engine) locked(v *env, command, site string, fn func() (any, error)) (any, error) {
-	wait := e.LockWait
-	if wait == 0 {
-		wait = 30 * time.Second
-	}
-	l, err := state.AcquireLock(v.paths.Lock(), wait, nil)
+	l, err := state.AcquireLock(v.paths.Lock(), e.lockWait(), nil)
 	if err != nil {
 		return nil, err
+	}
+	// A command that reads a tree of Gash 4.0 where it is (KeepLayout) may
+	// have waited for the command that moved it: it must not work on what
+	// is left of it.
+	if _, serr := os.Stat(v.paths.Settings()); v.paths.Legacy && serr != nil {
+		_ = l.Unlock()
+		// The lock made the state directory again for its file.
+		if left, err := os.ReadDir(v.paths.StateDir); err == nil && len(left) == 1 && left[0].Name() == "lock" {
+			_ = os.Remove(v.paths.Lock())
+			_ = os.Remove(v.paths.StateDir)
+		}
+		return nil, hteerr.New(hteerr.LockTimeout, "the files moved to the localweb names while this command waited", "run the command again")
 	}
 	defer func() { _ = l.Unlock() }()
 	res, err := fn()
@@ -433,7 +481,7 @@ func (e *Engine) audit(v *env, command, site string, res any, err error) {
 	f.Write(append(data, '\n'))
 }
 
-// installed loads hte.toml: hte_not_installed when it is missing.
+// installed loads localweb.toml: localweb_not_installed when it is missing.
 func (e *Engine) installed(v *env) (state.Settings, error) {
 	return v.store.LoadSettings()
 }

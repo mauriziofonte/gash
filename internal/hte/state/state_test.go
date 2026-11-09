@@ -59,19 +59,28 @@ func TestPaths(t *testing.T) {
 	p := NewPaths(d, 1000)
 	got := []string{p.Settings(), p.SiteFile("shop.test"), p.SiteOverlay("shop.test"), p.ApacheOverlay(),
 		p.PHPOverlay("8.3"), p.RenderDir(), p.SiteLogDir("shop.test"), p.CertFile("shop.test"), p.KeyFile("shop.test"),
-		p.SessionDir("8.3"), p.Receipt(), p.Audit(), p.Lock(), p.RuntimeDir, p.Stage("20261018T100000Z")}
-	want := []string{"/home/me/.config/gash/hte/hte.toml", "/home/me/.config/gash/hte/sites/shop.test.toml",
-		"/home/me/.config/gash/hte/sites/shop.test.apache.conf", "/home/me/.config/gash/hte/apache.conf",
-		"/home/me/.config/gash/hte/php/8.3/global.ini", "/home/me/.local/state/gash/hte/render",
-		"/home/me/.local/state/gash/hte/logs/shop.test", "/home/me/.local/share/gash/hte/certs/shop.test/cert.pem",
-		"/home/me/.local/share/gash/hte/certs/shop.test/key.pem", "/home/me/.local/state/gash/hte/php/8.3/sessions",
-		"/home/me/.local/state/gash/hte/receipt.json", "/home/me/.local/state/gash/hte/audit.jsonl",
-		"/home/me/.local/state/gash/hte/lock", "/run/user/1000/gash-hte", "/home/me/.local/state/gash/hte-stage-20261018T100000Z"}
+		p.SessionDir("8.3"), p.Receipt(), p.Audit(), p.Lock(), p.RuntimeDir, p.Stage("20261018T100000Z"), p.LegacyStage("20261018T100000Z")}
+	want := []string{"/home/me/.config/gash/localweb/localweb.toml", "/home/me/.config/gash/localweb/sites/shop.test.toml",
+		"/home/me/.config/gash/localweb/sites/shop.test.apache.conf", "/home/me/.config/gash/localweb/apache.conf",
+		"/home/me/.config/gash/localweb/php/8.3/global.ini", "/home/me/.local/state/gash/localweb/render",
+		"/home/me/.local/state/gash/localweb/logs/shop.test", "/home/me/.local/share/gash/localweb/certs/shop.test/cert.pem",
+		"/home/me/.local/share/gash/localweb/certs/shop.test/key.pem", "/home/me/.local/state/gash/localweb/php/8.3/sessions",
+		"/home/me/.local/state/gash/localweb/receipt.json", "/home/me/.local/state/gash/localweb/audit.jsonl",
+		"/home/me/.local/state/gash/localweb/lock", "/run/user/1000/gash-localweb", "/home/me/.local/state/gash/localweb-stage-20261018T100000Z",
+		"/home/me/.local/state/gash/hte-stage-20261018T100000Z"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatal(diff)
 	}
+	if p.Legacy {
+		t.Fatal("NewPaths is legacy")
+	}
+	old := LegacyPaths(d, 1000)
+	if diff := cmp.Diff([]string{"/home/me/.config/gash/hte/hte.toml", "/home/me/.local/state/gash/hte", "/home/me/.local/share/gash/hte", "/run/user/1000/gash-hte"},
+		[]string{old.Settings(), old.StateDir, old.DataDir, old.RuntimeDir}); diff != "" || !old.Legacy {
+		t.Fatalf("legacy layout (-want +got):\n%s", diff)
+	}
 	d.RuntimeDir = ""
-	if NewPaths(d, 1000).RuntimeDir != "/tmp/gash-hte-1000" {
+	if NewPaths(d, 1000).RuntimeDir != "/tmp/gash-localweb-1000" || LegacyPaths(d, 1000).RuntimeDir != "/tmp/gash-hte-1000" {
 		t.Fatal("runtime fallback")
 	}
 }
@@ -476,7 +485,7 @@ func TestSiteRoundTripAndStrictDecode(t *testing.T) {
 
 func TestSettings(t *testing.T) {
 	f := newFixture(t)
-	if _, err := f.store.LoadSettings(); code(err) != hteerr.HTENotInstalled || !errors.Is(err, ErrNotInstalled) {
+	if _, err := f.store.LoadSettings(); code(err) != hteerr.NotInstalled || !errors.Is(err, ErrNotInstalled) {
 		t.Fatalf("not installed: %v", err)
 	}
 	s := DefaultSettings(StandardPorts, "none")
@@ -489,7 +498,7 @@ func TestSettings(t *testing.T) {
 	data, _ := os.ReadFile(f.store.Paths.Settings())
 	want := "listen = [\"127.0.0.1\", \"::1\"]\ndefault_php = \"\"\nmodules = []\nautostart = \"none\"\n\n[ports]\nhttp = 80\nhttps = 443\n"
 	if string(data) != want {
-		t.Fatalf("hte.toml:\n%s", data)
+		t.Fatalf("localweb.toml:\n%s", data)
 	}
 	bad := []Settings{
 		{Ports: Ports{0, 443}, Listen: []string{"127.0.0.1"}, Autostart: "none"},

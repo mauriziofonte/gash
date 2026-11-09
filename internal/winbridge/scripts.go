@@ -21,6 +21,12 @@ type Script struct {
 
 // scriptText wraps a script body in the fixed preamble and the
 // ConvertTo-Json tail.
+//
+// The preamble drops the System.Array type data of this PowerShell session:
+// Windows PowerShell 5.1 extends arrays with a Count property, so an array
+// held by a calculated property serializes as {"value":[...],"Count":N}
+// instead of [...]. The removal lives only in the process the bridge starts;
+// PowerShell 7 has no such type data, hence SilentlyContinue.
 func scriptText(s Script) string {
 	depth := s.Depth
 	if depth <= 0 {
@@ -29,6 +35,7 @@ func scriptText(s Script) string {
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference='Stop';")
 	b.WriteString("$ProgressPreference='SilentlyContinue';")
+	b.WriteString("Remove-TypeData System.Array -ErrorAction SilentlyContinue;")
 	b.WriteString("[Console]::OutputEncoding=[Text.Encoding]::UTF8;")
 	b.WriteString("$__in=[Console]::In.ReadToEnd();")
 	b.WriteString("$a=if($__in){$__in|ConvertFrom-Json}else{[pscustomobject]@{}};")

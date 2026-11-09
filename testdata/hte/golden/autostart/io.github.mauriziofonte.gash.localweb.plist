@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Managed by gash hte install; gash hte uninstall removes it. -->
+<!-- Managed by gash localweb install; gash localweb uninstall removes it. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>io.github.mauriziofonte.gash.hte</string>
+  <string>io.github.mauriziofonte.gash.localweb</string>
   <key>ProgramArguments</key>
   <array>
     <string>/home/me/.local/bin/gash</string>
-    <string>hte</string>
+    <string>localweb</string>
     <string>__unit</string>
     <string>start</string>
   </array>

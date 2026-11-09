@@ -72,7 +72,7 @@ rc=0
     "$stage/gash-e2e" -test.v -test.run TestE2EDistro -test.timeout 20m) || rc=$?
 if [ "$rc" != 0 ]; then
     echo "== logs"
-    find "$HOME/.local/state/gash/hte/logs" -type f -name '*.log' 2>/dev/null | while IFS= read -r f; do
+    find "$HOME/.local/state/gash/localweb/logs" -type f -name '*.log' 2>/dev/null | while IFS= read -r f; do
         echo "-- $f"
         tail -n 20 "$f"
     done

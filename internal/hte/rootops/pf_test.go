@@ -94,7 +94,7 @@ func TestPFRedirect(t *testing.T) {
 	if err := run(t, env, pfPlan()); err != nil {
 		t.Fatal(err)
 	}
-	golden(t, "gash-hte", f.read(PFAnchorFile))
+	golden(t, "gash-localweb", f.read(PFAnchorFile))
 	golden(t, PFDaemonLabel+".plist", f.read(PFDaemonPath))
 	for _, p := range []string{PFAnchorFile, PFDaemonPath} {
 		if fi, err := os.Stat(filepath.Join(f.root, p)); err != nil || fi.Mode().Perm() != 0o644 {
@@ -105,9 +105,9 @@ func TestPFRedirect(t *testing.T) {
 		t.Error("pf.conf written")
 	}
 	want := []string{
-		"pfctl -n -a com.apple/gash-hte -f " + filepath.Join(f.root, pfAnchorTmp),
+		"pfctl -n -a com.apple/gash-localweb -f " + filepath.Join(f.root, pfAnchorTmp),
 		"plutil -lint " + filepath.Join(f.root, pfDaemonTmp),
-		"pfctl -E -a com.apple/gash-hte -f /etc/pf.anchors/gash-hte",
+		"pfctl -E -a com.apple/gash-localweb -f /etc/pf.anchors/gash-localweb",
 	}
 	if diff := cmp.Diff(want, f.lines); diff != "" {
 		t.Errorf("commands (-want +got):\n%s", diff)
@@ -138,7 +138,7 @@ func TestPFRedirect(t *testing.T) {
 
 	f.lines = nil
 	uninstall(t, f)
-	if !slices.Contains(f.lines, "launchctl bootout system/"+PFDaemonLabel) || !slices.Contains(f.lines, "pfctl -a com.apple/gash-hte -F all") {
+	if !slices.Contains(f.lines, "launchctl bootout system/"+PFDaemonLabel) || !slices.Contains(f.lines, "pfctl -a com.apple/gash-localweb -F all") {
 		t.Errorf("uninstall commands %v", f.lines)
 	}
 	if diff := cmp.Diff(before, snapshot(t, f.root)); diff != "" {

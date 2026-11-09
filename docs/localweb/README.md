@@ -4,17 +4,7 @@
 HTTPS, a name for each site in `/etc/hosts`, and its own PHP settings for
 each site. It replaces the PHP tool hte-cli.
 
-Why "hte" still shows up: HTE stands for *homelab test environment*, the
-name of hte-cli, the standalone PHP tool this stack began as. The command
-was `gash hte` until Gash 4.0, and `gash hte` still runs it through 4.x.
-The name stays, for historical reasons, in this page's folder
-(`docs/hte`), in the directories of your files (`~/.config/gash/hte` and
-the others below), in `hte.toml`, in the markers of the hosts file and in
-the error codes (`hte_not_installed`). One `sudo` at install does the
-few system steps (the hosts helper and its sudoers line, the low ports,
-autostart); every other command runs without root. Apache and PHP-FPM are
-the ones your system's packages provide: Gash installs and compiles
-nothing.
+The command was `gash hte` until Gash 4.0 (HTE stands for *homelab test environment*, the name of hte-cli): `gash hte` still runs it through 4.x, says on stderr that it is deprecated, and goes away in Gash 5.0. Gash 4.1 gave the stack's files their localweb names; see [Files of Gash 4.0](#files-of-gash-40) for how an existing install moves. One `sudo` at install does the few system steps (the hosts helper and its sudoers line, the low ports, autostart); every other command runs without root. Apache and PHP-FPM are the ones your system's packages provide: Gash installs and compiles nothing.
 
 Platforms: Linux (Debian, Ubuntu, Fedora, the RHEL family, Arch and their
 derivatives), macOS with Homebrew, and WSL 2 inside one of those
@@ -45,8 +35,8 @@ terminal nothing prompts: a missing required flag fails with
 - One self-signed certificate per site (ECDSA P-256, valid for 10 years),
   for the domain, `*.domain` and every alias. Browsers warn about it.
 - Your files live in your XDG directories: settings and site state in
-  `~/.config/gash/hte`, certificates in `~/.local/share/gash/hte`, the
-  rendered configuration and every log in `~/.local/state/gash/hte`. Logs
+  `~/.config/gash/localweb`, certificates in `~/.local/share/gash/localweb`, the
+  rendered configuration and every log in `~/.local/state/gash/localweb`. Logs
   never go inside a document root.
 
 ## Install the stack
@@ -68,7 +58,7 @@ The options that matter:
 
 - `--ports standard` (the default) serves on ports 80 and 443. On Linux
   install sets `net.ipv4.ip_unprivileged_port_start = 80` in
-  `/etc/sysctl.d/50-gash-hte.conf`, which lets every local user bind the
+  `/etc/sysctl.d/50-gash-localweb.conf`, which lets every local user bind the
   ports from 80 to 1023. On a shared machine use `--ports high` instead: 8080
   and 8443, and no port step. On macOS, see [macOS](#macos).
 - `--autostart` decides how the stack comes back after a reboot. `auto`
@@ -77,7 +67,7 @@ The options that matter:
   elsewhere. `shell` starts the stack in the background from the first
   interactive shell that loads Gash; that start prints nothing and never
   slows or fails the shell, and a failure is logged in
-  `~/.local/state/gash/hte/logs/autostart.log`. `none` sets up nothing.
+  `~/.local/state/gash/localweb/logs/autostart.log`. `none` sets up nothing.
 - `--yes` allows install to stop the system Apache when its plan does that.
 
 On the standard ports, install stops the system Apache only when nothing it
@@ -100,7 +90,7 @@ curl -k https://shop.test/
 asked for); a relative document root is resolved against the current
 directory. A flag left out gets its default: HTTPS on, forced HTTPS off,
 HTTP/2 on, the `dev` profile, a `www.` alias, and the default PHP version
-of `hte.toml` (else the newest installed one). A value that is not valid is
+of `localweb.toml` (else the newest installed one). A value that is not valid is
 an error: Gash never puts a default in its place. The site's names go in
 the managed block of `/etc/hosts` at once.
 
@@ -136,8 +126,8 @@ configuration, pool, certificate and hosts names; it never touches the
 document root, the site's overlay file or its logs.
 
 Hand edits go in overlay files, which Gash includes and never rewrites:
-`~/.config/gash/hte/sites/DOMAIN.apache.conf` for one site, and
-`~/.config/gash/hte/apache.conf` for the whole server
+`~/.config/gash/localweb/sites/DOMAIN.apache.conf` for one site, and
+`~/.config/gash/localweb/apache.conf` for the whole server
 (`gash localweb apache config path` prints it). Run `gash localweb service reload`
 after editing them. `gash localweb apache modules list` shows the modules the
 stack loads; `enable NAME` and `disable NAME` add or drop one from the
@@ -194,12 +184,7 @@ gash localweb hosts check                     # exit 1 when the block and the si
 gash localweb hosts apply                     # write the block again
 ```
 
-The names live in `/etc/hosts` between `# >>> gash hte >>>` and
-`# <<< gash hte <<<`, as `127.0.0.1` lines; lines outside the block are
-never changed. Every site change, `service start` and `doctor` write the
-block again when it drifted. They do it through the hosts helper, the one
-program install lets your user run as root: it writes only that block of
-`/etc/hosts`, and only loopback addresses and plain host names.
+The names live in `/etc/hosts` between `# >>> gash localweb >>>` and `# <<< gash localweb <<<`, as `127.0.0.1` lines; lines outside the block are never changed (a block between the `gash hte` markers of Gash 4.0 is read too, and gets the new markers once `install` has put the current hosts helper in place). Every site change, `service start` and `doctor` write the block again when it drifted. They do it through the hosts helper, the one program install lets your user run as root: it writes only that block of `/etc/hosts`, and only loopback addresses and plain host names.
 
 See [`gash localweb cert`](reference.md#gash-localweb-cert) and
 [`gash localweb hosts`](reference.md#gash-localweb-hosts).
@@ -268,19 +253,22 @@ What changes after the move:
 
 See [`gash localweb migrate`](reference.md#gash-localweb-migrate).
 
+## Files of Gash 4.0
+
+Gash 4.0 and older named the stack's files after hte. Gash 4.1 moves them to the localweb names, in two steps.
+
+- Your files move at the first `gash localweb` command you run after the update (any command but `doctor`): `~/.config/gash/hte` becomes `~/.config/gash/localweb` (with `hte.toml` renamed `localweb.toml`), and the same for `~/.local/state/gash/hte` and `~/.local/share/gash/hte`. A running stack stops, moves and starts again from the new directories; the systemd user unit `gash-hte.service` becomes `gash-localweb.service` (the macOS LaunchAgent likewise). Raw sites imported from hte-cli are rewritten to name the new directories. Your own overlay files are never edited: the command names any that still mention an old directory. When the move cannot finish, everything stays where it was and the stack runs as before.
+- The system files move at the next `gash localweb install`: the receipt in `/var/lib/gash-hte` goes to `/var/lib/gash-localweb`, with the backups and archives it names, `/etc/sudoers.d/gash-hte` becomes `/etc/sudoers.d/gash-localweb`, `/etc/sysctl.d/50-gash-hte.conf` becomes `/etc/sysctl.d/50-gash-localweb.conf`, the macOS pf anchor `com.apple/gash-hte` becomes `com.apple/gash-localweb`; install then puts the current hosts helper in place, and the hosts block gets the new markers. The move is the first step of install's plan, shown before `sudo` asks. Until then everything keeps working under the old names, `uninstall` included, and `doctor` reports them. An install interrupted half way leaves a receipt that names every file where it is: running `install` again finishes the move, and `uninstall` works from it too.
+
+The autostart units and scripts of Gash 4.0 call `gash hte __unit` and `gash hte __root`: those keep working through 4.x.
+
 ## Uninstall the stack
 
 ```bash
 gash localweb uninstall --yes
 ```
 
-`uninstall` stops the stack, removes autostart, and restores what install
-changed, as its receipt records it: the hosts block, the port setting,
-linger, the hosts helper and its sudoers line, the macOS port redirect.
-Your sites, their certificates and settings move to an
-`hte-stage-TIMESTAMP` directory, which a later `install` restores
-(`--restore-stage PATH` names one, `--no-restore` skips it). Document roots
-are never touched. Run it before `gash uninstall` when you remove Gash.
+`uninstall` stops the stack, removes autostart, and restores what install changed, as its receipt records it: the hosts block, the port setting, linger, the hosts helper and its sudoers line, the macOS port redirect. Your sites, their certificates and settings move to a `localweb-stage-TIMESTAMP` directory, which a later `install` restores (`--restore-stage PATH` names one, `--no-restore` skips it). Document roots are never touched. Run it before `gash uninstall` when you remove Gash.
 
 See [`gash localweb uninstall`](reference.md#gash-localweb-uninstall).
 
@@ -341,7 +329,7 @@ errors you are likely to meet:
 
 | Error | Meaning and fix |
 |---|---|
-| `hte_not_installed` | Run `gash localweb install` first. |
+| `localweb_not_installed` | Run `gash localweb install` first (`hte_not_installed` before Gash 4.1). |
 | `root_not_allowed` | `gash localweb` runs as your own user and asks for `sudo` itself when a step needs root. Run it without `sudo` (only `install`, `uninstall`, `migrate` without `--apply`, and `doctor` accept root). |
 | `apache_not_found` | Apache, its module directory or `mime.types` is missing. The hint gives the install command (`sudo apt install apache2`, `sudo dnf install httpd mod_ssl mod_http2`, `sudo pacman -S apache`, `brew install httpd`). |
 | `php_version_not_installed` | The site asks for a PHP version that has no PHP-FPM here. `gash localweb php versions` lists what is installed; install it, or `gash localweb site modify --domain D --php X.Y`. |
@@ -352,7 +340,7 @@ errors you are likely to meet:
 | `confirmation_required` | Add `--yes` to `site remove`, `uninstall`, `migrate --apply` or an `install` that stops the system Apache. |
 | `conflicting_options` | Both forms of a flag were given, such as `--https` and `--no-https`. |
 | `lock_timeout` | Another `gash localweb` command is running; retry when it ends. |
-| `invalid_state` | A site file or `hte.toml` does not parse or holds a value Gash refuses. The message names the file to fix by hand. |
+| `invalid_state` | A site file or `localweb.toml` does not parse or holds a value Gash refuses. The message names the file to fix by hand. |
 | `platform_unsupported` | This system is not one of the supported ones, or a step exists only elsewhere (`hosts windows` outside WSL). |
 
 ## See also

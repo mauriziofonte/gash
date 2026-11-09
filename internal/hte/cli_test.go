@@ -153,14 +153,14 @@ func TestCLIHelpAndUsage(t *testing.T) {
 	}
 }
 
-// TestCLIBeforeInstall: what needs install fails with hte_not_installed
+// TestCLIBeforeInstall: what needs install fails with localweb_not_installed
 // (STOP); php versions, doctor and the migrate dry run do not need it;
 // flag conflicts and missing flags fail before the engine runs, and a
 // missing flag is asked for on a terminal only.
 func TestCLIBeforeInstall(t *testing.T) {
 	g := newGash(t)
 	for _, args := range [][]string{{"site", "list"}, {"--json", "service", "status"}, {"apache", "config", "path"}, {"hosts", "list"}} {
-		if env := g.fails("hte_not_installed", args...); env["action"] != "STOP" || env["recoverable"] != true {
+		if env := g.fails("localweb_not_installed", args...); env["action"] != "STOP" || env["recoverable"] != true {
 			t.Errorf("%v: %v", args, env)
 		}
 	}
@@ -188,7 +188,7 @@ func TestCLIBeforeInstall(t *testing.T) {
 	// ...on a terminal it is asked for.
 	delete(g.env, "GASH_HEADLESS")
 	o = g.run("site", "show")
-	if !strings.HasPrefix(o.stderr, "Domain: ") || envelopeOf(t, o.stderr)["error"] != "hte_not_installed" {
+	if !strings.HasPrefix(o.stderr, "Domain: ") || envelopeOf(t, o.stderr)["error"] != "localweb_not_installed" {
 		t.Errorf("prompt: %+v", o)
 	}
 	g.stdin = "\n"
@@ -217,7 +217,7 @@ func TestCLI(t *testing.T) {
 	g := newGash(t)
 
 	o := g.ok("install", "--ports", "high", "--autostart", "none")
-	contains(t, "install stdout", o.stdout, "Ports", "8080 and 8443", "Started", "yes", "Recorded in the receipt:", "file_created /etc/sudoers.d/gash-hte")
+	contains(t, "install stdout", o.stdout, "Ports", "8080 and 8443", "Started", "yes", "Recorded in the receipt:", "file_created /etc/sudoers.d/gash-localweb")
 	contains(t, "install stderr", o.stderr, "Info: sudo runs these steps as root:", "  1. install /usr/local/libexec/gash/gash-hosts-helper",
 		"OK: gash localweb is installed and the stack runs")
 	if g.rig.Running() == 0 {
@@ -297,7 +297,7 @@ func TestCLI(t *testing.T) {
 
 	contains(t, "hosts list", g.ok("hosts", "list").stdout, "127.0.0.1 ", "app.test")
 	contains(t, "hosts check", g.ok("hosts", "check").stderr, "OK: the hosts block matches the sites")
-	_, block, _ := strings.Cut(g.rig.Read("/etc/hosts"), "# >>> gash hte >>>")
+	_, block, _ := strings.Cut(g.rig.Read("/etc/hosts"), "# >>> gash localweb >>>")
 	g.rig.Write("/etc/hosts", "127.0.0.1\tlocalhost\n", 0o644)
 	if o := g.run("hosts", "check"); o.status != 1 || !strings.Contains(o.stdout, "Missing from the block:") {
 		t.Errorf("drifted hosts check: %+v", o)
@@ -306,7 +306,7 @@ func TestCLI(t *testing.T) {
 		t.Errorf("hosts check --json: %v", d)
 	}
 	contains(t, "hosts apply", g.ok("hosts", "apply").stderr, "OK: the hosts block is written")
-	if got := g.rig.Read("/etc/hosts"); got != "127.0.0.1\tlocalhost\n# >>> gash hte >>>"+block {
+	if got := g.rig.Read("/etc/hosts"); got != "127.0.0.1\tlocalhost\n# >>> gash localweb >>>"+block {
 		t.Errorf("hosts after apply:\n%s\nwant the block:%s", got, block)
 	}
 	g.fails("platform_unsupported", "hosts", "windows")
@@ -330,10 +330,10 @@ func TestCLI(t *testing.T) {
 	contains(t, "service start", g.ok("service", "start").stderr, "OK: the stack runs")
 
 	un := object(t, g.ok("uninstall", "--yes", "--json"))
-	if stage, _ := un["stage"].(string); !strings.Contains(stage, "hte-stage-") {
+	if stage, _ := un["stage"].(string); !strings.Contains(stage, "localweb-stage-") {
 		t.Errorf("uninstall: %v", un)
 	}
-	g.fails("hte_not_installed", "site", "list")
+	g.fails("localweb_not_installed", "site", "list")
 	// The next install finds the stage and asks what to do with it.
 	if env := g.fails("missing_value", "install", "--ports", "high", "--autostart", "none"); !strings.Contains(env["hint"].(string), "--no-restore") {
 		t.Errorf("install over a stage: %v", env)

@@ -29,7 +29,7 @@ const (
 var siteKeys = []string{"domain", "aliases", "docroot", "php", "profile", "https", "force_https",
 	"force_https_bypass_loopback", "http2", "extra_http_ports", "extra_https_ports", "enabled", "kind", "raw_conf"}
 
-// settingsKeys must all be present in hte.toml.
+// settingsKeys must all be present in localweb.toml.
 var settingsKeys = []string{"ports", "ports.http", "ports.https", "listen", "default_php", "modules", "autostart"}
 
 // strictDecode decodes TOML into v and refuses unknown or missing keys:
@@ -100,7 +100,7 @@ func EncodeSite(s Site) ([]byte, error) {
 	return encode(s)
 }
 
-// DecodeSettings parses and validates hte.toml.
+// DecodeSettings parses and validates localweb.toml.
 func DecodeSettings(data []byte, file string) (Settings, error) {
 	var s Settings
 	if err := strictDecode(data, file, &s, settingsKeys); err != nil {
@@ -137,16 +137,17 @@ func writeFile(path string, data []byte) error {
 	return renameio.WriteFile(path, data, fileMode)
 }
 
-// ErrNotInstalled is wrapped by LoadSettings when hte.toml does not exist.
-var ErrNotInstalled = errors.New("hte.toml does not exist")
+// ErrNotInstalled is wrapped by LoadSettings when localweb.toml does not
+// exist.
+var ErrNotInstalled = errors.New("localweb.toml does not exist")
 
-// LoadSettings reads hte.toml. A missing file is hte_not_installed.
+// LoadSettings reads localweb.toml. A missing file is localweb_not_installed.
 func (st Store) LoadSettings() (Settings, error) {
 	path := st.Paths.Settings()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Settings{}, fmt.Errorf("%w: %w", ErrNotInstalled,
-			hteerr.New(hteerr.HTENotInstalled, path+" does not exist", "run gash localweb install"))
+			hteerr.New(hteerr.NotInstalled, path+" does not exist", "run gash localweb install"))
 	}
 	if err != nil {
 		return Settings{}, err
@@ -154,7 +155,7 @@ func (st Store) LoadSettings() (Settings, error) {
 	return DecodeSettings(data, path)
 }
 
-// SaveSettings writes hte.toml atomically.
+// SaveSettings writes localweb.toml atomically.
 func (st Store) SaveSettings(s Settings) error {
 	data, err := EncodeSettings(s)
 	if err != nil {

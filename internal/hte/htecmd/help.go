@@ -19,14 +19,21 @@ without --yes is confirmation_required.
 
 Start with: gash localweb install, then gash localweb migrate (a dry run of what
 would move from hte-cli), then gash localweb site create. The guide is
-docs/hte/README.md; WSL notes are in its "WSL" section.`,
+docs/localweb/README.md; WSL notes are in its "WSL" section.
+
+gash hte, the name before Gash 4.0, is deprecated: it still runs gash
+localweb through 4.x and goes away in 5.0. Gash 4.1 moves the files of
+an install of Gash 4.0 to their localweb names (the guide's "Files of
+Gash 4.0" section).`,
 
 	"localweb install": `Install the stack. install prints its plan, then runs the system steps in
 one interactive sudo: the hosts helper and its sudoers line, the low ports
 (--ports standard), linger for the systemd unit, and stopping the system
 Apache when the plan needs it. Then, as you, it writes the userland tree,
 starts the stack and sets up autostart. Running it again changes only what
-is missing.
+is missing. On a stack Gash 4.0 installed, the first system step moves the
+files it named gash-hte (the receipt under /var/lib/gash-hte, the sudoers
+and sysctl drop-ins, the macOS pf redirect) to their gash-localweb names.
 
 --ports standard binds 80 and 443 (on Linux by lowering
 net.ipv4.ip_unprivileged_port_start, which lets every local user bind ports
@@ -44,7 +51,7 @@ names it, --no-restore skips it.`,
 	"localweb uninstall": `Stop the stack, remove autostart, and restore what install changed, as
 its receipt records it (the hosts block, the port setting, linger, the
 helper and its sudoers line). Your sites, their certificates and settings
-move to an hte-stage-<timestamp> directory that a later install restores.
+move to a localweb-stage-<timestamp> directory that a later install restores.
 Document roots are never touched. Needs --yes.`,
 
 	"localweb doctor": `Check the machine and the stack: binaries and modules, ports and who holds
@@ -74,7 +81,7 @@ rewrites.`,
 one is asked for); a relative document root is resolved against the current
 directory. A flag left out gets its default: HTTPS on, forced HTTPS off,
 the loopback bypass off, HTTP/2 on, the dev profile, a www. alias and the
-default PHP version of hte.toml (else the newest installed). A value that
+default PHP version of localweb.toml (else the newest installed). A value that
 is not valid is an error, never replaced by a default.
 
 Each on/off setting has both forms (--https/--no-https, --force-https,
@@ -173,8 +180,11 @@ serial and SHA-256 fingerprint.`,
 that migrate copied from hte-cli.`,
 
 	"localweb hosts": `The managed block of the hosts file: the names of the enabled sites
-between "# >>> gash hte >>>" and "# <<< gash hte <<<", written through the
-hosts helper. Lines outside the block are never changed.`,
+between "# >>> gash localweb >>>" and "# <<< gash localweb <<<" (Gash 4.0
+wrote "gash hte" in the markers: such a block is read, and gets the new
+markers once install has put the current helper in place), written through
+the hosts helper. Lines outside
+the block are never changed.`,
 
 	"localweb hosts list":  `List the entries of the managed block.`,
 	"localweb hosts check": `Compare the block with the sites. Exits 1 when they differ.`,
@@ -185,7 +195,7 @@ and doctor do this too.`,
 for the site names Windows cannot resolve (asked through powershell.exe
 when interop is available, else every name). gash never edits the Windows
 file. Elsewhere this is platform_unsupported. See the "WSL" section of
-docs/hte/README.md.`,
+docs/localweb/README.md.`,
 }
 
 // setHelp gives every visible command of the tree its long help.

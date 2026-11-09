@@ -21,7 +21,7 @@ fi
 unset __gash_here
 
 # shellcheck disable=SC2120
-gash() { __gash_cold gash 55fe322e && "${FUNCNAME[0]}" "$@"; }
+gash() { __gash_cold gash 84aa23f4 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
 gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {

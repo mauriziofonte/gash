@@ -210,7 +210,7 @@ type Modules struct {
 }
 
 // ResolveModules turns the userland list plus the extra modules of
-// hte.toml into LoadModule lines: built-in modules are left out, each
+// localweb.toml into LoadModule lines: built-in modules are left out, each
 // other one must exist as <module dir>/mod_<name>.so. A statically built
 // MPM replaces mpm_event (two MPMs cannot be loaded); one other than event
 // is a warning, since HTTP/2 needs a threaded MPM.

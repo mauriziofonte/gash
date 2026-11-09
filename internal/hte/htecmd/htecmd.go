@@ -10,10 +10,11 @@
 // exits 0). A required flag missing on a terminal is asked for; headless
 // or without a terminal it is missing_value.
 //
-// It runs as the handler of the 3.x command `hte` (Run), with the hidden
-// commands the system calls: `__root` (the root step, under sudo),
-// `__unit start|stop` (the systemd unit and the LaunchAgent) and
-// `__autostart` (the shell autostart of gash init bash).
+// It runs as the handler of the command `localweb` (Run; `hte`, its name
+// before 4.0, is an alias through 4.x), with the hidden commands the
+// system calls: `__root` (the root step, under sudo), `__unit start|stop`
+// (the systemd unit and the LaunchAgent) and `__autostart` (the shell
+// autostart of gash init bash).
 package htecmd
 
 import (
@@ -49,7 +50,7 @@ type Options struct {
 func Run(c *invoke.Call) int { return Handler(Options{})(c) }
 
 // Register binds gash localweb to the table.
-func Register(t *invoke.Table) { t.HandleCommand("hte", Run) }
+func Register(t *invoke.Table) { t.HandleCommand("localweb", Run) }
 
 // Handler returns the handler of `gash localweb` with opt's seams.
 func Handler(opt Options) invoke.Handler {
@@ -117,8 +118,26 @@ func (r *run) engine() (*hte.Engine, error) {
 		return nil, err
 	}
 	e.BeforeSudo = r.beforeSudo
+	e.OnLayoutMove = r.layoutMoved
 	r.eng = e
 	return e, nil
+}
+
+// layoutMoved tells the user that the files of Gash 4.0 moved to the
+// localweb names, on stderr. With --json and no terminal nobody reads it
+// there: the audit log keeps it.
+func (r *run) layoutMoved(mv hte.LayoutMove) {
+	if r.asJSON && !r.interactive() {
+		return
+	}
+	r.say().Info("moved the files of Gash 4.0 to the localweb names:")
+	for _, m := range mv.Moved {
+		fmt.Fprintf(r.c.Stderr, "  %s\n", m)
+	}
+	if mv.Restarted {
+		r.say().Info("the stack runs again from the new place")
+	}
+	r.warn(mv.Warnings)
 }
 
 // beforeSudo shows the root steps before sudo starts: on stderr, so that

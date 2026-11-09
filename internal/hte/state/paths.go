@@ -1,7 +1,7 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
 // Package state is the declarative state of gash localweb: one TOML file per
-// site, the hte.toml settings, their strict validation, atomic load and
+// site, the localweb.toml settings, their strict validation, atomic load and
 // save, the mutation lock, and the file layout of design/hte.md section 2.
 package state
 
@@ -11,26 +11,50 @@ import (
 	"github.com/mauriziofonte/gash/internal/platform"
 )
 
+// Names of the userland layout. Gash 4.0 and older used the legacy ones
+// (gash localweb was gash hte); LegacyPaths reads such a tree until the
+// engine moves it.
+const (
+	Name               = "localweb"
+	SettingsName       = "localweb.toml"
+	LegacyName         = "hte"
+	LegacySettingsName = "hte.toml"
+)
+
 // Paths is the userland file layout of design/hte.md section 2.
 type Paths struct {
-	ConfigDir  string // $XDG_CONFIG_HOME/gash/hte
-	StateDir   string // $XDG_STATE_HOME/gash/hte
-	DataDir    string // $XDG_DATA_HOME/gash/hte
-	RuntimeDir string // $XDG_RUNTIME_DIR/gash-hte, else /tmp/gash-hte-<uid>
+	ConfigDir  string // $XDG_CONFIG_HOME/gash/localweb
+	StateDir   string // $XDG_STATE_HOME/gash/localweb
+	DataDir    string // $XDG_DATA_HOME/gash/localweb
+	RuntimeDir string // $XDG_RUNTIME_DIR/gash-localweb, else /tmp/gash-localweb-<uid>
+	// Legacy marks the layout of Gash 4.0 and older (gash/hte, hte.toml).
+	Legacy bool
 }
 
 // NewPaths derives the layout from the XDG directories of uid.
-func NewPaths(d platform.Dirs, uid int) Paths {
+func NewPaths(d platform.Dirs, uid int) Paths { return paths(d, uid, Name, false) }
+
+// LegacyPaths is the layout Gash 4.0 and older wrote: gash/hte, gash-hte
+// and hte.toml.
+func LegacyPaths(d platform.Dirs, uid int) Paths { return paths(d, uid, LegacyName, true) }
+
+func paths(d platform.Dirs, uid int, name string, legacy bool) Paths {
 	return Paths{
-		ConfigDir:  filepath.Join(d.ConfigHome, "gash", "hte"),
-		StateDir:   filepath.Join(d.StateHome, "gash", "hte"),
-		DataDir:    filepath.Join(d.DataHome, "gash", "hte"),
-		RuntimeDir: d.RuntimeBase("gash-hte", uid),
+		ConfigDir:  filepath.Join(d.ConfigHome, "gash", name),
+		StateDir:   filepath.Join(d.StateHome, "gash", name),
+		DataDir:    filepath.Join(d.DataHome, "gash", name),
+		RuntimeDir: d.RuntimeBase("gash-"+name, uid),
+		Legacy:     legacy,
 	}
 }
 
-// Settings is hte.toml.
-func (p Paths) Settings() string { return filepath.Join(p.ConfigDir, "hte.toml") }
+// Settings is localweb.toml (hte.toml in the legacy layout).
+func (p Paths) Settings() string {
+	if p.Legacy {
+		return filepath.Join(p.ConfigDir, LegacySettingsName)
+	}
+	return filepath.Join(p.ConfigDir, SettingsName)
+}
 
 // SitesDir holds the site state files and their Apache overlays.
 func (p Paths) SitesDir() string { return filepath.Join(p.ConfigDir, "sites") }
@@ -110,5 +134,10 @@ func (p Paths) PHPCache() string { return filepath.Join(p.StateDir, "php-version
 
 // Stage is the uninstall stage directory for a UTC timestamp.
 func (p Paths) Stage(timestamp string) string {
-	return filepath.Join(filepath.Dir(p.StateDir), "hte-stage-"+timestamp)
+	return filepath.Join(filepath.Dir(p.StateDir), Name+"-stage-"+timestamp)
+}
+
+// LegacyStage is the uninstall stage directory Gash 4.0 and older made.
+func (p Paths) LegacyStage(timestamp string) string {
+	return filepath.Join(filepath.Dir(p.StateDir), LegacyName+"-stage-"+timestamp)
 }

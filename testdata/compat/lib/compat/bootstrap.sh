@@ -462,7 +462,6 @@ declare -gA __GASH_FORMER=(
     [wsl_restart]='gash wsl restart (shortcut wr)'
     [wsl_shutdown]='gash wsl shutdown (shortcut wsd)'
     [wsl_taskmanager]='gash win taskmgr (shortcut wtm)'
-    ['gash hte']='gash localweb'
 )
 declare -gA __GASH_FORMER_SEEN=()
 

@@ -30,7 +30,7 @@ import (
 // moves on: a graceful reload reads current/httpd.conf and everything it
 // includes from the same generation.
 type Layout struct {
-	Dir string // $XDG_STATE_HOME/gash/hte/render
+	Dir string // $XDG_STATE_HOME/gash/localweb/render
 }
 
 const (

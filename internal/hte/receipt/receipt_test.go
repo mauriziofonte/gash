@@ -20,7 +20,7 @@ func sample() *Receipt {
 	r.Add(Change{Kind: DirCreated, Path: "/usr/local/libexec/gash"})
 	r.Add(Change{Kind: FileCreated, Path: "/usr/local/libexec/gash/gash-hosts-helper", SHA256: sum, Mode: "0755"})
 	r.Add(Change{Kind: Sysctl, Key: "net.ipv4.ip_unprivileged_port_start", Prior: Raw("1024"), Applied: Raw("80"),
-		File: &FilePrior{Path: "/etc/sysctl.d/50-gash-hte.conf"}})
+		File: &FilePrior{Path: "/etc/sysctl.d/50-gash-localweb.conf"}})
 	r.Add(Change{Kind: Linger, Prior: Raw(false), Applied: Raw(true)})
 	r.Add(Change{Kind: Unit, Name: "apache2.service", Prior: Raw(UnitState{true, true}), Applied: Raw(UnitState{})})
 	r.Add(Change{Kind: HostsBlock, Prior: Raw(nil)})

@@ -509,7 +509,7 @@ func (in Input) pool(s state.Site) ([]byte, error) {
 	}
 	lines := []string{
 		"[" + s.Domain + "]",
-		"; Managed by gash hte. Profile: " + s.Profile,
+		"; Managed by gash localweb. Profile: " + s.Profile,
 		"listen = " + sock,
 		"listen.mode = 0660",
 		"security.limit_extensions = .php",

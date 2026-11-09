@@ -24,7 +24,7 @@ type Area struct {
 	Title string
 	// Summary is one sentence: what the area covers.
 	Summary string
-	// Commands are the gash commands documented with the area ("hte",
+	// Commands are the gash commands documented with the area ("localweb",
 	// "win"): each with every subcommand, from their --help.
 	Commands []string
 }
@@ -40,7 +40,7 @@ var Areas = []Area{
 	{Key: "databases", Title: "Databases", Summary: "The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only."},
 	{Key: "runtimes", Title: "PHP, Node.js and Chrome", Summary: "Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current.",
 		Commands: []string{"runtime", "run"}},
-	{Key: "hte", Title: "Local web stack (localweb)", Summary: "gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site.",
+	{Key: "localweb", Title: "Local web stack (localweb)", Summary: "gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site.",
 		Commands: []string{"localweb"}},
 	{Key: "windows", Title: "Windows and WSL", Summary: "Inspect and repair WSL, and read the Windows host from inside it.",
 		Commands: []string{"wsl", "win"}},

@@ -138,7 +138,7 @@ func (e *Engine) Migrate(ctx context.Context, opt MigrateOptions) (*MigrateResul
 		return nil, hteerr.New(hteerr.RootNotAllowed, "migrate --apply moves the sites into your own userland stack",
 			"Run gash localweb as your own user; it asks for sudo itself when a step needs root")
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +186,9 @@ type migration struct {
 	switchOnly bool
 	extra      []string // hosts.toml names after --apply
 	keyFile    func(domain string) string
+	// legacyRoot: the root receipt of Gash 4.0 and older is moved first
+	// (rootops.OpMigrateNames).
+	legacyRoot bool
 }
 
 // lines are the root steps as the user sees them before sudo.
@@ -207,6 +210,9 @@ func (w *migration) ops(keys map[string]string) []rootops.Op {
 	add := func(o rootops.Op) {
 		o.ID = len(out) + 1
 		out = append(out, o)
+	}
+	if w.legacyRoot {
+		add(rootops.Op{Op: rootops.OpMigrateNames})
 	}
 	for _, d := range sortedKeys(w.copies) {
 		dst := w.keyFile(d)
@@ -277,7 +283,7 @@ func (e *Engine) planMigration(ctx context.Context, v *env, set state.Settings, 
 	if err != nil {
 		return nil, err
 	}
-	w := &migration{plan: plan, inv: legacy.Scan(e.Sysroot, layout), layout: layout, sites: sites, copies: map[string]*migrate.CertPlan{},
+	w := &migration{plan: plan, inv: legacy.Scan(e.Sysroot, layout), layout: layout, sites: sites, copies: map[string]*migrate.CertPlan{}, legacyRoot: e.legacyRoot(),
 		blocking: len(plan.Blocking) > 0, extra: slices.Clone(hst.Names), keyFile: v.paths.KeyFile}
 	for _, n := range plan.Hosts.Extra {
 		if !slices.Contains(w.extra, n) {
@@ -422,6 +428,9 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		r, err := c.Run(ops[i].ID)
 		res.Changes = append(res.Changes, r.Changes...)
 		res.Warnings = append(res.Warnings, r.Warnings...)
+		return err
+	}
+	if err := run(rootops.OpMigrateNames, ""); err != nil {
 		return err
 	}
 

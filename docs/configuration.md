@@ -17,9 +17,9 @@ each.
 | `~/.gash_env` | you (`gash config init` creates it) | SSH keys to unlock, database connections, AI tokens, remote hosts and settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
 | `~/.local/share/gash/versions/VERSION/` | the installer, the first shell, `gash update` | The `gash` binary of each version (and `gash-hosts-helper`) |
-| `~/.local/state/gash/` | Gash | `update` (the version `gash update --rollback` returns to), `schema` and `notice` (the Gash 1.x reminder), `hte/` (the rendered `gash localweb` configuration and its logs) |
+| `~/.local/state/gash/` | Gash | `update` (the version `gash update --rollback` returns to), `schema` and `notice` (the Gash 1.x reminder), `localweb/` (the rendered `gash localweb` configuration and its logs; `hte/` before Gash 4.1) |
 | `~/.cache/gash/` | Gash | `init-probes` (what the shell start learned about `ls`, `grep`, `rm` and `dircolors`, reused for a day), `runtimes.json` (`gash runtime` answers). A `probes` file there is a Gash 2.x leftover, safe to delete |
-| `~/.config/gash/hte/` | `gash localweb` | The sites, settings and overlay files of the [local web stack](hte/README.md) |
+| `~/.config/gash/localweb/` | `gash localweb` | The sites, settings and overlay files of the [local web stack](localweb/README.md) (`~/.config/gash/hte/` before Gash 4.1) |
 
 `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` and `XDG_CONFIG_HOME`
 move the last four, as their names say.

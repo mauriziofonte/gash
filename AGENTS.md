@@ -1353,12 +1353,7 @@ out=$(gash llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
 
 ## 10. Local sites (`gash localweb`)
 
-`gash localweb` manages the user's local Apache and PHP-FPM sites
-([docs/hte/README.md](docs/hte/README.md)). It is not read-only: call it when the user asks
-for a site change, and read with `site list`, `site show` and `doctor` the
-rest of the time. It was `gash hte` (homelab test environment, the name of
-the hte-cli tool it began as) until 4.0; `gash hte` still runs it through
-4.x, and its error codes and files keep the `hte` name.
+`gash localweb` manages the user's local Apache and PHP-FPM sites ([docs/localweb/README.md](docs/localweb/README.md)). It is not read-only: call it when the user asks for a site change, and read with `site list`, `site show` and `doctor` the rest of the time. It was `gash hte` (homelab test environment, the name of the hte-cli tool it began as) until 4.0; `gash hte` is deprecated, runs it through 4.x (with a warning on stderr outside headless mode) and goes away in 5.0: call `gash localweb`. Since 4.1 the error code is `localweb_not_installed` (it was `hte_not_installed`), and the first `gash localweb` command after the update moves the files of a 4.0 install to their localweb names: a call that moves them restarts a running stack once and may take a few seconds.
 
 ```bash
 GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash localweb site list --json'
@@ -1369,14 +1364,12 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash localweb site list --json'
 * Headless calls never prompt: a missing required flag is `missing_value`
   (RETRY with the flag), a destructive step without `--yes` is
   `confirmation_required` (RETRY with `--yes`, once the user agreed).
-* `gash localweb install` needs `sudo` once and changes system files: leave it
-  to the user. Without an install every other command fails with
-  `hte_not_installed` (STOP).
+* `gash localweb install` needs `sudo` once and changes system files: leave it to the user. Without an install every other command fails with `localweb_not_installed` (STOP; `hte_not_installed` before 4.1).
 
 | Action | Codes |
 |---|---|
 | RETRY | `missing_value` `conflicting_options` `confirmation_required` `site_not_found` `site_exists` `invalid_domain` `invalid_docroot` `docroot_not_found` `php_version_not_installed` `php_not_enabled` `invalid_profile` `invalid_ports` `invalid_autostart` `lock_timeout` |
-| STOP | `hte_not_installed` `port_in_use` `privileged_step_required` `config_test_failed` `reload_failed` `apache_module_missing` `invalid_state` |
+| STOP | `localweb_not_installed` `port_in_use` `privileged_step_required` `config_test_failed` `reload_failed` `apache_module_missing` `invalid_state` |
 | FATAL | `apache_not_found` `openssl_not_found` `platform_unsupported` `receipt_mismatch` `root_not_allowed` |
 
 ## 11. WSL, Windows and log reclaim (`gash wsl`, `gash win`, `gash logs`)
@@ -1502,12 +1495,7 @@ the arguments, retry once), CONTINUE (skip), STOP (ask the user), FATAL
 
 ## 13. Versions and stability
 
-The version in use: `gash version --json`, or `$GASH_VERSION` in a shell
-that loaded Gash. Gash follows semantic versioning over the API named at
-the top of this page: a minor release adds functions, flags, keys and error
-codes; only a major release changes or removes them. New keys can appear
-in any JSON object, so read the keys you need and ignore the others; an
-existing key never changes type.
+The version in use: `gash version --json`, or `$GASH_VERSION` in a shell that loaded Gash. Gash follows semantic versioning over the API named at the top of this page: a minor release adds functions, flags, keys and error codes; only a major release changes or removes them. One declared exception: 4.1.0 renamed the error code `hte_not_installed` of `gash localweb` to `localweb_not_installed` (section 10). New keys can appear in any JSON object, so read the keys you need and ignore the others; an existing key never changes type.
 
 What changed in each release, including what an agent written for Gash
 2.x has to know about 3.x (no client programs needed, missing paths fail

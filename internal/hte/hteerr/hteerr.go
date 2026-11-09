@@ -30,7 +30,7 @@ type Code string
 // Codes of design/hte.md section 9, plus missing_value of the general
 // contract.
 const (
-	HTENotInstalled        Code = "hte_not_installed"
+	NotInstalled           Code = "localweb_not_installed"
 	SiteNotFound           Code = "site_not_found"
 	SiteExists             Code = "site_exists"
 	InvalidDomain          Code = "invalid_domain"
@@ -54,7 +54,7 @@ const (
 	// ConflictingOptions is a flag pair that contradicts itself, such as
 	// --force-https with --no-https (LEDGER HTE-01).
 	ConflictingOptions Code = "conflicting_options"
-	// InvalidState is a site TOML or hte.toml that does not parse, has
+	// InvalidState is a site TOML or localweb.toml that does not parse, has
 	// unknown or missing keys, or holds a value the strict validation
 	// refuses, and a php_ini value that cannot be written into a pool. A
 	// human must fix the file.
@@ -74,7 +74,7 @@ const (
 )
 
 var actions = map[Code]Action{
-	HTENotInstalled:        Stop,
+	NotInstalled:           Stop,
 	SiteNotFound:           Retry,
 	SiteExists:             Retry,
 	InvalidDomain:          Retry,

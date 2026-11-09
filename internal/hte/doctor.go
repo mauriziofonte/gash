@@ -77,7 +77,11 @@ func (e *Engine) Doctor(ctx context.Context) (*DoctorResult, error) {
 	if err := e.CheckIdentity("doctor"); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	// doctor diagnoses a tree of Gash 4.0 where it is; it does not move it.
+	keep := e.KeepLayout
+	e.KeepLayout = true
+	v, err := e.resolve(ctx)
+	e.KeepLayout = keep
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +110,14 @@ func (e *Engine) Doctor(ctx context.Context) (*DoctorResult, error) {
 		return r.result(), nil
 	}
 	r.add("install", CheckOK, fmt.Sprintf("ports %d/%d, autostart %s", set.Ports.HTTP, set.Ports.HTTPS, set.Autostart), "")
+	if v.paths.Legacy {
+		r.add("layout", CheckWarn, fmt.Sprintf("the files keep the names of Gash 4.0 (%s, %s, %s)", v.paths.ConfigDir, v.paths.StateDir, v.paths.DataDir),
+			"any gash localweb command other than doctor moves them to the localweb names (gash localweb service status does)")
+	}
+	if e.legacyRoot() {
+		r.add("system files", CheckWarn, fmt.Sprintf("the receipt and the system files keep the names of Gash 4.0 (%s, %s)", receipt.LegacyRootDir, rootops.LegacySudoersPath),
+			"run gash localweb install: it moves them to the localweb names")
+	}
 	e.doctorReceipt(v, r)
 	e.doctorRoot(ctx, v, set, r)
 
@@ -196,8 +208,7 @@ func phpRemedy(f platform.Family) string {
 
 // doctorReceipt compares the user copy of the receipt with the root copy.
 func (e *Engine) doctorReceipt(v *env, r *report) {
-	rootPath := receipt.RootPath(e.User)
-	rootData, rootErr := e.Sysroot.ReadFile(rootPath)
+	rootData, rootPath, rootErr := receipt.ReadRoot(e.Sysroot.ReadFile, e.User)
 	userData, userErr := os.ReadFile(v.paths.Receipt())
 	switch {
 	case errors.Is(rootErr, fs.ErrNotExist) && errors.Is(userErr, fs.ErrNotExist):
@@ -249,7 +260,11 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 	} else {
 		r.add("hosts helper", CheckOK, rootops.HelperPath, "")
 	}
-	e.doctorSudoers(ctx, r)
+	sudoers := rootops.SudoersPath
+	if e.legacyRoot() {
+		sudoers = rootops.LegacySudoersPath
+	}
+	e.doctorSudoers(ctx, r, sudoers)
 	if v.os.GOOS == "linux" && set.Ports.HTTP < 1024 {
 		data, err := e.Sysroot.ReadFile("/proc/sys/net/ipv4/ip_unprivileged_port_start")
 		n, perr := strconv.Atoi(strings.TrimSpace(string(data)))
@@ -281,7 +296,10 @@ func (e *Engine) doctorPF(set state.Settings, r *report) {
 	switch {
 	case to.HTTP != set.Ports.HTTP || to.HTTPS != set.Ports.HTTPS:
 		r.add("ports setting", CheckFail, fmt.Sprintf("the pf redirect sends ports 80 and 443 to %d and %d, but the stack listens on %d and %d",
-			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in hte.toml back, or run gash localweb uninstall and install again")
+			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in localweb.toml back, or run gash localweb uninstall and install again")
+	case e.legacyRoot():
+		r.add("ports setting", CheckWarn, fmt.Sprintf("pf redirects ports 80 and 443 of the loopback to %d and %d (anchor %s, the name of Gash 4.0)",
+			to.HTTP, to.HTTPS, rootops.LegacyPFAnchor), "run gash localweb install: it moves the redirect to the anchor "+rootops.PFAnchor)
 	case string(anchor) != string(rootops.PFRules(to.HTTP, to.HTTPS)) || string(daemon) != string(rootops.PFDaemon()):
 		r.add("ports setting", CheckFail, rootops.PFAnchorFile+" or "+rootops.PFDaemonPath+" is missing or changed", "run gash localweb uninstall, then gash localweb install")
 	default:
@@ -467,19 +485,20 @@ func (e *Engine) doctorStack(ctx context.Context, v *env, st service.Status, stE
 func (e *Engine) doctorAutostart(ctx context.Context, v *env, set state.Settings, r *report) {
 	switch set.Autostart {
 	case service.AutostartSystemd:
-		if _, err := os.Stat(service.UnitPath(v.dirs.ConfigHome)); err != nil {
+		unit := e.systemdUnit(v, set)
+		if unit == "" {
 			r.add("autostart", CheckFail, service.UnitPath(v.dirs.ConfigHome)+" is missing", "run gash localweb install")
 			return
 		}
-		if err := e.systemctlUser(ctx, v, "is-enabled", "--quiet", service.UnitName); err != nil {
-			r.add("autostart", CheckFail, service.UnitName+" is not enabled", "systemctl --user enable "+service.UnitName)
+		if err := e.systemctlUser(ctx, v, "is-enabled", "--quiet", unit); err != nil {
+			r.add("autostart", CheckFail, unit+" is not enabled", "systemctl --user enable "+unit)
 			return
 		}
 		if !e.Sysroot.Exists(filepath.Join("/var/lib/systemd/linger", e.User)) {
 			r.add("autostart", CheckWarn, "linger is off: the stack starts at login, not at boot", "run gash localweb install")
 			return
 		}
-		r.add("autostart", CheckOK, "systemd user unit, linger on", "")
+		r.add("autostart", CheckOK, "systemd user unit "+unit+", linger on", "")
 	case service.AutostartShell:
 		r.add("autostart", CheckOK, "the first interactive shell starts the stack (gash init bash)", "")
 	default:
@@ -581,17 +600,17 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 // doctorSudoers checks the sudoers drop-in. Fedora and Arch ship
 // /etc/sudoers.d as 0750: the user cannot stat the file, which is not
 // missing, so sudo -n -l is the proof that the rule works.
-func (e *Engine) doctorSudoers(ctx context.Context, r *report) {
-	_, err := e.Sysroot.Stat(rootops.SudoersPath)
+func (e *Engine) doctorSudoers(ctx context.Context, r *report, path string) {
+	_, err := e.Sysroot.Stat(path)
 	hidden := err != nil && errors.Is(err, fs.ErrPermission)
 	if err != nil && !hidden {
-		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash localweb install")
+		r.add("sudoers", CheckFail, path+" is missing", "run gash localweb install")
 		return
 	}
 	sudo := e.find("sudo")
 	if sudo == "" {
 		if hidden {
-			r.add("sudoers", CheckWarn, rootops.SudoersPath+" is not readable by you and sudo is not on the PATH", "")
+			r.add("sudoers", CheckWarn, path+" is not readable by you and sudo is not on the PATH", "")
 		}
 		return
 	}
@@ -600,9 +619,9 @@ func (e *Engine) doctorSudoers(ctx context.Context, r *report) {
 	case err != nil || !res.Success():
 		r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash localweb install")
 	case hidden:
-		r.add("sudoers", CheckOK, rootops.SudoersPath+" (not readable by you; sudo allows the hosts helper)", "")
+		r.add("sudoers", CheckOK, path+" (not readable by you; sudo allows the hosts helper)", "")
 	default:
-		r.add("sudoers", CheckOK, rootops.SudoersPath, "")
+		r.add("sudoers", CheckOK, path, "")
 	}
 }
 

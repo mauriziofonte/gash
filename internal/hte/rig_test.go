@@ -334,7 +334,8 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 	m.mu.Lock()
 	m.userLines = append(m.userLines, bin+" "+strings.Join(args, " "))
 	m.mu.Unlock()
-	if bin == "systemctl" && m.systemd && len(args) == 3 && args[0] == "--user" && args[2] == "gash-hte.service" {
+	if bin == "systemctl" && m.systemd && len(args) == 3 && args[0] == "--user" && (args[2] == service.UnitName || args[2] == service.LegacyUnitName) &&
+		slices.Contains([]string{"start", "stop", "restart"}, args[1]) {
 		return m.unitJob(args[1]), true
 	}
 	if bin == "sudo" && len(args) == 3 && args[0] == "-n" && args[2] == "apply" {
@@ -346,16 +347,20 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 	return runner.Expect{}, true
 }
 
-// unitJob plays the user manager for gash-hte.service: start runs
-// ExecStart (gash localweb __unit start) unless the unit is active, stop runs
-// ExecStop when it is, restart both, as Type=oneshot with RemainAfterExit
-// does.
+// unitJob plays the user manager for the user unit (gash-localweb.service,
+// or gash-hte.service of Gash 4.0): start runs ExecStart (gash localweb
+// __unit start) unless the unit is active, stop runs ExecStop when it is,
+// restart both, as Type=oneshot with RemainAfterExit does. The hidden
+// command reads a tree of Gash 4.0 where it is (KeepLayout).
 func (m *rig) unitJob(verb string) runner.Expect {
 	run := func(start bool) error {
 		m.mu.Lock()
 		m.inUnit = true
 		m.mu.Unlock()
+		keep := m.e.KeepLayout
+		m.e.KeepLayout = true
 		defer func() {
+			m.e.KeepLayout = keep
 			m.mu.Lock()
 			m.inUnit = false
 			m.mu.Unlock()
@@ -390,7 +395,7 @@ func (m *rig) unitJob(verb string) runner.Expect {
 		m.unitActive = err == nil
 	}
 	if err != nil {
-		return runner.Expect{Status: 1, Stderr: "Job for gash-hte.service failed: " + err.Error()}
+		return runner.Expect{Status: 1, Stderr: "Job for gash-localweb.service failed: " + err.Error()}
 	}
 	return runner.Expect{}
 }
@@ -717,8 +722,8 @@ func TestLedger_HTE73(t *testing.T) {
 		_, user := m.lines()
 		var jobs []string
 		for _, l := range user[seen:] {
-			if verb, ok := strings.CutPrefix(l, "systemctl --user "); ok && strings.HasSuffix(verb, " gash-hte.service") {
-				jobs = append(jobs, strings.TrimSuffix(verb, " gash-hte.service"))
+			if verb, ok := strings.CutPrefix(l, "systemctl --user "); ok && strings.HasSuffix(verb, " gash-localweb.service") {
+				jobs = append(jobs, strings.TrimSuffix(verb, " gash-localweb.service"))
 			}
 		}
 		seen = len(user)
@@ -831,7 +836,7 @@ func TestLedger_HTE64Apply(t *testing.T) {
 		if c.Kind != receipt.LegacyVhost && c.Kind != receipt.LegacyPool {
 			continue
 		}
-		if c.Archive == "" || !strings.HasPrefix(c.Archive, "/var/lib/gash-hte/archive/") {
+		if c.Archive == "" || !strings.HasPrefix(c.Archive, "/var/lib/gash-localweb/archive/") {
 			t.Errorf("%s: archive %q", c.Path, c.Archive)
 			continue
 		}

@@ -14,7 +14,7 @@ import (
 
 // CertShow is cert show.
 func (e *Engine) CertShow(ctx context.Context, domain string) (*certs.Info, error) {
-	v, err := e.ready("cert show")
+	v, err := e.ready(ctx, "cert show")
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (e *Engine) CertRenew(ctx context.Context, domain string) (*SiteResult, err
 	if err := e.CheckIdentity("cert renew"); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (e *Engine) CertRenew(ctx context.Context, domain string) (*SiteResult, err
 
 // HostsList is hosts list: the block gash wants.
 func (e *Engine) HostsList(ctx context.Context) ([]hostshelper.Entry, error) {
-	v, err := e.ready("hosts list")
+	v, err := e.ready(ctx, "hosts list")
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (e *Engine) HostsList(ctx context.Context) ([]hostshelper.Entry, error) {
 
 // HostsCheck is hosts check: the drift of /etc/hosts.
 func (e *Engine) HostsCheck(ctx context.Context) (*hosts.Drift, error) {
-	v, err := e.ready("hosts check")
+	v, err := e.ready(ctx, "hosts check")
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (e *Engine) HostsCheck(ctx context.Context) (*hosts.Drift, error) {
 
 // HostsApply is hosts apply: write the block through the helper.
 func (e *Engine) HostsApply(ctx context.Context) (*hosts.Drift, error) {
-	v, err := e.ready("hosts apply")
+	v, err := e.ready(ctx, "hosts apply")
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (e *Engine) HostsApply(ctx context.Context) (*hosts.Drift, error) {
 // HostsWindows is hosts windows: on WSL, the lines to add to the Windows
 // hosts file for the names Windows cannot resolve.
 func (e *Engine) HostsWindows(ctx context.Context) ([]string, error) {
-	v, err := e.ready("hosts windows")
+	v, err := e.ready(ctx, "hosts windows")
 	if err != nil {
 		return nil, err
 	}

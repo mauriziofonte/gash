@@ -13,7 +13,7 @@ import (
 // The actions of design/hte.md section 9, verbatim.
 func TestCatalogActions(t *testing.T) {
 	want := map[Code]Action{
-		"hte_not_installed": Stop, "site_not_found": Retry, "site_exists": Retry,
+		"localweb_not_installed": Stop, "site_not_found": Retry, "site_exists": Retry,
 		"invalid_domain": Retry, "invalid_docroot": Retry, "docroot_not_found": Retry,
 		"php_version_not_installed": Retry, "invalid_profile": Retry,
 		"confirmation_required": Retry, "lock_timeout": Retry, "port_in_use": Stop,
@@ -51,7 +51,7 @@ func TestErrorValue(t *testing.T) {
 }
 
 // pendingContract are the codes internal/contract does not register yet;
-// the lead adds their rows (area "hte", origin 3.x) and empties the list.
+// the lead adds their rows (area "localweb", origin 3.x) and empties the list.
 // All HTE codes are now registered, so the list is empty.
 var pendingContract = []Code{}
 

@@ -139,8 +139,6 @@ gash_help() {
 
 {{% define "stub/gash" %}}
 gash() {
-    # 4.0: gash hte is gash localweb; typed at the prompt, one tip.
-    [[ "${1-}" == hte && -z "${FUNCNAME[1]-}" ]] && __gash_former 'gash hte'
     # 3.5: a canonical command runs the shell function of its handler,
     # as the flat name does (gash files largest is files_largest).
 {{% gashRoute %}}

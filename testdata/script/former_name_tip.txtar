@@ -7,8 +7,9 @@
 # and session; GASH_LEGACY_HINTS=0 turns it off. script(1) gives the shell
 # its terminal (util-linux, Linux only); the lines arrive as typed, since
 # a former name in a script prints nothing. 4.0: the former names exist
-# with GASH_LEGACY_NAMES=1 (this suite's default); gash hte, the former
-# word of gash localweb, prints its tip in any case.
+# with GASH_LEGACY_NAMES=1 (this suite's default). gash hte, the former
+# word of gash localweb, is deprecated in 4.1: the binary says so on every
+# call (localweb_not_installed.txtar), and the shell adds no tip.
 
 [!linux] skip 'script(1) of util-linux'
 [!exec:script] skip 'no script(1)'
@@ -19,20 +20,22 @@ stdin drive.sh
 exec script -qec 'bash --norc --noprofile -i' /dev/null
 stdout -count=1 'tip: files_largest is now gash files largest \(shortcut flf\)'
 ! stdout 'tip: .*gash files stats'
-stdout -count=1 'tip: gash hte is now gash localweb'
+! stdout 'tip: gash hte'
+stdout -count=2 'warning: gash hte is deprecated and goes away in Gash 5\.0: use gash localweb'
 
 # Without GASH_LEGACY_NAMES the former name is not defined.
 env GASH_LEGACY_NAMES=
 stdin drive.sh
 exec script -qec 'bash --norc --noprofile -i' /dev/null
 stdout 'files_largest: command not found'
-stdout -count=1 'tip: gash hte is now gash localweb'
+stdout -count=2 'warning: gash hte is deprecated'
 env GASH_LEGACY_NAMES=1
 
 env GASH_LEGACY_HINTS=0
 stdin drive.sh
 exec script -qec 'bash --norc --noprofile -i' /dev/null
 ! stdout 'tip:'
+! stdout 'deprecated'
 
 -- drive.sh --
 source "$GASH_SH" >/dev/null 2>&1

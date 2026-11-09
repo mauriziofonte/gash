@@ -51,7 +51,7 @@ func (e *Engine) mutate(ctx context.Context, command, site string, fn func(v *en
 	if err := e.CheckIdentity(command); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (e *Engine) SiteRemove(ctx context.Context, domain string, yes bool) (*Site
 	if err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ type SiteList struct {
 
 // SiteList reads every site.
 func (e *Engine) SiteList(ctx context.Context) (*SiteList, error) {
-	v, err := e.ready("site list")
+	v, err := e.ready(ctx, "site list")
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ type SiteShow struct {
 
 // SiteShow reads one site.
 func (e *Engine) SiteShow(ctx context.Context, domain string) (*SiteShow, error) {
-	v, err := e.ready("site show")
+	v, err := e.ready(ctx, "site show")
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +273,11 @@ func (e *Engine) SiteShow(ctx context.Context, domain string) (*SiteShow, error)
 }
 
 // ready is the frame of a read-only command: identity and install check.
-func (e *Engine) ready(command string) (*env, error) {
+func (e *Engine) ready(ctx context.Context, command string) (*env, error) {
 	if err := e.CheckIdentity(command); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -150,6 +150,44 @@ func TestSplice(t *testing.T) {
 	}
 }
 
+// TestLegacyMarkers: a region between the markers of Gash 4.0 and older
+// is the managed region; Splice gives it the current markers, Strip
+// removes it, and a region whose begin and end lines belong to different
+// pairs is broken.
+func TestLegacyMarkers(t *testing.T) {
+	block := []byte("127.0.0.1 shop.test\n")
+	legacy := "a\n" + LegacyBeginMarker + "\n127.0.0.1 old.test\n" + LegacyEndMarker + "\nz\n"
+	inner, found, err := Extract([]byte(legacy))
+	if err != nil || !found || string(inner) != "127.0.0.1 old.test\n" {
+		t.Fatalf("Extract legacy = %q %v %v", inner, found, err)
+	}
+	if !Legacy([]byte(legacy)) {
+		t.Fatal("Legacy = false on a legacy region")
+	}
+	got, err := Splice([]byte(legacy), block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "a\n" + BeginMarker + "\n127.0.0.1 shop.test\n" + EndMarker + "\nz\n"; string(got) != want {
+		t.Fatalf("Splice legacy:\n%s", got)
+	}
+	if Legacy(got) {
+		t.Fatal("Legacy = true after Splice")
+	}
+	if got, err := Strip([]byte(legacy)); err != nil || string(got) != "a\nz\n" {
+		t.Fatalf("Strip legacy = %q %v", got, err)
+	}
+	for name, in := range map[string]string{
+		"legacy begin, current end": LegacyBeginMarker + "\n" + EndMarker + "\n",
+		"current begin, legacy end": BeginMarker + "\n" + LegacyEndMarker + "\n",
+		"both pairs":                LegacyBeginMarker + "\n" + LegacyEndMarker + "\n" + BeginMarker + "\n" + EndMarker + "\n",
+	} {
+		if _, _, err := Extract([]byte(in)); !errors.Is(err, ErrCorruptBlock) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 func TestRunApplyAndCheck(t *testing.T) {
 	outside := "127.0.0.1 localhost\n::1 localhost ip6-localhost\n\n127.0.0.1    http.test www.http.test # hte-cli\n"
 	path, _ := hostsFixture(t, outside)

@@ -15,7 +15,7 @@ CI installs Gash on each of these systems at every change: from the bare
 image, `install.sh` installs what Gash needs with the system's package
 manager, then `gash doctor` installs every package Gash can use and checks
 that each one provides its tool. The last column is the end-to-end test of
-the local web stack ([`gash localweb`](hte/README.md)).
+the local web stack ([`gash localweb`](localweb/README.md)).
 
 <!-- BEGIN generated: systems (go test ./internal/docgen -update) -->
 | System | Version | amd64 | arm64 | Local sites (`gash localweb`) |

@@ -255,5 +255,5 @@ and point Playwright's `executablePath` (Puppeteer: `executablePath` with
 
 - [reference.md](reference.md): every function, alias and command of this area.
 - [configuration](../configuration.md#settings-reference): `GASH_NVM`, `GASH_REPLACE_TOOLS`, `GASH_PATH_ADD`, and the [environment variables](../configuration.md#environment-only-variables) `GASH_CHROME_ROOT` and `GASH_CHROME_LINK`.
-- [Local web stack (HTE)](../hte/README.md): local Apache and PHP-FPM sites, one pool per PHP version.
+- [Local web stack (localweb)](../localweb/README.md): local Apache and PHP-FPM sites, one pool per PHP version.
 - [Tools for AI agents](../agents/README.md): `llm_runtime`, and `llm_tools` for the versions installed.

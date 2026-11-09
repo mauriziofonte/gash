@@ -4,7 +4,7 @@
 // closed, typed set of operations that install, migrate --apply and
 // uninstall run as root through one interactive sudo per command,
 //
-//	sudo -- <gash> hte __root
+//	sudo -- <gash> localweb __root
 //
 // The user side sends the plan the user saw (Hello), then asks for its
 // operations one by one by id; root validates every operation against its
@@ -31,7 +31,7 @@ const (
 	// OpInstallHelper copies the hosts helper (Src, whose SHA256 the plan
 	// names) to /usr/local/libexec/gash/gash-hosts-helper, root 0755.
 	OpInstallHelper = "install_helper"
-	// OpWriteSudoers writes /etc/sudoers.d/gash-hte for the sudo user:
+	// OpWriteSudoers writes /etc/sudoers.d/gash-localweb for the sudo user:
 	// a temporary file, visudo -c -f, rename.
 	OpWriteSudoers = "write_sudoers" //nolint:gosec // G101: an operation name, not a credential
 	// OpSysctlPorts sets net.ipv4.ip_unprivileged_port_start to Value
@@ -78,10 +78,17 @@ const (
 	// OpFinish removes the root receipt once every change is undone, and
 	// the archive and backup directories when empty.
 	OpFinish = "finish_uninstall"
+	// OpMigrateNames moves what Gash 4.0 and older installed under the
+	// gash-hte names to the gash-localweb ones: the receipt with the
+	// backups and archives it names (LegacyRootDir to RootDir), the
+	// sudoers drop-in, the sysctl drop-in, the macOS pf anchor and its
+	// LaunchDaemon, and the markers of the hosts block; every path of the
+	// receipt follows. Run again, it finds nothing left to move.
+	OpMigrateNames = "migrate_names"
 )
 
 var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpPFRedirect, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
-	OpArchiveVhost, OpArchivePool, OpCopyKey, OpRecordAutostart, OpRestore, OpFinish}
+	OpArchiveVhost, OpArchivePool, OpCopyKey, OpRecordAutostart, OpRestore, OpFinish, OpMigrateNames}
 
 // Op is one operation of a plan.
 type Op struct {
@@ -136,6 +143,9 @@ func (o Op) String() string {
 		return fmt.Sprintf("undo change %d of the receipt", o.Change)
 	case OpFinish:
 		return "remove the root receipt"
+	case OpMigrateNames:
+		return "move the files Gash 4.0 installed as gash-hte to their gash-localweb names (" + receipt.LegacyRootDir + " to " +
+			receipt.RootDir + ", the sudoers and sysctl drop-ins, the pf redirect, the hosts block markers) and update the receipt"
 	}
 	return o.Op
 }
@@ -144,13 +154,20 @@ func (o Op) String() string {
 const (
 	HelperPath  = "/usr/local/libexec/gash/gash-hosts-helper"
 	SudoersDir  = "/etc/sudoers.d"
-	SudoersPath = SudoersDir + "/gash-hte"
+	SudoersPath = SudoersDir + "/gash-localweb"
 	// sudoersTmp has a dot: sudo ignores such names in sudoers.d.
-	sudoersTmp = SudoersDir + "/.gash-hte.tmp"
+	sudoersTmp = SudoersDir + "/.gash-localweb.tmp"
 	PortSysctl = "net.ipv4.ip_unprivileged_port_start"
-	SysctlFile = "/etc/sysctl.d/50-gash-hte.conf"
+	SysctlFile = "/etc/sysctl.d/50-gash-localweb.conf"
 	sysctlProc = "/proc/sys/net/ipv4/ip_unprivileged_port_start"
 	lingerDir  = "/var/lib/systemd/linger"
+)
+
+// The system files of Gash 4.0 and older (gash localweb was gash hte):
+// OpMigrateNames moves them to the names above.
+const (
+	LegacySudoersPath = SudoersDir + "/gash-hte"
+	LegacySysctlFile  = "/etc/sysctl.d/50-gash-hte.conf"
 )
 
 var (

@@ -130,11 +130,20 @@ func (e *Engine) resolveAutostart(v *env, want string) (string, error) {
 	return "", hteerr.InvalidValue(hteerr.InvalidAutostart, "autostart", want, "auto", "systemd", "launchd", "shell", "none")
 }
 
-// stages lists the uninstall stage directories.
+// stages lists the uninstall stage directories, those of Gash 4.0 and
+// older (hte-stage-*) too, oldest first.
 func stages(v *env) []string {
 	found, _ := filepath.Glob(v.paths.Stage("*"))
-	slices.Sort(found)
+	legacy, _ := filepath.Glob(v.paths.LegacyStage("*"))
+	found = append(found, legacy...)
+	slices.SortFunc(found, func(a, b string) int { return strings.Compare(stageStamp(a), stageStamp(b)) })
 	return found
+}
+
+// stageStamp is the UTC timestamp of a stage directory's name.
+func stageStamp(dir string) string {
+	_, ts, _ := strings.Cut(filepath.Base(dir), "-stage-")
+	return ts
 }
 
 // saveUserReceipt stores the root copy as the user copy, byte for byte;
@@ -207,7 +216,7 @@ func (e *Engine) Install(ctx context.Context, opt InstallOptions) (*InstallResul
 	if err := e.CheckIdentity("install"); err != nil {
 		return nil, err
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -280,11 +289,12 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 		return hteerr.Newf(hteerr.InvalidState, "the stages are "+v.paths.Stage("<UTC timestamp>"), "%s is not an uninstall stage", opt.RestoreStage)
 	}
 
-	// The plan.
-	plan := []rootops.Op{
-		{Op: rootops.OpInstallHelper, Src: e.Helper, SHA256: sum},
-		{Op: rootops.OpWriteSudoers},
+	// The plan: the system files of Gash 4.0 and older move first.
+	var plan []rootops.Op
+	if e.legacyRoot() {
+		plan = append(plan, rootops.Op{Op: rootops.OpMigrateNames})
 	}
+	plan = append(plan, rootops.Op{Op: rootops.OpInstallHelper, Src: e.Helper, SHA256: sum}, rootops.Op{Op: rootops.OpWriteSudoers})
 	if ports == state.StandardPorts && v.os.GOOS == "linux" {
 		plan = append(plan, rootops.Op{Op: rootops.OpSysctlPorts, Value: ports.HTTP})
 	}
@@ -321,7 +331,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 
 	// The userland tree, restored from a stage first when asked.
 	if opt.RestoreStage != "" {
-		if err := restoreStage(v, opt.RestoreStage); err != nil {
+		if err := restoreStage(v, opt.RestoreStage, state.LegacyPaths(v.dirs, e.UID)); err != nil {
 			return err
 		}
 		res.Restored = opt.RestoreStage
@@ -367,6 +377,15 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	}
 	c.Close()
 
+	// A hosts block between the markers of Gash 4.0 gets the current ones
+	// now that the current helper is in place: the start below may write
+	// nothing (a systemd unit that is already active).
+	if e.legacyMarkers() {
+		if err := e.applyHosts(ctx, v, sites); err != nil {
+			res.Warnings = append(res.Warnings, "the hosts block keeps the markers of Gash 4.0: "+err.Error())
+		}
+	}
+
 	// The stack.
 	if len(res.Blocking) > 0 {
 		res.Next = "gash localweb migrate"
@@ -376,6 +395,11 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	}
 	return nil
 }
+
+// legacyRoot reports a root receipt of Gash 4.0 and older (under
+// /var/lib/gash-hte): the root steps of install and migrate --apply move
+// it, and the system files it names, first (rootops.OpMigrateNames).
+func (e *Engine) legacyRoot() bool { return e.Sysroot.Exists(receipt.LegacyRootPath(e.User)) }
 
 // systemApacheInstalled reports a system Apache unit or init script.
 func (e *Engine) systemApacheInstalled(v *env) bool {
@@ -422,16 +446,16 @@ func (e *Engine) setupAutostart(ctx context.Context, v *env, mode string) error 
 		}
 		// launchd loads the agent at the next login (install starts the
 		// stack itself); enable clears a disable an earlier one left.
-		_, err = e.launchctl(ctx, v, "enable", e.agentTarget())
+		_, err = e.launchctl(ctx, v, "enable", e.agentTarget(service.LaunchAgentLabel))
 		return err
 	}
 	return nil
 }
 
-// agentTarget is the LaunchAgent's service target in the user's GUI
-// domain.
-func (e *Engine) agentTarget() string {
-	return fmt.Sprintf("gui/%d/%s", e.UID, service.LaunchAgentLabel)
+// agentTarget is the service target of the LaunchAgent label in the
+// user's GUI domain.
+func (e *Engine) agentTarget(label string) string {
+	return fmt.Sprintf("gui/%d/%s", e.UID, label)
 }
 
 // launchctl runs launchctl as the user.
@@ -450,14 +474,14 @@ func (e *Engine) launchctl(ctx context.Context, v *env, args ...string) (string,
 	return string(res.Stdout), nil
 }
 
-// removeAgent unloads the LaunchAgent (it is loaded since the last
-// login, or not at all) and removes its file.
-func (e *Engine) removeAgent(ctx context.Context, v *env) {
-	p := service.LaunchAgentPath(v.dirs.Home)
+// removeAgent unloads the LaunchAgent of label (it is loaded since the
+// last login, or not at all) and removes its file.
+func (e *Engine) removeAgent(ctx context.Context, v *env, label string) {
+	p := filepath.Join(filepath.Dir(service.LaunchAgentPath(v.dirs.Home)), label+".plist")
 	if _, err := os.Lstat(p); err != nil {
 		return
 	}
-	_, _ = e.launchctl(ctx, v, "bootout", e.agentTarget()) // not loaded is fine
+	_, _ = e.launchctl(ctx, v, "bootout", e.agentTarget(label)) // not loaded is fine
 	os.Remove(p)
 }
 
@@ -476,7 +500,7 @@ type UninstallResult struct {
 // Uninstall is uninstall: stop the stack, remove autostart, restore the
 // receipt's pre-install state from the root copy (refused when the user
 // copy differs: receipt_mismatch), then move the userland tree into
-// hte-stage-<ts>/, which a later install offers to restore.
+// localweb-stage-<ts>/, which a later install offers to restore.
 func (e *Engine) Uninstall(ctx context.Context, opt UninstallOptions) (*UninstallResult, error) {
 	if err := e.CheckIdentity("uninstall"); err != nil {
 		return nil, err
@@ -484,14 +508,14 @@ func (e *Engine) Uninstall(ctx context.Context, opt UninstallOptions) (*Uninstal
 	if !opt.Yes {
 		return nil, hteerr.New(hteerr.ConfirmationRequired, "uninstall removes the stack and restores the system", "add --yes")
 	}
-	v, err := e.resolve()
+	v, err := e.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
 	res := &UninstallResult{Restored: []receipt.Change{}, Warnings: []string{}}
 	lockDir := v.paths.StateDir
 	if _, err := os.Stat(lockDir); err != nil {
-		return nil, hteerr.New(hteerr.HTENotInstalled, lockDir+" does not exist", "nothing to uninstall")
+		return nil, hteerr.New(hteerr.NotInstalled, lockDir+" does not exist", "nothing to uninstall")
 	}
 	out, err := e.locked(v, "uninstall", "", func() (any, error) { return res, e.uninstall(ctx, v, res) })
 	if err != nil {
@@ -506,8 +530,7 @@ func (e *Engine) Uninstall(ctx context.Context, opt UninstallOptions) (*Uninstal
 }
 
 func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) error {
-	rootPath := receipt.RootPath(e.User)
-	rootData, rootErr := e.Sysroot.ReadFile(rootPath)
+	rootData, rootPath, rootErr := receipt.ReadRoot(e.Sysroot.ReadFile, e.User)
 	userData, userErr := os.ReadFile(v.paths.Receipt())
 	switch {
 	case rootErr == nil || userErr == nil:
@@ -524,17 +547,19 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 	}
 	// The stack and autostart.
 	set, _ := v.store.LoadSettings()
-	if e.systemdUnit(v, set) {
+	if unit := e.systemdUnit(v, set); unit != "" {
 		for _, verb := range []string{"stop", "disable"} {
-			if err := e.unitJob(ctx, v, verb, service.UnitName); err != nil {
+			if err := e.unitJob(ctx, v, verb, unit); err != nil {
 				res.Warnings = append(res.Warnings, err.Error())
 			}
 		}
 		os.Remove(service.UnitPath(v.dirs.ConfigHome))
+		os.Remove(service.LegacyUnitPath(v.dirs.ConfigHome))
 		_ = e.systemctlUser(ctx, v, "daemon-reload")
 	}
 	if set.Autostart == service.AutostartLaunchd {
-		e.removeAgent(ctx, v)
+		e.removeAgent(ctx, v, service.LaunchAgentLabel)
+		e.removeAgent(ctx, v, service.LegacyLaunchAgentLabel)
 	}
 	if err := e.supervisor(v).Stop(ctx); err != nil {
 		return err
@@ -616,8 +641,9 @@ func (e *Engine) stage(v *env, res *UninstallResult) error {
 }
 
 // restoreStage moves a stage's tree back into place; a target that exists
-// and is not empty is refused.
-func restoreStage(v *env, dir string) error {
+// and is not empty is refused. The tree of a stage Gash 4.0 or older made
+// gets the current names (restoreLegacy).
+func restoreStage(v *env, dir string, legacy state.Paths) error {
 	for name, dst := range map[string]string{"config": v.paths.ConfigDir, "state": v.paths.StateDir, "data": v.paths.DataDir} {
 		src := filepath.Join(dir, name)
 		if _, err := os.Lstat(src); errors.Is(err, fs.ErrNotExist) {
@@ -637,7 +663,39 @@ func restoreStage(v *env, dir string) error {
 	// The staged receipt copy belongs to the uninstalled stack: install
 	// writes a new one from the root copy.
 	os.Remove(v.paths.Receipt())
+	if err := restoreLegacy(v, legacy); err != nil {
+		return err
+	}
 	return os.Remove(dir)
+}
+
+// restoreLegacy gives a tree restored from a stage of Gash 4.0 or older
+// the current names: hte.toml becomes localweb.toml, raw sites name the
+// current directories, and the rendering of the old paths goes (the next
+// start renders again).
+func restoreLegacy(v *env, legacy state.Paths) error {
+	old := filepath.Join(v.paths.ConfigDir, state.LegacySettingsName)
+	if _, err := os.Stat(old); err != nil {
+		return nil
+	}
+	if _, err := os.Lstat(v.paths.Settings()); err == nil {
+		return hteerr.Newf(hteerr.InvalidState, "keep one of them", "%s and %s both exist", old, v.paths.Settings())
+	}
+	if err := os.Rename(old, v.paths.Settings()); err != nil {
+		return err
+	}
+	sites, _, err := v.store.LoadSites()
+	if err != nil {
+		return err
+	}
+	raw, err := rawRewrites(legacy, v.paths, sites)
+	if err != nil {
+		return err
+	}
+	if err := writeRaw(raw); err != nil {
+		return err
+	}
+	return os.RemoveAll(v.paths.RenderDir())
 }
 
 // onlyLock reports a state directory holding only what this install

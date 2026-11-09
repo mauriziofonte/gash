@@ -20,15 +20,23 @@ import (
 // the anchor is a child of com.apple, which the stock pf.conf evaluates
 // (rdr-anchor "com.apple/*").
 const (
-	PFAnchor      = "com.apple/gash-hte"
-	PFAnchorFile  = "/etc/pf.anchors/gash-hte"
-	pfAnchorTmp   = "/etc/pf.anchors/.gash-hte.tmp"
-	PFDaemonLabel = "io.github.mauriziofonte.gash.hte.pf"
+	PFAnchor      = "com.apple/gash-localweb"
+	PFAnchorFile  = "/etc/pf.anchors/gash-localweb"
+	pfAnchorTmp   = "/etc/pf.anchors/.gash-localweb.tmp"
+	PFDaemonLabel = "io.github.mauriziofonte.gash.localweb.pf"
 	PFDaemonPath  = "/Library/LaunchDaemons/" + PFDaemonLabel + ".plist"
-	pfDaemonTmp   = "/Library/LaunchDaemons/.gash-hte-pf.tmp"
+	pfDaemonTmp   = "/Library/LaunchDaemons/.gash-localweb-pf.tmp"
 	PFConf        = "/etc/pf.conf"
 	// pfctlPath is where macOS keeps pfctl: the LaunchDaemon names it.
 	pfctlPath = "/sbin/pfctl"
+)
+
+// The pf redirect of Gash 4.0 and older; OpMigrateNames moves it.
+const (
+	LegacyPFAnchor      = "com.apple/gash-hte"
+	LegacyPFAnchorFile  = "/etc/pf.anchors/gash-hte"
+	LegacyPFDaemonLabel = "io.github.mauriziofonte.gash.hte.pf"
+	LegacyPFDaemonPath  = "/Library/LaunchDaemons/" + LegacyPFDaemonLabel + ".plist"
 )
 
 var rdrAnchorRE = lazyre.MustCompile(`(?m)^[ \t]*rdr-anchor[ \t]+"com\.apple/\*"[ \t]*$`)
@@ -41,7 +49,7 @@ var rdrAnchorRE = lazyre.MustCompile(`(?m)^[ \t]*rdr-anchor[ \t]+"com\.apple/\*"
 // therefore redirect without pass, keep state only for the inbound half,
 // and pass the outbound half of these ports without state.
 func PFRules(http, https int) []byte {
-	b := fmt.Appendf(nil, "# Managed by gash hte install; gash hte uninstall removes it.\n"+
+	b := fmt.Appendf(nil, "# Managed by gash localweb install; gash localweb uninstall removes it.\n"+
 		"# The rules of the pf anchor %s: the standard web ports of the\n"+
 		"# loopback reach the userland Apache.\n", PFAnchor)
 	fams := []struct{ af, addr string }{{"inet", "127.0.0.1"}, {"inet6", "::1"}}
@@ -67,7 +75,7 @@ var pfLoad = []string{"-E", "-a", PFAnchor, "-f", PFAnchorFile}
 func PFDaemon() []byte {
 	b := []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Managed by gash hte install; gash hte uninstall removes it. -->
+<!-- Managed by gash localweb install; gash localweb uninstall removes it. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
@@ -133,12 +141,18 @@ func (s *server) pfRedirect(ctx context.Context, o Op) ([]string, error) {
 	return nil, s.commit(c)
 }
 
-// pfUndo empties the anchor (its redirect and filter rules) and unloads the LaunchDaemon; its files are
-// removed by the changes recorded before this one. pf itself stays
-// enabled until the next restart (the reference of the boot-time load
-// has no token to release), with an empty anchor.
-func (s *server) pfUndo(ctx context.Context) ([]string, error) {
+// pfUndo empties the anchor of the change (its redirect and filter rules)
+// and unloads its LaunchDaemon; their files are removed by the changes
+// recorded before this one. A receipt of Gash 4.0 not moved yet names the
+// legacy anchor, whose daemon has the legacy label. pf itself stays
+// enabled until the next restart (the reference of the boot-time load has
+// no token to release), with an empty anchor.
+func (s *server) pfUndo(ctx context.Context, c receipt.Change) ([]string, error) {
+	anchor, label := PFAnchor, PFDaemonLabel
+	if c.Name == LegacyPFAnchor {
+		anchor, label = LegacyPFAnchor, LegacyPFDaemonLabel
+	}
 	// Loaded at boot, or not at all since install: either is fine.
-	_, _ = s.cmd(ctx, "launchctl", "bootout", "system/"+PFDaemonLabel)
-	return nil, s.mustCmd(ctx, "pfctl", "-a", PFAnchor, "-F", "all")
+	_, _ = s.cmd(ctx, "launchctl", "bootout", "system/"+label)
+	return nil, s.mustCmd(ctx, "pfctl", "-a", anchor, "-F", "all")
 }
