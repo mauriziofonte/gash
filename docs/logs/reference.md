@@ -20,7 +20,7 @@ Available Commands:
   scan        Report the log files eating disk, grouped by category
 
 Flags:
-  -h, --help   help for logs
+  -h, --help[=true|false]   help for logs
 
 Use "gash logs [command] --help" for more information about a command.
 ```
@@ -34,15 +34,15 @@ Usage:
   gash logs clean [PATH...] [flags]
 
 Flags:
-      --depth int           limit how deep each root is walked (0: no limit)
-      --dry-run             show what would be freed, change nothing
-  -h, --help                help for clean
-      --json                one JSON object on stdout
-      --min-size string     ignore files smaller than this (e.g. 1M, 512K)
-      --older-than string   ignore files modified more recently than this (e.g. 7d, 48h)
-      --sudo                reclaim root-owned logs too, with one sudo
-      --truncate            also truncate live logs in place (keeps the file for running daemons)
-  -y, --yes                 do not ask for confirmation
+      --depth int               limit how deep each root is walked (0: no limit)
+      --dry-run[=true|false]    show what would be freed, change nothing
+  -h, --help[=true|false]       help for clean
+      --json[=true|false]       one JSON object on stdout
+      --min-size string         ignore files smaller than this (e.g. 1M, 512K)
+      --older-than string       ignore files modified more recently than this (e.g. 7d, 48h)
+      --sudo[=true|false]       reclaim root-owned logs too, with one sudo
+      --truncate[=true|false]   also truncate live logs in place (keeps the file for running daemons)
+  -y, --yes[=true|false]        do not ask for confirmation
 ```
 
 ### gash logs scan
@@ -55,8 +55,8 @@ Usage:
 
 Flags:
       --depth int           limit how deep each root is walked (0: no limit)
-  -h, --help                help for scan
-      --json                one JSON object on stdout
+  -h, --help[=true|false]   help for scan
+      --json[=true|false]   one JSON object on stdout
       --min-size string     ignore files smaller than this (e.g. 1M, 512K)
       --older-than string   ignore files modified more recently than this (e.g. 7d, 48h)
 ```

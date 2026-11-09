@@ -12,7 +12,7 @@ stdout '^  migrate +Move the hte-cli and system vhosts'
 ! stderr .
 
 exec gash localweb --help
-stdout '^      --json   print one JSON object$'
+stdout '^      --json\[=true\|false\]   print one JSON object$'
 ! stderr .
 
 exec gash localweb site create --help

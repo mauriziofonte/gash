@@ -408,8 +408,8 @@ Usage:
   gash version [flags]
 
 Flags:
-  -h, --help   help for version
-      --json   print one JSON object
+  -h, --help[=true|false]   help for version
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash init
@@ -421,7 +421,7 @@ Usage:
   gash init bash [flags]
 
 Flags:
-  -h, --help   help for init
+  -h, --help[=true|false]   help for init
 ```
 
 ### gash update
@@ -456,6 +456,6 @@ Usage:
   gash update [--rollback] [flags]
 
 Flags:
-  -h, --help       help for update
-      --rollback   return to the version the last update left
+  -h, --help[=true|false]       help for update
+      --rollback[=true|false]   return to the version the last update left
 ```

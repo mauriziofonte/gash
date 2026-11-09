@@ -3299,6 +3299,6 @@ Usage:
   gash agents-hint [flags]
 
 Flags:
-      --format string   md (Markdown for instructions) or json (default "md")
-  -h, --help            help for agents-hint
+      --format string       md (Markdown for instructions) or json (default "md")
+  -h, --help[=true|false]   help for agents-hint
 ```

@@ -42,8 +42,8 @@ Available Commands:
   uninstall   Stop the stack, restore the system as install found it, stage the sites for a later install
 
 Flags:
-  -h, --help   help for localweb
-      --json   print one JSON object
+  -h, --help[=true|false]   help for localweb
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb [command] --help" for more information about a command.
 ```
@@ -62,10 +62,10 @@ Available Commands:
   modules     Apache modules
 
 Flags:
-  -h, --help   help for apache
+  -h, --help[=true|false]   help for apache
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb apache [command] --help" for more information about a command.
 ```
@@ -84,10 +84,10 @@ Available Commands:
   path        Print the global Apache overlay file you edit
 
 Flags:
-  -h, --help   help for config
+  -h, --help[=true|false]   help for config
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb apache config [command] --help" for more information about a command.
 ```
@@ -101,10 +101,10 @@ Usage:
   gash localweb apache config path [flags]
 
 Flags:
-  -h, --help   help for path
+  -h, --help[=true|false]   help for path
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb apache modules
@@ -123,10 +123,10 @@ Available Commands:
   list        List the base, enabled and available modules
 
 Flags:
-  -h, --help   help for modules
+  -h, --help[=true|false]   help for modules
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb apache modules [command] --help" for more information about a command.
 ```
@@ -141,10 +141,10 @@ Usage:
   gash localweb apache modules disable NAME [flags]
 
 Flags:
-  -h, --help   help for disable
+  -h, --help[=true|false]   help for disable
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb apache modules enable
@@ -158,10 +158,10 @@ Usage:
   gash localweb apache modules enable NAME [flags]
 
 Flags:
-  -h, --help   help for enable
+  -h, --help[=true|false]   help for enable
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb apache modules list
@@ -173,10 +173,10 @@ Usage:
   gash localweb apache modules list [flags]
 
 Flags:
-  -h, --help   help for list
+  -h, --help[=true|false]   help for list
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb cert
@@ -194,10 +194,10 @@ Available Commands:
   show        Show a site's certificate
 
 Flags:
-  -h, --help   help for cert
+  -h, --help[=true|false]   help for cert
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb cert [command] --help" for more information about a command.
 ```
@@ -212,11 +212,11 @@ Usage:
   gash localweb cert renew [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for renew
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for renew
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb cert show
@@ -229,11 +229,11 @@ Usage:
   gash localweb cert show [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for show
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for show
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb doctor
@@ -251,10 +251,10 @@ Usage:
   gash localweb doctor [flags]
 
 Flags:
-  -h, --help   help for doctor
+  -h, --help[=true|false]   help for doctor
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb hosts
@@ -275,10 +275,10 @@ Available Commands:
   windows     On WSL, the lines for the Windows hosts file
 
 Flags:
-  -h, --help   help for hosts
+  -h, --help[=true|false]   help for hosts
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb hosts [command] --help" for more information about a command.
 ```
@@ -293,10 +293,10 @@ Usage:
   gash localweb hosts apply [flags]
 
 Flags:
-  -h, --help   help for apply
+  -h, --help[=true|false]   help for apply
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb hosts check
@@ -308,10 +308,10 @@ Usage:
   gash localweb hosts check [flags]
 
 Flags:
-  -h, --help   help for check
+  -h, --help[=true|false]   help for check
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb hosts list
@@ -323,10 +323,10 @@ Usage:
   gash localweb hosts list [flags]
 
 Flags:
-  -h, --help   help for list
+  -h, --help[=true|false]   help for list
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb hosts windows
@@ -342,10 +342,10 @@ Usage:
   gash localweb hosts windows [flags]
 
 Flags:
-  -h, --help   help for windows
+  -h, --help[=true|false]   help for windows
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb install
@@ -375,15 +375,15 @@ Usage:
   gash localweb install [flags]
 
 Flags:
-      --autostart string       auto, systemd, launchd, shell or none (default "auto")
-  -h, --help                   help for install
-      --no-restore             install without restoring an existing uninstall stage
-      --ports string           standard (80 and 443) or high (8080 and 8443) (default "standard")
-      --restore-stage string   restore the sites of an uninstall stage
-      --yes                    allow the destructive steps of the plan (stopping the system Apache)
+      --autostart string          auto, systemd, launchd, shell or none (default "auto")
+  -h, --help[=true|false]         help for install
+      --no-restore[=true|false]   install without restoring an existing uninstall stage
+      --ports string              standard (80 and 443) or high (8080 and 8443) (default "standard")
+      --restore-stage string      restore the sites of an uninstall stage
+      --yes[=true|false]          allow the destructive steps of the plan (stopping the system Apache)
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb migrate
@@ -403,16 +403,16 @@ Usage:
   gash localweb migrate [flags]
 
 Flags:
-      --apply                 apply the plan
-      --exclude stringArray   leave this domain or vhost file out (repeatable)
-  -h, --help                  help for migrate
-      --keep-pool-values      keep the legacy pool's PHP values
-      --reissue-certs         make new certificates instead of copying the legacy ones
-      --site stringArray      migrate only this domain (repeatable)
-      --yes                   allow stopping the system Apache and archiving the vhosts
+      --apply[=true|false]              apply the plan
+      --exclude stringArray             leave this domain or vhost file out (repeatable)
+  -h, --help[=true|false]               help for migrate
+      --keep-pool-values[=true|false]   keep the legacy pool's PHP values
+      --reissue-certs[=true|false]      make new certificates instead of copying the legacy ones
+      --site stringArray                migrate only this domain (repeatable)
+      --yes[=true|false]                allow stopping the system Apache and archiving the vhosts
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php
@@ -432,10 +432,10 @@ Available Commands:
   versions    List the installed PHP-FPM versions
 
 Flags:
-  -h, --help   help for php
+  -h, --help[=true|false]   help for php
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb php [command] --help" for more information about a command.
 ```
@@ -457,10 +457,10 @@ Available Commands:
   unset       Remove a value
 
 Flags:
-  -h, --help   help for global
+  -h, --help[=true|false]   help for global
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb php global [command] --help" for more information about a command.
 ```
@@ -474,11 +474,11 @@ Usage:
   gash localweb php global get KEY [flags]
 
 Flags:
-  -h, --help             help for get
-      --version string   the Version
+  -h, --help[=true|false]   help for get
+      --version string      the Version
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php global set
@@ -490,11 +490,11 @@ Usage:
   gash localweb php global set KEY VALUE [flags]
 
 Flags:
-  -h, --help             help for set
-      --version string   the Version
+  -h, --help[=true|false]   help for set
+      --version string      the Version
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php global unset
@@ -506,11 +506,11 @@ Usage:
   gash localweb php global unset KEY [flags]
 
 Flags:
-  -h, --help             help for unset
-      --version string   the Version
+  -h, --help[=true|false]   help for unset
+      --version string      the Version
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php ini
@@ -529,10 +529,10 @@ Available Commands:
   unset       Remove a value
 
 Flags:
-  -h, --help   help for ini
+  -h, --help[=true|false]   help for ini
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb php ini [command] --help" for more information about a command.
 ```
@@ -546,11 +546,11 @@ Usage:
   gash localweb php ini get KEY [flags]
 
 Flags:
-      --domain string   the Domain
-  -h, --help            help for get
+      --domain string       the Domain
+  -h, --help[=true|false]   help for get
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php ini set
@@ -562,11 +562,11 @@ Usage:
   gash localweb php ini set KEY VALUE [flags]
 
 Flags:
-      --domain string   the Domain
-  -h, --help            help for set
+      --domain string       the Domain
+  -h, --help[=true|false]   help for set
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php ini unset
@@ -578,11 +578,11 @@ Usage:
   gash localweb php ini unset KEY [flags]
 
 Flags:
-      --domain string   the Domain
-  -h, --help            help for unset
+      --domain string       the Domain
+  -h, --help[=true|false]   help for unset
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb php versions
@@ -595,10 +595,10 @@ Usage:
   gash localweb php versions [flags]
 
 Flags:
-  -h, --help   help for versions
+  -h, --help[=true|false]   help for versions
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service
@@ -620,10 +620,10 @@ Available Commands:
   stop        Stop the stack
 
 Flags:
-  -h, --help   help for service
+  -h, --help[=true|false]   help for service
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb service [command] --help" for more information about a command.
 ```
@@ -639,12 +639,12 @@ Usage:
   gash localweb service logs [flags]
 
 Flags:
-  -h, --help          help for logs
-      --lines int     lines per log (default 20)
-      --site string   the logs of this site
+  -h, --help[=true|false]   help for logs
+      --lines int           lines per log (default 20)
+      --site string         the logs of this site
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service reload
@@ -657,10 +657,10 @@ Usage:
   gash localweb service reload [flags]
 
 Flags:
-  -h, --help   help for reload
+  -h, --help[=true|false]   help for reload
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service restart
@@ -672,10 +672,10 @@ Usage:
   gash localweb service restart [flags]
 
 Flags:
-  -h, --help   help for restart
+  -h, --help[=true|false]   help for restart
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service start
@@ -688,10 +688,10 @@ Usage:
   gash localweb service start [flags]
 
 Flags:
-  -h, --help   help for start
+  -h, --help[=true|false]   help for start
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service status
@@ -703,10 +703,10 @@ Usage:
   gash localweb service status [flags]
 
 Flags:
-  -h, --help   help for status
+  -h, --help[=true|false]   help for status
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb service stop
@@ -718,10 +718,10 @@ Usage:
   gash localweb service stop [flags]
 
 Flags:
-  -h, --help   help for stop
+  -h, --help[=true|false]   help for stop
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site
@@ -746,10 +746,10 @@ Available Commands:
   show        Show a site
 
 Flags:
-  -h, --help   help for site
+  -h, --help[=true|false]   help for site
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 
 Use "gash localweb site [command] --help" for more information about a command.
 ```
@@ -774,26 +774,26 @@ Usage:
   gash localweb site create [flags]
 
 Flags:
-      --alias stringArray       a name the site also answers to (repeatable)
-      --docroot string          the document root (absolute, or relative to the current directory)
-      --domain string           the site's domain (its identity)
-      --extra-http-port ints    one more loopback port of the HTTP vhost (repeatable)
-      --extra-https-port ints   one more loopback port of the HTTPS vhost (repeatable)
-      --force-https             redirect HTTP to HTTPS
-      --force-https-bypass      do not redirect requests from 127.0.0.1 and ::1
-  -h, --help                    help for create
-      --http2                   serve HTTP/2
-      --https                   serve HTTPS
-      --no-force-https          the opposite of --force-https
-      --no-force-https-bypass   the opposite of --force-https-bypass
-      --no-http2                the opposite of --http2
-      --no-https                the opposite of --https
-      --no-www                  no www. alias
-      --php string              the PHP version (X.Y)
-      --profile string          dev, staging or hardened
+      --alias stringArray                    a name the site also answers to (repeatable)
+      --docroot string                       the document root (absolute, or relative to the current directory)
+      --domain string                        the site's domain (its identity)
+      --extra-http-port ints                 one more loopback port of the HTTP vhost (repeatable)
+      --extra-https-port ints                one more loopback port of the HTTPS vhost (repeatable)
+      --force-https[=true|false]             redirect HTTP to HTTPS
+      --force-https-bypass[=true|false]      do not redirect requests from 127.0.0.1 and ::1
+  -h, --help[=true|false]                    help for create
+      --http2[=true|false]                   serve HTTP/2
+      --https[=true|false]                   serve HTTPS
+      --no-force-https[=true|false]          the opposite of --force-https
+      --no-force-https-bypass[=true|false]   the opposite of --force-https-bypass
+      --no-http2[=true|false]                the opposite of --http2
+      --no-https[=true|false]                the opposite of --https
+      --no-www[=true|false]                  no www. alias
+      --php string                           the PHP version (X.Y)
+      --profile string                       dev, staging or hardened
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site disable
@@ -806,11 +806,11 @@ Usage:
   gash localweb site disable [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for disable
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for disable
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site enable
@@ -822,11 +822,11 @@ Usage:
   gash localweb site enable [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for enable
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for enable
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site list
@@ -839,10 +839,10 @@ Usage:
   gash localweb site list [flags]
 
 Flags:
-  -h, --help   help for list
+  -h, --help[=true|false]   help for list
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site modify
@@ -858,26 +858,26 @@ Usage:
   gash localweb site modify [flags]
 
 Flags:
-      --alias stringArray       a name the site also answers to (repeatable)
-      --docroot string          the document root (absolute, or relative to the current directory)
-      --domain string           the site's domain (its identity)
-      --extra-http-port ints    one more loopback port of the HTTP vhost (repeatable)
-      --extra-https-port ints   one more loopback port of the HTTPS vhost (repeatable)
-      --force-https             redirect HTTP to HTTPS
-      --force-https-bypass      do not redirect requests from 127.0.0.1 and ::1
-  -h, --help                    help for modify
-      --http2                   serve HTTP/2
-      --https                   serve HTTPS
-      --no-force-https          the opposite of --force-https
-      --no-force-https-bypass   the opposite of --force-https-bypass
-      --no-http2                the opposite of --http2
-      --no-https                the opposite of --https
-      --no-www                  no www. alias
-      --php string              the PHP version (X.Y)
-      --profile string          dev, staging or hardened
+      --alias stringArray                    a name the site also answers to (repeatable)
+      --docroot string                       the document root (absolute, or relative to the current directory)
+      --domain string                        the site's domain (its identity)
+      --extra-http-port ints                 one more loopback port of the HTTP vhost (repeatable)
+      --extra-https-port ints                one more loopback port of the HTTPS vhost (repeatable)
+      --force-https[=true|false]             redirect HTTP to HTTPS
+      --force-https-bypass[=true|false]      do not redirect requests from 127.0.0.1 and ::1
+  -h, --help[=true|false]                    help for modify
+      --http2[=true|false]                   serve HTTP/2
+      --https[=true|false]                   serve HTTPS
+      --no-force-https[=true|false]          the opposite of --force-https
+      --no-force-https-bypass[=true|false]   the opposite of --force-https-bypass
+      --no-http2[=true|false]                the opposite of --http2
+      --no-https[=true|false]                the opposite of --https
+      --no-www[=true|false]                  no www. alias
+      --php string                           the PHP version (X.Y)
+      --profile string                       dev, staging or hardened
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site remove
@@ -891,12 +891,12 @@ Usage:
   gash localweb site remove [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for remove
-      --yes             confirm the removal
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for remove
+      --yes[=true|false]    confirm the removal
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb site show
@@ -909,11 +909,11 @@ Usage:
   gash localweb site show [flags]
 
 Flags:
-      --domain string   the site's domain
-  -h, --help            help for show
+      --domain string       the site's domain
+  -h, --help[=true|false]   help for show
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
 
 ### gash localweb uninstall
@@ -929,9 +929,9 @@ Usage:
   gash localweb uninstall [flags]
 
 Flags:
-  -h, --help   help for uninstall
-      --yes    confirm the uninstall
+  -h, --help[=true|false]   help for uninstall
+      --yes[=true|false]    confirm the uninstall
 
 Global Flags:
-      --json   print one JSON object
+      --json[=true|false]   print one JSON object
 ```
