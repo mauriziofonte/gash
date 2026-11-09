@@ -16,6 +16,10 @@
 # via the gash error glyph; the R6 variant proves the plain form carries no
 # escape bytes.
 
+# On a WSL host the refusals do not happen: wsl_restart -y would shut the
+# VM down and wsl_explorer/wsl_taskmanager would open Windows programs.
+[wsl] skip 'needs a host that is not WSL'
+
 env GASH_HEADLESS=1
 env HOME=$WORK
 env LC_ALL=C.UTF-8

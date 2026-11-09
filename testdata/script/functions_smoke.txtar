@@ -84,13 +84,15 @@ stdout 'gash win explorer'
 exec bash -c 'source "$GASH_SH"; wsl_taskmanager -h'
 stdout wsl_taskmanager
 
-# --- functions_smoke_spec.sh:159 - wsl_restart fails outside WSL
-! exec bash -c 'source "$GASH_SH"; wsl_restart'
-stderr WSL
+# --- functions_smoke_spec.sh:159 - wsl_restart fails outside WSL (not
+# run on a WSL host: the refusal would not happen there)
+[!wsl] ! exec bash -c 'source "$GASH_SH"; wsl_restart'
+[!wsl] stderr WSL
 
-# --- functions_smoke_spec.sh:179 - wsl_explorer fails outside WSL
-! exec bash -c 'source "$GASH_SH"; wsl_explorer'
-stderr WSL
+# --- functions_smoke_spec.sh:179 - wsl_explorer fails outside WSL (on a
+# WSL host it would open Explorer)
+[!wsl] ! exec bash -c 'source "$GASH_SH"; wsl_explorer'
+[!wsl] stderr WSL
 
 # --- functions_smoke_spec.sh:198 - wr alias points to wsl_restart
 exec bash -c 'source "$GASH_SH"; alias wr'

@@ -8,6 +8,9 @@
 #
 # covers: none (gash wsl is new in 3.4; no 2.x spec)
 
+# On a WSL host the off-WSL refusals do not happen: skip.
+[wsl] skip 'needs a host that is not WSL'
+
 env GASH_HEADLESS=1
 env LC_ALL=C
 

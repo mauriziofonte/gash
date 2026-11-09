@@ -13,6 +13,9 @@
 # what is observable off WSL: option parsing runs before the WSL check, and the
 # WSL check refuses (rc 1) before any sudo or cmd.exe call. The CI runner is
 # not WSL, so /proc/version carries no "microsoft" and the refusal is stable.
+# On a WSL host the gate passes and the calls would reach Windows: skip.
+
+[wsl] skip 'needs a host that is not WSL'
 
 env GASH_HEADLESS=1
 chmod 0755 bin/sudo

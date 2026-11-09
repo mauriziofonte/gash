@@ -151,6 +151,13 @@ func TestScript(t *testing.T) {
 				// BSD sed without it. Probe so the sed-sandbox rows run only
 				// where that path exists (the refusal is a Go unit test).
 				return exec.Command("sed", "--sandbox", "-n", "-e", "p", "/dev/null").Run() == nil, nil
+			case "wsl":
+				// The host is WSL: requireWSL reads the real /proc/version,
+				// so the off-WSL refusals do not hold and wsl_restart -y
+				// would shut the developer's VM down (cmd.exe /C wsl
+				// --shutdown). Scripts about the off-WSL path skip here.
+				b, err := os.ReadFile("/proc/version")
+				return err == nil && strings.Contains(strings.ToLower(string(b)), "microsoft"), nil
 			}
 			return false, fmt.Errorf("unknown condition %q", cond)
 		},
