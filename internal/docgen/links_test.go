@@ -4,6 +4,7 @@ package docgen
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -18,9 +19,19 @@ var linkRe = regexp.MustCompile(`!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)`)
 var htmlAnchorRe = regexp.MustCompile(`<a\s+(?:id|name)="([^"]+)"`)
 
 // markdownFiles are the pages the links test reads: the root pages, docs/
-// and dev/ (but the port archive, kept as written then).
+// and dev/ (but the port archive, kept as written then). In a git checkout
+// only the pages git tracks count: a local draft that is not part of the
+// repository (an untracked file) is not checked.
 func markdownFiles(t *testing.T, root string) []string {
 	t.Helper()
+	tracked := map[string]bool{}
+	if out, err := exec.Command("git", "-C", root, "ls-files", "-z", "--", "*.md").Output(); err == nil {
+		for _, f := range strings.Split(string(out), "\x00") {
+			if f != "" {
+				tracked[filepath.Join(root, filepath.FromSlash(f))] = true
+			}
+		}
+	}
 	var out []string
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -37,7 +48,7 @@ func markdownFiles(t *testing.T, root string) []string {
 			}
 			return nil
 		}
-		if strings.HasSuffix(p, ".md") {
+		if strings.HasSuffix(p, ".md") && (len(tracked) == 0 || tracked[p]) {
 			out = append(out, p)
 		}
 		return nil

@@ -62,7 +62,8 @@ for f in /usr/local/bin/* /usr/bin/* /bin/*; do
     case "$n" in
     tar | gzip | apt | apt-get | dnf | yum | microdnf | pacman | zypper | apk | brew | sudo) continue ;;
     esac
-    [ -e "bin/$n" ] || ln -s "$f" "bin/$n"
+    # -L too: a dangling link of an earlier PATH directory is a name taken.
+    [ -e "bin/$n" ] || [ -L "bin/$n" ] || ln -s "$f" "bin/$n"
 done
 w=$PWD
 printf '#!%s\n"$@"\n' "$(command -v bash)" >bin/sudo

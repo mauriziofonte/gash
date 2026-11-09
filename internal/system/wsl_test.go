@@ -124,9 +124,10 @@ func TestWSLExplorer(t *testing.T) {
 }
 
 func TestWSLTaskmanager(t *testing.T) {
-	m, _, _ := tm(t, nil)
-	dir := m.winDir()
-	m, _, _ = tm(t, runner.NewFake(t,
+	// The fixture has no Windows drive mounted: cmd.exe starts in /, on
+	// any host (the real system drive of a WSL host is not the fixture's).
+	dir := "/"
+	m, _, _ := tm(t, runner.NewFake(t,
 		runner.Expect{Background: true, Argv: []string{"cmd.exe", "/C", "taskmgr"}, Dir: &dir},
 		runner.Expect{Background: true, Argv: []string{"cmd.exe", "/C", "taskmgr"}, Err: &runner.StartError{Name: "cmd.exe", Status: 127, Err: errors.New("not found")}},
 	))

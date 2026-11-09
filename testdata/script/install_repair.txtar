@@ -29,8 +29,10 @@ stderr '^OK: Installed gash 3\.0\.0 for [a-z]+/[a-z0-9]+$'
 exec home/.local/share/gash/versions/3.0.0/gash version --json
 stdout '"version":"3\.0\.0"'
 
-# A broken binary is replaced.
-exec sh -c 'printf broken >"$HOME/.local/share/gash/versions/3.0.0/gash"'
+# A broken binary is replaced. It is broken by a rename, not a write in
+# place: a write right after the binary ran can meet ETXTBSY while the
+# kernel still releases the exited process (seen on WSL 2).
+exec sh -c 'f=$HOME/.local/share/gash/versions/3.0.0/gash; printf broken >"$f.tmp" && chmod 755 "$f.tmp" && mv "$f.tmp" "$f"'
 exec bash home/.gash/install.sh --repair --quiet
 ! stderr .
 exec home/.local/share/gash/versions/3.0.0/gash version --json
