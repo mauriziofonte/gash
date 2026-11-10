@@ -9,48 +9,23 @@ gash localweb: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP
 ### gash localweb
 
 ```text
-gash localweb runs a userland Apache and PHP-FPM for local sites: one sudo at
-install for the few system steps, everything else as you. The Apache and
-PHP-FPM binaries are the ones the system already has.
 
-Every command takes --json (one JSON object on stdout). Errors are the Gash
-error envelope on stderr with exit status 1. Without a terminal nothing
-prompts: a missing required flag is missing_value, and a destructive step
-without --yes is confirmation_required.
+  gash localweb · Local Apache and PHP-FPM sites with HTTPS
 
-Start with: gash localweb install, then gash localweb migrate (a dry run of what
-would move from hte-cli), then gash localweb site create. The guide is
-docs/localweb/README.md; WSL notes are in its "WSL" section.
+  COMMAND    USAGE  SHORTCUT  DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────
+  apache                      The global Apache overlay and modules
+  cert                        Site certificates
+  doctor                      Check the machine and the stack; exits 1 when a c…
+  hosts                       The managed block of the hosts file
+  install                     Install the stack: one sudo for the system steps,…
+  migrate                     Move the hte-cli and system vhosts to the stack (…
+  php                         PHP versions and php.ini values
+  service                     Start, stop and inspect the stack
+  site                        Create, change and remove sites
+  uninstall                   Stop the stack, restore the system as install fou…
 
-gash hte, the name before Gash 4.0, is deprecated: it still runs gash
-localweb through 4.x and goes away in 5.0. Gash 4.1 moves the files of
-an install of Gash 4.0 to their localweb names (the guide's "Files of
-Gash 4.0" section).
-
-Usage:
-  gash localweb [flags]
-  gash localweb [command]
-
-Aliases:
-  localweb, hte
-
-Available Commands:
-  apache      The global Apache overlay and modules
-  cert        Site certificates
-  doctor      Check the machine and the stack; exits 1 when a check fails
-  hosts       The managed block of the hosts file
-  install     Install the stack: one sudo for the system steps, then the userland tree, the stack and autostart
-  migrate     Move the hte-cli and system vhosts to the stack (a dry-run plan without --apply)
-  php         PHP versions and php.ini values
-  service     Start, stop and inspect the stack
-  site        Create, change and remove sites
-  uninstall   Stop the stack, restore the system as install found it, stage the sites for a later install
-
-Flags:
-  -h, --help[=true|false]   help for localweb
-      --json[=true|false]   print one JSON object
-
-Use "gash localweb [command] --help" for more information about a command.
+  Details: gash localweb COMMAND --help · Guide: docs/localweb/README.md
 ```
 
 ### gash localweb apache

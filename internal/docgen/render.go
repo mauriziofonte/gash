@@ -253,11 +253,12 @@ func link(name string) string {
 
 // command renders a gash command and, recursively, its subcommands. A
 // subcommand whose section done names (a function of the area, listed by
-// a namespace page) is not repeated; the commands of the area always are,
-// with their full help.
+// a namespace page) is not repeated, nor a group of the tree (gash runtime
+// detect), whose commands are functions of the area; the commands of the
+// area always are, with their full help.
 func command(w func(...string), help HelpFunc, path []string, done map[string]bool) {
 	name := "gash " + strings.Join(path, " ")
-	if len(path) > 1 && done[name] {
+	if len(path) > 1 && (done[name] || registry.IsGroup(path...)) {
 		return
 	}
 	done[name] = true

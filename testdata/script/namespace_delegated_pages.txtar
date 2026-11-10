@@ -1,0 +1,49 @@
+# Gash 4.1. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (4.1.2: the pages of the delegated namespaces)
+#
+# A namespace whose 3.x command serves the words the tree does not list
+# prints the namespace page, as every other namespace does: gash localweb
+# and gash logs (no command of the tree) as gash wsl, with or without
+# --help. A group of such a namespace (gash runtime detect, gash runtime
+# upgrade) prints its group page, as gash git tag does, and so does gash
+# help runtime detect; before, the words went to the 3.x command
+# (unknown_runtime, the usage of gash runtime php). A command of the 3.x
+# tree keeps its own --help.
+
+env GASH_HEADLESS=1 LC_ALL=C COLUMNS=200
+exec bash pages.sh
+! stderr .
+
+-- pages.sh --
+export GASH_HEADLESS=1 LC_ALL=C COLUMNS=200
+source "$GASH_SH"
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+
+for ns in localweb logs wsl; do
+  for arg in "" --help -h; do
+    page="$(gash $ns $arg)" || fail "$ns $arg status"
+    grep -qE "^  gash $ns . " <<<"$page"                        || fail "$ns $arg title"
+    grep -qE "^  COMMAND +USAGE +SHORTCUT +DESCRIPTION$" <<<"$page" || fail "$ns $arg table"
+    grep -q "^  Details: gash $ns COMMAND --help" <<<"$page"     || fail "$ns $arg footer"
+    if grep -q "Available Commands" <<<"$page"; then fail "$ns $arg cobra help"; fi
+  done
+done
+grep -qE "^  site +Create, change and remove sites" <<<"$(gash localweb)" || fail "localweb site row"
+grep -qE "^  clean +Reclaim space" <<<"$(gash logs)"                      || fail "logs clean row"
+
+for words in "runtime detect" "runtime detect --help" "help runtime detect"; do
+  page="$(gash $words)" || fail "$words status"
+  grep -qE "^  gash runtime detect . " <<<"$page" || fail "$words title"
+  grep -qE "^  detect php +" <<<"$page"           || fail "$words detect php"
+  grep -qE "^  detect node +" <<<"$page"          || fail "$words detect node"
+  if grep -q "VERSION" <<<"$page"; then fail "$words runtime usage"; fi
+done
+page="$(gash runtime upgrade)" || fail "upgrade status"
+grep -qE "^  upgrade node +.* nvmc " <<<"$page"   || fail "upgrade node"
+grep -qE "^  upgrade chrome +.* chri " <<<"$page" || fail "upgrade chrome"
+
+[[ "$(gash localweb doctor --help)" == *"gash localweb doctor [flags]"* ]] || fail "doctor --help"
+[[ "$(gash runtime php --help)" == *"Usage: gash runtime php|node"* ]]     || fail "runtime php --help"
+echo ok

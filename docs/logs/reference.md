@@ -9,20 +9,15 @@ gash logs: find the log files that fill a disk and reclaim the space safely. The
 ### gash logs
 
 ```text
-Find and reclaim disk space from log files
 
-Usage:
-  gash logs [flags]
-  gash logs [command]
+  gash logs · Find and reclaim disk space from log files
 
-Available Commands:
-  clean       Reclaim space: delete rotated logs, optionally truncate live ones
-  scan        Report the log files eating disk, grouped by category
+  COMMAND  USAGE  SHORTCUT  DESCRIPTION
+  ──────────────────────────────────────────────────────────────────────────────
+  clean                     Reclaim space: delete rotated logs, optionally trun…
+  scan                      Report the log files eating disk, grouped by catego…
 
-Flags:
-  -h, --help[=true|false]   help for logs
-
-Use "gash logs [command] --help" for more information about a command.
+  Details: gash logs COMMAND --help · Guide: docs/logs/README.md
 ```
 
 ### gash logs clean

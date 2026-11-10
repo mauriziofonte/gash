@@ -1,17 +1,23 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 # covers: none (3.0 HTE surface; no 2.x spec)
 # gash localweb help: on stdout, exit 0, nothing on stderr; the hidden
-# commands are not listed.
+# commands are not listed. gash localweb and its --help are the namespace
+# page, as for every namespace (4.1.2; before, the root help of the cobra
+# tree); a command of the tree keeps its own --help.
 
 exec gash localweb
-stdout '^Manage the local Apache and PHP-FPM test environment|^gash localweb runs a userland Apache'
-stdout '^  gash localweb \[command\]$'
+stdout '^  gash localweb .* Local Apache and PHP-FPM sites with HTTPS$'
 stdout '^  install +Install the stack'
 stdout '^  migrate +Move the hte-cli and system vhosts'
-! stdout '__root|__unit|__autostart|completion'
+stdout '^  Details: gash localweb COMMAND --help'
+! stdout '__root|__unit|__autostart|completion|Available Commands'
 ! stderr .
 
 exec gash localweb --help
+stdout '^  gash localweb .* Local Apache and PHP-FPM sites with HTTPS$'
+! stderr .
+
+exec gash localweb site --help
 stdout '^      --json\[=true\|false\]   print one JSON object$'
 ! stderr .
 

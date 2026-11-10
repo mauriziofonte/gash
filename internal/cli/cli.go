@@ -86,8 +86,9 @@ func Run(p Process) int {
 				return status
 			}
 		} else if delegatePage(p.Args) {
-			// gash wsl, gash win, gash runtime: the namespace page lists
-			// the commands of the tree with those of the 3.x command.
+			// gash wsl, gash localweb, gash runtime detect: the page of a
+			// namespace lists the commands of the tree with those of its
+			// 3.x command; a group of the tree lists its own.
 			return p.call("gash", p.Args)
 		}
 	}
@@ -110,14 +111,21 @@ func Run(p Process) int {
 	return status
 }
 
-// delegatePage reports `gash NS` or `gash NS --help` for a namespace
-// whose 3.x command shares it with commands of the tree.
+// delegatePage reports a page of a namespace whose 3.x command serves the
+// words the tree does not list, which the card prints as for every other
+// namespace: `gash NS` (gash localweb, gash wsl) and a group of its tree
+// (gash runtime detect), each with or without --help. Any other word goes
+// to the 3.x command.
 func delegatePage(args []string) bool {
 	ns, ok := registry.NamespaceOf(args[0])
-	if !ok || ns.Delegate == "" || len(registry.CommandsUnder(ns.Name)) == 0 {
+	if !ok || ns.Delegate == "" {
 		return false
 	}
-	return len(args) == 1 || len(args) == 2 && (args[1] == "--help" || args[1] == "-h")
+	words := args
+	if n := len(words); n > 1 && (words[n-1] == "--help" || words[n-1] == "-h") {
+		words = words[:n-1]
+	}
+	return len(words) == 1 || registry.IsGroup(words...)
 }
 
 // runTree runs a command of the 3.5 tree: its catalog function, or the
@@ -141,7 +149,7 @@ func (p *Process) runTree(c *registry.Command, rest []string) (status int, done 
 				p.Args = append(append([]string{target.Command3x}, target.Prefix...), "--help")
 				return 0, false
 			}
-			if _, _, ok := registry.Resolve(rest); !ok && len(rest) > 1 {
+			if _, _, ok := registry.Resolve(rest); !ok && len(rest) > 1 && !registry.IsGroup(rest...) {
 				if ns, ok := registry.NamespaceOf(rest[0]); ok && ns.Delegate != "" {
 					p.Args = append(append([]string{ns.Delegate}, rest[1:]...), "--help")
 					return 0, false
