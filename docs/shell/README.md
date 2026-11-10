@@ -177,7 +177,7 @@ mask: [0-9]+ +[0-9]+ {2}
 ```console
 $ gash
 
-  Gash 4.1.0 · Bash for humans and AI agents
+  Gash 4.1.1 · Bash for humans and AI agents
 
   EVERYDAY
     files    Largest files and folders, tree stats, archives, backups

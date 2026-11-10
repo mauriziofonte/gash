@@ -6,7 +6,9 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [Unreleased]
+## [4.1.1] - 2026-11-10
+
+Gash 4 stops suggesting the names it no longer defines: messages, usages, hints and help name the commands (`gash shell history-smart`, not `hgrep`). `gash doctor --legacy` no longer reports a command of your own under a former name, and the history searches leave themselves out again.
 
 ### Fixed
 
@@ -1294,6 +1296,8 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[4.1.1]: https://github.com/mauriziofonte/gash/compare/v4.1.0...v4.1.1
+[4.1.0]: https://github.com/mauriziofonte/gash/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/mauriziofonte/gash/compare/v3.5.0...v4.0.0
 [3.5.0]: https://github.com/mauriziofonte/gash/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/mauriziofonte/gash/compare/v3.4.1...v3.4.2
