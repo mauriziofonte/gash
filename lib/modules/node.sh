@@ -58,10 +58,10 @@ __node_read_remote_index() {
 }
 
 # shellcheck disable=SC2120
-node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
+node_upgrade() { __gash_cold node_upgrade 16985517 && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 # shellcheck disable=SC2120
-nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
+nvm_prune_versions() { __gash_cold nvm_prune_versions dda5a23d && "${FUNCNAME[0]}" "$@"; }
 
 alias nvmp='gash runtime prune node'
 alias nvmc='gash runtime upgrade node'

@@ -6,6 +6,9 @@
 # LEDGER CORE-05: gash_db_test connects through the native drivers. With
 # no mysql, mariadb or psql on PATH and a host that refuses the
 # connection it prints "Connection failed", never "client not found".
+# Where a closed local port drops the connection instead of refusing it
+# (some WSL hosts), the driver's error is a timeout: GASH_DB_TIMEOUT=3
+# keeps it short.
 
 env GASH_HEADLESS=1
 mkdir empty-bin
@@ -17,13 +20,13 @@ chmod 600 home/.gash_env
 ! exec bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test my'
 ! stdout .
 stderr -count=1 '^Info: Testing connection ''my'' \(mysql://u@127.0.0.1:1/app\)\.\.\.$'
-stderr '^Error: Connection failed\nHint: .*connection refused$'
+stderr '^Error: Connection failed\nHint: .*(connection refused|i/o timeout)$'
 ! stderr secret
 
 ! exec bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test pg'
 ! stdout .
 stderr -count=1 '^Info: Testing connection ''pg'' \(pgsql://u@127.0.0.1:1/app\)\.\.\.$'
-stderr '^Error: Connection failed\nHint: .*connection refused$'
+stderr '^Error: Connection failed\nHint: .*(connection refused|context deadline exceeded)$'
 ! stderr secret
 
 ! exec bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test maria'
@@ -31,6 +34,7 @@ stderr '^Error: Connection failed\nHint: .*connection refused$'
 stderr '^Error: Connection failed$'
 
 -- gash_env --
+GASH_DB_TIMEOUT=3
 DB:my=mysql://u:secret@127.0.0.1:1/app
 DB:pg=pgsql://u:secret@127.0.0.1:1/app
 DB:maria=mariadb://u:secret@127.0.0.1:1

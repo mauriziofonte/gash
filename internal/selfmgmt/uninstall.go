@@ -64,7 +64,7 @@ func (m *Module) uninstall(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	if badArgs(c, "gash_uninstall") {
+	if badArgs(c, "gash uninstall") {
 		return usageStatus
 	}
 	s := ui.StyleOf(c.Term, false)
@@ -89,7 +89,7 @@ func (m *Module) uninstall(c *invoke.Call) int {
 	// The profile edits run sed: without it nothing is removed (3.4: the
 	// uninstall went on and left the profiles loading a removed Gash).
 	if len(gashProfiles(home)) > 0 {
-		if _, ok := prereq.Require(c, "sed", "gash_uninstall", false); !ok {
+		if _, ok := prereq.Require(c, "sed", "gash uninstall", false); !ok {
 			return 1
 		}
 	}
@@ -202,7 +202,7 @@ func (m *Module) editProfile(c *invoke.Call, p ui.Printer, profile, expr string)
 	}})
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		if se.Status == 127 {
-			prereq.Fail(c, "sed", "gash_uninstall", false)
+			prereq.Fail(c, "sed", "gash uninstall", false)
 		} else {
 			_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
 		}

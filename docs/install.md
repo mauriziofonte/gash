@@ -199,7 +199,7 @@ doctor; [docs/README.md](README.md) lists every area.
 ## Update
 
 ```bash
-gash update            # the same as gash_upgrade
+gash update            # the newest verified release
 gash update --rollback # back to the version you had before
 ```
 

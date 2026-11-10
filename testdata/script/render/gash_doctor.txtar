@@ -33,7 +33,7 @@ stderr 'Warning: [0-9]+ issue.s. found\.'
 [bash5] stdout 'Startup timing'
 [bash5] stdout 'gash.sh \(total\)'
 [!bash5] ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor --timing'
-[!bash5] stderr 'gash_doctor --timing needs Bash 5\.0 or newer'
+[!bash5] stderr 'gash doctor --timing needs Bash 5\.0 or newer'
 
 # --- R6: plain mode, no ESC on either stream (without the 0644 settings
 # file of :53, an issue that would make the status 1)

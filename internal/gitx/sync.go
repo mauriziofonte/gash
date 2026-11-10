@@ -10,7 +10,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
-const syncUsage = "git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]"
+const syncUsage = "gash git sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]"
 
 // inProgress are the git-path markers of an operation in progress, in the
 // 2.x order, with the word the message uses.

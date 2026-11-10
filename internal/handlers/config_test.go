@@ -79,10 +79,10 @@ func TestConfigListsMatch2x(t *testing.T) {
 func TestConfigListsHelp(t *testing.T) {
 	out, _, rc := run(t, "gash_db_list", map[string]string{"GASH__HELP": "0"}, false, "--help")
 	require.Equal(t, 0, rc)
-	require.Equal(t, "gash_db_list\nUsage: gash_db_list\nList available database connections from ~/.gash_env\n", out)
+	require.Equal(t, "gash db list\nUsage: gash db list\nList available database connections from ~/.gash_env\n", out)
 	out, _, rc = run(t, "gash_ai_list", map[string]string{"GASH__HELP": "0"}, false, "-h")
 	require.Equal(t, 0, rc)
-	require.Equal(t, "gash_ai_list\nUsage: gash_ai_list\nList available AI providers from ~/.gash_env\n", out)
+	require.Equal(t, "gash ai providers\nUsage: gash ai providers\nList available AI providers from ~/.gash_env\n", out)
 }
 
 // listOf runs a listing on a settings file with content.
@@ -133,12 +133,12 @@ func TestLedger_CORE06(t *testing.T) {
 	other := filepath.Join(t.TempDir(), "other")
 	env := map[string]string{"GASH_ENV_FILE": other}
 	_, errOut := listOf(t, "gash_db_list", "", env)
-	require.Equal(t, "Info: No database connections configured in "+other+"\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
+	require.Equal(t, "Info: No database connections configured in "+other+"\nInfo: Run 'gash config init' to create a template configuration\n", errOut)
 	_, errOut = listOf(t, "gash_ai_list", "", env)
 	require.Equal(t, "Info: No AI providers configured in "+other+"\nInfo: Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY\n", errOut)
 	// Without GASH_ENV_FILE the default file keeps its 2.x name.
 	_, errOut = listOf(t, "gash_db_list", "", nil)
-	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
+	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash config init' to create a template configuration\n", errOut)
 	// The file itself is the one read.
 	out, _ := listOf(t, "gash_ai_list", "AI:claude=sk-123456789\n", env)
 	require.True(t, strings.Contains(out, "claude     sk-12345..."), out)

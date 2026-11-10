@@ -7,11 +7,12 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
-// transfer describes one scp or rsync function: its name, its usage
-// line, which side the remote path is on, and the operation word of its
-// safety messages.
+// transfer describes one scp or rsync function: its name (the catalog
+// function), its usage line (by the canonical command), which side the
+// remote path is on, and the operation word of its safety messages.
 type transfer struct {
 	name      string
 	usage     string
@@ -27,13 +28,13 @@ const (
 )
 
 var (
-	pushSpec = transfer{"remote_push", "remote_push <alias|user@host> <local-src> <remote-dst>" + scpOpts,
+	pushSpec = transfer{"remote_push", "gash remote push <alias|user@host> <local-src> <remote-dst>" + scpOpts,
 		"local source", "remote destination", "push", false}
-	pullSpec = transfer{"remote_pull", "remote_pull <alias|user@host> <remote-src> <local-dst>" + scpOpts,
+	pullSpec = transfer{"remote_pull", "gash remote pull <alias|user@host> <remote-src> <local-dst>" + scpOpts,
 		"remote source", "local destination", "pull (source path access)", true}
-	syncPushSpec = transfer{"remote_sync_push", "remote_sync_push <alias|user@host> <local-dir> <remote-dir>" + rsyncOpts,
+	syncPushSpec = transfer{"remote_sync_push", "gash remote sync push <alias|user@host> <local-dir> <remote-dir>" + rsyncOpts,
 		"local source", "remote destination", "sync-push", false}
-	syncPullSpec = transfer{"remote_sync_pull", "remote_sync_pull <alias|user@host> <remote-dir> <local-dir>" + rsyncOpts,
+	syncPullSpec = transfer{"remote_sync_pull", "gash remote sync pull <alias|user@host> <remote-dir> <local-dir>" + rsyncOpts,
 		"remote source", "local destination", "sync-pull (source path access)", true}
 )
 
@@ -87,7 +88,7 @@ func (x *call) parseFlags(t transfer, words []string, rsync bool) (flags, bool) 
 // positionals checks the three positionals, as __gash_require_arg does, in
 // order: target, source, destination.
 func (x *call) positionals(t transfer) (string, string, string, bool) {
-	usage := t.name + " <alias> <src> <dst>"
+	usage := registry.CanonicalCall(t.name) + " <alias> <src> <dst>"
 	input, src, dst := x.Arg(0), x.Arg(1), x.Arg(2)
 	ok := x.requireArg(input, "host alias/target", usage, "missing_host") &&
 		x.requireArg(src, t.srcName, usage, "missing_value") &&

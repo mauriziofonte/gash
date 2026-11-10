@@ -92,7 +92,7 @@ func TestLedger_SELF13(t *testing.T) {
 	for a, what := range map[string]string{"foo": "Unexpected argument", "--bogus": "Unknown option", "-x": "Unknown option"} {
 		o, e, rc := run(t, "gash_inspiring_quote", nil, false, a)
 		require.Empty(t, o)
-		require.Equal(t, "Error: "+what+": "+a+" (usage: gash_inspiring_quote [--source])\n", e)
+		require.Equal(t, "Error: "+what+": "+a+" (usage: gash shell quote [--source])\n", e)
 		require.Equal(t, 1, rc)
 	}
 }

@@ -39,10 +39,9 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 	}
 	cmd, hasCmd := registry.CommandOf(f.Name)
 	h := f.Help
-	title := f.Name
+	title := registry.PageName(f)
 	if hasCmd {
 		h = registry.CanonicalHelp(f)
-		title = cmd.Name()
 	}
 	var sb strings.Builder
 	line := func(s string) { sb.WriteString(s); sb.WriteByte('\n') }
@@ -109,15 +108,17 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 			heading("FORMER NAME")
 			line("    " + a + strings.Join(former, ", ") + r + m + "  the Gash 3.x name, defined with GASH_LEGACY_NAMES=1" + r)
 		}
+	} else if registry.Legacy(f.Name) {
+		// gash_migrate: a legacy name whose command is not in the tree.
+		line("")
+		heading("FORMER NAME")
+		line("    " + a + f.Name + r + m + "  the Gash 3.x name, defined with GASH_LEGACY_NAMES=1" + r)
 	}
-	if h.SeeAlso != "" {
+	if see := registry.SeeAlso(f); len(see) > 0 {
 		line("")
 		heading("SEE ALSO")
 		var list []string
-		for _, s := range strings.FieldsFunc(h.SeeAlso, func(r rune) bool { return r == '\n' || (!hasCmd && r == ' ') }) {
-			if c, ok := registry.Canonical(s); ok && !hasCmd {
-				s = c // a script helper's page names the commands too
-			}
+		for _, s := range see {
 			list = append(list, a+s+r)
 		}
 		line("    " + strings.Join(list, ", "))
@@ -151,7 +152,8 @@ func Fallback(w io.Writer, color bool, program, usage, description string) {
 // Needs is the port of needs_help PROGRAM USAGE DESCRIPTION ARG: when ARG
 // is -h or --help it prints the registered help of program (when the
 // caller's shell had the help registry loaded) or the fallback, and
-// returns true; otherwise it returns false.
+// returns true; otherwise it returns false. The fallback names a former
+// flat name by its command (registry.CanonicalCall), as the help pages do.
 func Needs(c *invoke.Call, program, usage, description, arg string) bool {
 	if arg != "--help" && arg != "-h" {
 		return false
@@ -162,7 +164,7 @@ func Needs(c *invoke.Call, program, usage, description, arg string) bool {
 			return true
 		}
 	}
-	Fallback(c.Stdout, color, program, usage, description)
+	Fallback(c.Stdout, color, registry.CanonicalCall(program), registry.CanonicalCall(usage), description)
 	return true
 }
 

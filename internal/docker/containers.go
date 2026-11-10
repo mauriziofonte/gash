@@ -24,13 +24,13 @@ func ifsFields(s string) []string {
 // the Y/n question (headless or without a terminal it needs -y, LEDGER
 // DOCK-22), then one `docker stop` of every ID.
 func (m *Module) stopAll(c *invoke.Call) int {
-	return m.startStop(c, "docker_stop_all", []string{"ps"}, "No running containers to stop.", "Stopping Docker containers...", "stop")
+	return m.startStop(c, "gash docker stop-all", []string{"ps"}, "No running containers to stop.", "Stopping Docker containers...", "stop")
 }
 
 // startAll is docker_start_all [-y]: the same for the exited and created
 // containers and `docker start`.
 func (m *Module) startAll(c *invoke.Call) int {
-	return m.startStop(c, "docker_start_all", []string{"ps", "-a", "--filter", "status=exited", "--filter", "status=created"},
+	return m.startStop(c, "gash docker start-all", []string{"ps", "-a", "--filter", "status=exited", "--filter", "status=created"},
 		"No stopped containers to start.", "Starting Docker containers...", "start")
 }
 
@@ -141,7 +141,7 @@ func (x *call) userNetworks() ([]string, bool) {
 	return out, true
 }
 
-const pruneUsage = "docker_prune_all [-y] [--dry-run]"
+const pruneUsage = "gash docker prune-all [-y] [--dry-run]"
 
 // pruneAll is docker_prune_all [-y] [--dry-run]: the counts, then (after
 // the question unless -y) stop, rm, rmi, volume rm, network rm and

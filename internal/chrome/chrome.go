@@ -132,7 +132,7 @@ func (m *Module) update(c *invoke.Call) int {
 		case "--dry-run":
 			dryRun = true
 		default:
-			k.p.Error("Unknown option: " + a + " (usage: chrome_headless_update [-y] [--dry-run])")
+			k.p.Error("Unknown option: " + a + " (usage: gash runtime upgrade chrome [-y] [--dry-run])")
 			return 1
 		}
 	}
@@ -435,7 +435,7 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 		}
 		sort.Strings(pkgs)
 		k.p.Error("Missing shared libraries: " + strings.Join(missing, " ") + " ")
-		k.p.Info("Install them, then run chrome_headless_update again:  sudo apt-get install " + strings.Join(pkgs, " "))
+		k.p.Info("Install them, then run gash runtime upgrade chrome again:  sudo apt-get install " + strings.Join(pkgs, " "))
 		k.deleteTree(tmp, false)
 		return 1
 	}

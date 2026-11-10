@@ -156,7 +156,7 @@ func (x *call) resolveTarget(input string) (string, bool) {
 		if skipped != "" {
 			msg += " Skipped: " + skipped + "."
 		}
-		x.fail("unknown_host", msg, "Use an alias that remote_hosts lists, or ask the user to add HOST:alias=user@host to ~/.gash_env")
+		x.fail("unknown_host", msg, "Use an alias that gash remote hosts lists, or ask the user to add HOST:alias=user@host to ~/.gash_env")
 		return "", false
 	}
 	if config.ValidHostTarget(input) {

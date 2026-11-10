@@ -199,7 +199,7 @@ func missingTool(c *invoke.Call, cmd string) int {
 			tool = n.tool
 		}
 	}
-	return prereq.Fail(c, tool, "archive_extract ("+labels[k]+")", false)
+	return prereq.Fail(c, tool, "gash files extract ("+labels[k]+")", false)
 }
 
 // hasWildcard reports whether name holds a character that unzip and unrar
@@ -246,7 +246,7 @@ func archiveExtract(c *invoke.Call) int {
 		outputDir = "."
 	}
 	if archive == "" {
-		p.Error("Missing archive file. Usage: archive_extract <archive_file> [output_dir]")
+		p.Error("Missing archive file. Usage: gash files extract <archive_file> [output_dir]")
 		return 1
 	}
 	if notRegular(archive) {
@@ -590,7 +590,7 @@ func fileBackup(c *invoke.Call) int {
 
 	file := c.Arg(0)
 	if file == "" {
-		p.Error("Missing file. Usage: file_backup <file>")
+		p.Error("Missing file. Usage: gash files backup <file>")
 		return 1
 	}
 	if notRegular(file) {
@@ -637,7 +637,7 @@ func fileBackup(c *invoke.Call) int {
 		// cp is POSIX, outside the prerequisite catalog: named, not
 		// "Failed to create backup file." (3.4).
 		_ = os.Remove(backup)
-		p.Error("file_backup needs cp, which is not on PATH.")
+		p.Error("gash files backup needs cp, which is not on PATH.")
 		return 1
 	}
 	if rerr != nil || res.ExitCode != 0 || !isRegularFile(backup) {

@@ -151,14 +151,9 @@ func Reference(a Area, help HelpFunc) string {
 	return b.String()
 }
 
-// title is the heading of a function: its canonical command (gash files
-// largest), or its own name for a script helper with no command.
-func title(f registry.Function) string {
-	if c, ok := registry.CommandOf(f.Name); ok {
-		return c.Name()
-	}
-	return f.Name
-}
+// title is the heading of a function: the title of its help page
+// (registry.PageName).
+func title(f registry.Function) string { return registry.PageName(&f) }
 
 // shortcuts are the typing shortcuts of a function: the shortcut of its
 // command, else its module aliases.
@@ -198,6 +193,8 @@ func function(w func(...string), f registry.Function) {
 		case len(c.FormerNames()) > 0:
 			names = append(names, "Former name: `"+strings.Join(c.FormerNames(), "`, `")+"` (with `GASH_LEGACY_NAMES=1`)")
 		}
+	} else if registry.Legacy(f.Name) {
+		names = append(names, "Former name: `"+f.Name+"` (with `GASH_LEGACY_NAMES=1`)")
 	}
 	if len(names) > 0 {
 		w("", strings.Join(names, ". ")+".")
@@ -223,15 +220,9 @@ func function(w func(...string), f registry.Function) {
 		}
 		w("", "#### "+titleCase(sec.title), "", "```"+fence, sec.text, "```")
 	}
-	if h.SeeAlso != "" {
+	if see := registry.SeeAlso(&f); len(see) > 0 {
 		var links []string
-		for _, name := range strings.FieldsFunc(h.SeeAlso, func(r rune) bool { return r == '\n' || r == '\t' }) {
-			if !strings.HasPrefix(name, "gash ") {
-				for _, n := range strings.Fields(name) {
-					links = append(links, link(n))
-				}
-				continue
-			}
+		for _, name := range see {
 			links = append(links, link(name))
 		}
 		w("", "See also: "+strings.Join(links, ", "))
@@ -239,14 +230,16 @@ func function(w func(...string), f registry.Function) {
 }
 
 // link is a see-also entry: a link to the function's section in the
-// reference of its area, plain code when it is not a documented function.
+// reference of its area (the function of the name, or the one whose page
+// it titles: gash help, gash update), plain code when it is not a
+// documented function.
 func link(name string) string {
 	fn := name
 	if c, ok := registry.CanonicalName(name); ok && c.Handler != "" && strings.HasPrefix(name, "gash ") {
 		fn = c.Handler
 	}
 	for _, f := range registry.Functions() {
-		if f.Name != fn || !f.HasHelp {
+		if (f.Name != fn && title(f) != name) || !f.HasHelp {
 			continue
 		}
 		area := AreaOf(f)

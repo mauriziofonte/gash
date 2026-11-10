@@ -18,7 +18,7 @@ import (
 )
 
 // doctorUsage is the usage line of gash_doctor.
-const doctorUsage = "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]]"
+const doctorUsage = "gash doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]]"
 
 // doctorFlags are the parsed arguments of gash_doctor.
 type doctorFlags struct {
@@ -123,7 +123,7 @@ func (m *Module) doctorPrereqs(c *invoke.Call, s ui.Style, sys *prereq.System) i
 		}
 	}
 	if installable > 0 {
-		p.Hint("gash_doctor --install installs the missing tools after asking (--all adds the optional ones)")
+		p.Hint("gash doctor --install installs the missing tools after asking (--all adds the optional ones)")
 	}
 	return issues
 }
@@ -229,7 +229,7 @@ func (m *Module) doctorInstall(c *invoke.Call, s ui.Style, sys *prereq.System, f
 		for _, name := range f.tools {
 			t, ok := prereq.Lookup(name)
 			if !ok {
-				p.Error("Unknown tool: " + name + " (gash_doctor --prereqs lists them)")
+				p.Error("Unknown tool: " + name + " (gash doctor --prereqs lists them)")
 				return usageStatus
 			}
 			if path, found := sys.Find(t); found {
@@ -281,7 +281,7 @@ func (m *Module) doctorInstall(c *invoke.Call, s ui.Style, sys *prereq.System, f
 
 	if s.Headless || c.Env.Get("GASH_HEADLESS") == "1" {
 		return c.Fail(contract.New("install_needs_confirmation",
-			"gash_doctor installs packages only for a person at a terminal",
+			"gash doctor installs packages only for a person at a terminal",
 			"Ask the user to run: "+line).With("install", line))
 	}
 	if sys.NeedsRoot() {

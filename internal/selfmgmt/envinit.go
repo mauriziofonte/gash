@@ -25,7 +25,7 @@ func (m *Module) envInit(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	if badArgs(c, "gash_env_init [--force]", "--force") {
+	if badArgs(c, "gash config init [--force]", "--force") {
 		return usageStatus
 	}
 	force := c.Arg(0) == "--force"

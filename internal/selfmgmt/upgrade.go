@@ -58,7 +58,7 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	if badArgs(c, "gash_upgrade") {
+	if badArgs(c, "gash update") {
 		return usageStatus
 	}
 	return m.upgradeFlow(c)

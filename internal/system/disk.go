@@ -32,7 +32,7 @@ func (m *Module) diskUsage(c *invoke.Call) int {
 	noColor := false
 	for _, a := range c.Args {
 		if a != "--no-color" {
-			p.Error("disk_usage: unknown option '" + a + "'")
+			p.Error("gash system disks: unknown option '" + a + "'")
 			return 1
 		}
 		noColor = true
@@ -44,7 +44,7 @@ func (m *Module) diskUsage(c *invoke.Call) int {
 		raw = m.df(c, "-Pk")
 	}
 	if raw == "" {
-		p.Error("disk_usage: df failed")
+		p.Error("gash system disks: df failed")
 		return 1
 	}
 	rows := diskRows(raw, typed)

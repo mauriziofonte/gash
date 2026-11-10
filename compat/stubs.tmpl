@@ -452,7 +452,7 @@ node_upgrade() {
             -y | --yes | --force) assume_yes=1 ;;
             --dry-run) dry_run=1 ;;
             *)
-                __gash_error "Unknown option: $arg (usage: node_upgrade [-y] [--dry-run])"
+                __gash_error "Unknown option: $arg (usage: gash runtime upgrade node [-y] [--dry-run])"
                 return 1
                 ;;
         esac
@@ -571,7 +571,7 @@ nvm_prune_versions() {
         case "$arg" in
             --force | -f | -y | --yes) force=1 ;;
             *)
-                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [-y|--yes|--force])"
+                __gash_error "Unknown option: $arg (usage: gash runtime prune node [-y|--yes|--force])"
                 return 1
                 ;;
         esac

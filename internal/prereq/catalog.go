@@ -69,7 +69,7 @@ var catalog = []Tool{
 		Note: "On macOS git comes with the Command Line Tools: xcode-select --install"},
 	{Name: "grep", Purpose: "is used by the installer", Level: Required, Area: "core",
 		Packages: pkgs("grep", "brew", ""), Builtin: []string{"darwin"}},
-	{Name: "sed", Purpose: "is used by the installer and gash_uninstall", Level: Required, Area: "core",
+	{Name: "sed", Purpose: "is used by the installer and gash uninstall", Level: Required, Area: "core",
 		Packages: pkgs("sed", "brew", ""), Builtin: []string{"darwin"}},
 
 	// Remote hosts and SSH.
@@ -115,7 +115,7 @@ var catalog = []Tool{
 		Level: Feature, Area: "archives", Packages: pkgs("unzip", "brew", ""), Builtin: []string{"darwin"}},
 	{Name: "bzip2", Commands: []string{"bzip2", "bunzip2"}, Purpose: "extracts .bz2 archives",
 		Level: Feature, Area: "archives", Packages: pkgs("bzip2", "brew", ""), Builtin: []string{"darwin"}},
-	{Name: "xz", Purpose: "extracts .xz archives, and lets archive_extract check a .tar.xz before extracting it",
+	{Name: "xz", Purpose: "extracts .xz archives, and lets gash files extract check a .tar.xz before extracting it",
 		Level: Feature, Area: "archives", Packages: pkgs("xz", "apt", "xz-utils")},
 	{Name: "zstd", Purpose: "extracts .zst archives", Level: Feature, Area: "archives", Packages: pkgs("zstd")},
 	{Name: "7z", Commands: []string{"7z", "7zz"}, Purpose: "extracts .7z archives", Level: Feature, Area: "archives",

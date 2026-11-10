@@ -108,10 +108,10 @@ func pinSystem() (restore func()) {
 
 // report is the prerequisite report of a missing archive tool on Debian.
 func report(label, tool, purpose, pkg string) string {
-	return "Error: archive_extract (" + label + ") needs " + tool + ", which is not installed.\n" +
+	return "Error: gash files extract (" + label + ") needs " + tool + ", which is not installed.\n" +
 		"  " + tool + " " + purpose + " (package " + pkg + " on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y " + pkg + "\n" +
-		"  Or run:      gash_doctor --install " + tool + "\n"
+		"  Or run:      gash doctor --install " + tool + "\n"
 }
 
 func gzipReport(label string) string {
@@ -390,11 +390,11 @@ func TestLedger_FILE12_fix(t *testing.T) {
 		}
 	}
 	_, errb, rc := runIn(t, d, nil, nil, "archive_extract")
-	if rc != 1 || errb != "Error: Missing archive file. Usage: archive_extract <archive_file> [output_dir]\n" {
+	if rc != 1 || errb != "Error: Missing archive file. Usage: gash files extract <archive_file> [output_dir]\n" {
 		t.Errorf("missing arg: rc=%d err=%q", rc, errb)
 	}
 	_, errb, rc = runIn(t, d, nil, nil, "file_backup")
-	if rc != 1 || errb != "Error: Missing file. Usage: file_backup <file>\n" {
+	if rc != 1 || errb != "Error: Missing file. Usage: gash files backup <file>\n" {
 		t.Errorf("missing arg: rc=%d err=%q", rc, errb)
 	}
 }
@@ -476,10 +476,10 @@ func TestLedger_FILE19(t *testing.T) {
 		}
 		withRunner(t, runner.NewFake(t)) // no start at all: zstd is never run
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "zstd")}, nil, "archive_extract", "a.tar.zst", "out")
-		if rc != 1 || errb != "Error: archive_extract (.tar.zst) needs tar, which is not installed.\n"+
+		if rc != 1 || errb != "Error: gash files extract (.tar.zst) needs tar, which is not installed.\n"+
 			"  tar unpacks the Gash release archive (package tar on Debian GNU/Linux 12).\n"+
 			"  Install it:  apt-get install -y tar\n"+
-			"  Or run:      gash_doctor --install tar\n" {
+			"  Or run:      gash doctor --install tar\n" {
 			t.Errorf("rc=%d err=%q", rc, errb)
 		}
 	})

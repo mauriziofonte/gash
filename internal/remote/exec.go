@@ -27,7 +27,7 @@ func (m *Module) exec(c *invoke.Call) int {
 	}
 	x := m.begin(c)
 	input := c.Arg(0)
-	if !x.requireArg(input, "host alias/target", `remote_exec <alias|user@host> "command"`, "missing_host") {
+	if !x.requireArg(input, "host alias/target", `gash remote exec <alias|user@host> "command"`, "missing_host") {
 		return 1
 	}
 	args := c.Args[1:]
@@ -45,7 +45,7 @@ func (m *Module) exec(c *invoke.Call) int {
 	scriptFile := ""
 	if arg(0) == "--script" {
 		scriptFile = arg(1)
-		if !x.requireArg(scriptFile, "script file", "remote_exec <alias> --script FILE|-", "missing_file") {
+		if !x.requireArg(scriptFile, "script file", "gash remote exec <alias> --script FILE|-", "missing_file") {
 			return 1
 		}
 		args = args[2:]
@@ -69,19 +69,19 @@ func (m *Module) exec(c *invoke.Call) int {
 		stdin = strings.NewReader(content + "\n") // <<<"$script_content"
 	} else {
 		remoteCmd = arg(0)
-		if !x.requireArg(remoteCmd, "remote command", `remote_exec <alias> "command"`, "empty_command") {
+		if !x.requireArg(remoteCmd, "remote command", `gash remote exec <alias> "command"`, "empty_command") {
 			return 1
 		}
 		if len(args) > 1 {
-			x.fail("unexpected_argument", "Pass the remote command as a SINGLE quoted string: remote_exec <alias> \"cmd arg1 arg2\". Refusing to silently drop extra args. For multi-line commands use --script.",
-				`Quote the whole command: remote_exec <alias> "cmd arg1 arg2"`)
+			x.fail("unexpected_argument", "Pass the remote command as a SINGLE quoted string: gash remote exec <alias> \"cmd arg1 arg2\". Refusing to silently drop extra args. For multi-line commands use --script.",
+				`Quote the whole command: gash remote exec <alias> "cmd arg1 arg2"`)
 			return 1
 		}
 	}
 
 	// ssh is looked up before anything is created or started: without
 	// it, the prerequisite report, not a silent exit 127.
-	if _, ok := prereq.Require(c, "ssh", "remote_exec", false); !ok {
+	if _, ok := prereq.Require(c, "ssh", "gash remote exec", false); !ok {
 		return 1
 	}
 	// A missing ~/.ssh (the multiplexing socket's directory) is created

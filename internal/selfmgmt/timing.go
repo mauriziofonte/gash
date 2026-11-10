@@ -26,7 +26,7 @@ func (m *Module) doctorTiming(c *invoke.Call, s ui.Style) int {
 	// 2.x read $EPOCHREALTIME of the calling shell: Bash 5.0 or newer.
 	bv := c.Env.Get("BASH_VERSION")
 	if major, _ := bashVersinfo(bv); bv != "" && major < 5 {
-		p.Error("gash_doctor --timing needs Bash 5.0 or newer ($EPOCHREALTIME); this is " + bv + ".")
+		p.Error("gash doctor --timing needs Bash 5.0 or newer ($EPOCHREALTIME); this is " + bv + ".")
 		return 1
 	}
 	p.Info("--timing starts your shell 3 times (your ~/.bashrc runs each time).")

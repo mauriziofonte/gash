@@ -23,7 +23,7 @@ func gitReport(need string) string {
 	return "Error: " + need + " needs git, which is not installed.\n" +
 		"  git installs and updates Gash, and runs the git functions (package git on Rocky Linux 9.4).\n" +
 		"  Install it:  sudo dnf install -y git\n" +
-		"  Or run:      gash_doctor --install git\n" +
+		"  Or run:      gash doctor --install git\n" +
 		"  On macOS git comes with the Command Line Tools: xcode-select --install.\n"
 }
 
@@ -46,12 +46,12 @@ func TestUpgradeWithoutGit(t *testing.T) {
 	m.run = runner.NewFake(t)
 	_, errOut, rc := callModule(t, m, "gash_upgrade", map[string]string{"GASH_DIR": dir})
 	require.Equal(t, 1, rc)
-	require.Equal(t, gitReport("gash_upgrade"), errOut)
+	require.Equal(t, gitReport("gash update"), errOut)
 	require.NotContains(t, errOut, "network")
 
 	_, errOut, rc = callModule(t, m, "gash_upgrade", map[string]string{"GASH_DIR": dir, "GASH_HEADLESS": "1"})
 	require.Equal(t, 1, rc)
-	require.Equal(t, `{"error":"git_not_found","details":"gash_upgrade needs git, which is not installed","action":"CONTINUE","recoverable":true,`+
+	require.Equal(t, `{"error":"git_not_found","details":"gash update needs git, which is not installed","action":"CONTINUE","recoverable":true,`+
 		`"hint":"Install git: sudo dnf install -y git. On macOS git comes with the Command Line Tools: xcode-select --install","missing":"git","install":"sudo dnf install -y git"}`+"\n", errOut)
 
 	_, errOut, rc = runUpdate(t, map[string]string{"GASH_DIR": dir}, "--rollback")
@@ -139,10 +139,10 @@ func TestUninstallStopsWithoutProfileEdit(t *testing.T) {
 	_, errOut, rc := callModule(t, New(), "gash_uninstall", map[string]string{"HOME": home, UninstallStepVar: "check"})
 	restore()
 	require.Equal(t, 1, rc)
-	require.Equal(t, "Error: gash_uninstall needs sed, which is not installed.\n"+
-		"  sed is used by the installer and gash_uninstall (package sed on Rocky Linux 9.4).\n"+
+	require.Equal(t, "Error: gash uninstall needs sed, which is not installed.\n"+
+		"  sed is used by the installer and gash uninstall (package sed on Rocky Linux 9.4).\n"+
 		"  Install it:  sudo dnf install -y sed\n"+
-		"  Or run:      gash_doctor --install sed\n", errOut)
+		"  Or run:      gash doctor --install sed\n", errOut)
 	require.DirExists(t, filepath.Join(home, ".gash"))
 
 	bin := t.TempDir()

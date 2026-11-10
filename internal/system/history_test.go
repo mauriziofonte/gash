@@ -111,7 +111,7 @@ func TestHistoryGrep(t *testing.T) {
 	require.Equal(t, result{"", "", 0}, r)
 
 	r = historyGrep(t, historyFixture)
-	require.Equal(t, result{"", "Error: Missing pattern. Usage: history_grep <pattern>\n", 1}, r)
+	require.Equal(t, result{"", "Error: Missing pattern. Usage: gash shell history <pattern>\n", 1}, r)
 	r = historyGrep(t, historyFixture, "-h")
 	require.Equal(t, 0, r.rc)
 	require.Contains(t, r.out, "history_grep")
@@ -141,6 +141,10 @@ func TestLedger_SYS09(t *testing.T) {
 	require.Equal(t, "1     cp a                 a\n2     ls ls                ls\n3     git push\n4     git push             origin\n", r.out)
 	r = historyGrep(t, "    1  hg git\n    2  history_grep git\n    3  echo hg git\n", "git")
 	require.Equal(t, "1     echo hg              git\n", r.out)
+	// The search by its canonical name is left out too; history-smart is
+	// another command.
+	r = historyGrep(t, "    1  gash shell history git\n    2  gash shell history-smart git\n", "git")
+	require.Equal(t, "1     gash shell           history-smart git\n", r.out)
 }
 
 // SYS-38: GNU BRE, case-insensitive with Unicode folding in every locale;

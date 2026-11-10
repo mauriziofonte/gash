@@ -49,7 +49,7 @@ const nvmMissing = "nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh firs
 
 // nvmPruneUsage is the usage line of nvm_prune_versions: -y and --yes
 // are synonyms of --force (LEDGER DEV-20).
-const nvmPruneUsage = "nvm_prune_versions [-y|--yes|--force]"
+const nvmPruneUsage = "gash runtime prune node [-y|--yes|--force]"
 
 // nvmPrune is nvm_prune_versions run outside the shim: help, an unknown
 // option (the arguments come before the environment, LEDGER DEV-20), or

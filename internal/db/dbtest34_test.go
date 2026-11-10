@@ -21,7 +21,7 @@ func TestDBTestRefusesRemoteDrivers(t *testing.T) {
 		require.Equal(t, 1, r.RC, name)
 		require.Empty(t, r.Stdout, name)
 		require.NotContains(t, r.Stderr, "Testing connection", name)
-		require.Contains(t, r.Stderr, "gash_db_test tests mysql, mariadb and pgsql connections from this machine; '"+name+"' is a", name)
+		require.Contains(t, r.Stderr, "gash db test tests mysql, mariadb and pgsql connections from this machine; '"+name+"' is a", name)
 		require.Contains(t, r.Stderr, `llm_db_query "SELECT 1" -c `+name+` --scalar`, name)
 	}
 }

@@ -125,7 +125,7 @@ func TestEnvInitMatches2x(t *testing.T) {
 				want := filepath.Join(ref, strconv.Itoa(i))
 				if refusal, ok := envInitSELF15[tc.name]; ok {
 					// 3.0: SELF-15 fixed: refused before anything is written.
-					require.Contains(t, o+e, refusal+" (usage: gash_env_init [--force])", tc.name)
+					require.Contains(t, o+e, refusal+" (usage: gash config init [--force])", tc.name)
 					require.Equal(t, 2, rc, tc.name)
 					untouched := filepath.Join(t.TempDir(), "x")
 					bash(t, envInitSetup(untouched, tc.setup))

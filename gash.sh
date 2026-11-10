@@ -464,10 +464,10 @@ __node_read_remote_index() {
 }
 
 # shellcheck disable=SC2120
-__gash_fn_node_upgrade() { __gash_cold __gash_fn_node_upgrade d3a26d47 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_node_upgrade() { __gash_cold __gash_fn_node_upgrade ffb99546 && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 # shellcheck disable=SC2120
-__gash_fn_nvm_prune_versions() { __gash_cold __gash_fn_nvm_prune_versions 630c6085 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_nvm_prune_versions() { __gash_cold __gash_fn_nvm_prune_versions 6f3d2e83 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php

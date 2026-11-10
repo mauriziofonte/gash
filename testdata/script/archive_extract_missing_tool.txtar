@@ -16,9 +16,9 @@ mkdir work bin
 exec bash -c 'ln -s "$(command -v bash)" bin/bash; printf x > work/a.zip; printf x > work/s.txt.gz'
 
 ! exec bash -c 'cd work; PATH=$WORK/bin; source "$GASH_SH"; archive_extract a.zip newdir'
-stderr '^\{"error":"prerequisite_missing","details":"archive_extract \(\.zip\) needs unzip, which is not installed",.*"missing":"unzip"'
+stderr '^\{"error":"prerequisite_missing","details":"gash files extract \(\.zip\) needs unzip, which is not installed",.*"missing":"unzip"'
 ! exists work/newdir
 
 ! exec bash -c 'cd work; PATH=$WORK/bin; source "$GASH_SH"; archive_extract s.txt.gz'
-stderr '^\{"error":"prerequisite_missing","details":"archive_extract \(\.gz\) needs gzip, which is not installed",.*"missing":"gzip"'
+stderr '^\{"error":"prerequisite_missing","details":"gash files extract \(\.gz\) needs gzip, which is not installed",.*"missing":"gzip"'
 ! exists work/s.txt

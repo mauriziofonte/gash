@@ -60,7 +60,7 @@ func TestAllColors(t *testing.T) {
 
 	out, _, rc = run(t, "all_colors", map[string]string{"GASH__HELP": "0"}, false, "-h")
 	require.Equal(t, 0, rc)
-	require.Equal(t, "all_colors\nUsage: all_colors\nDisplays all available terminal colors (256 colors).\n", out)
+	require.Equal(t, "gash shell colors\nUsage: gash shell colors\nDisplays all available terminal colors (256 colors).\n", out)
 }
 
 func TestCompatHelp(t *testing.T) {
@@ -106,7 +106,7 @@ func TestCardUnknownCommand(t *testing.T) {
 
 	_, errOut, rc = run(t, "gash", nil, false, "migrate", "--x")
 	require.Equal(t, 1, rc)
-	require.Contains(t, errOut, "Error: gash_migrate: Gash 3 does not migrate a Gash 1.x configuration;")
+	require.Contains(t, errOut, "Error: gash migrate: Gash 3 does not migrate a Gash 1.x configuration;")
 }
 
 func TestUsername(t *testing.T) {

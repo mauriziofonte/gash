@@ -38,10 +38,7 @@ gash doctor --legacy ~/bin/backup.sh      # any file
 gash doctor --legacy --json ~/bin/*.sh    # for a script
 ```
 
-Each line names the file and line, the former name and its command; the
-status is 1 when it finds one. An interactive shell whose startup files
-call a former name says so once a day on stderr, until the files are
-clean or `GASH_LEGACY_NAMES=1` is set.
+Each line names the file and line, the former name and its command; the status is 1 when it finds one. A name your files define for a command of your own (`alias hgrep='gash shell history-smart'`, `hgrep() { ... }`) is not a call and is not reported, nor is a word of a `gash` command (`gash ai sysinfo`). An interactive shell whose startup files call a former name says so once a day on stderr, until the files are clean or `GASH_LEGACY_NAMES=1` is set.
 
 ## Keep the former names for now
 
@@ -57,10 +54,9 @@ A script that sources Gash headless can set it for itself:
 GASH_HEADLESS=1 GASH_LEGACY_NAMES=1 bash -c 'source ~/.gash/gash.sh; files_largest ~ --limit 5'
 ```
 
-With the setting, every former name runs its command with the same output
-and exit status, as in 3.5, and the tip of each one prints once per
-session at the prompt (`GASH_LEGACY_HINTS=0` turns the tips off). The
-setting works through Gash 4.x ([configuration](configuration.md)).
+With the setting, every former name runs its command with the same output and exit status, as in 3.5, and the tip of each one prints once per session at the prompt (`GASH_LEGACY_HINTS=0` turns the tips off). The setting works through Gash 4.x ([configuration](configuration.md)).
+
+To keep one name you type often, and no other, make it your own alias in `~/.bash_local`, which keeps working after 4.x: `alias hgrep='gash shell history-smart'`. Gash does not report it as a former name.
 
 ## Every former name
 

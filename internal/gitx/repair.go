@@ -16,7 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-const repairUsage = "git_repair [-y] [--dry-run]"
+const repairUsage = "gash git repair [-y] [--dry-run]"
 
 // repair is git_repair [-y] [--dry-run]: count the empty files of the
 // object store, print the plan, ask Y/n (-y skips it, headless or without

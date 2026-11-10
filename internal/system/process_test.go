@@ -37,7 +37,7 @@ func TestProcessFind(t *testing.T) {
 	require.Equal(t, result{"   1        root         0.0  /sbin/init\n", "Info: Processes matching INIT:\n", 0}, r)
 
 	r = call(m, "process_find", nil, nil, "")
-	require.Equal(t, result{"", "Error: Missing process name. Usage: process_find <process_name>\n", 1}, r)
+	require.Equal(t, result{"", "Error: Missing process name. Usage: gash system ps <process_name>\n", 1}, r)
 }
 
 // SYS-04: NAME is matched literally, ignoring case, against the COMMAND
@@ -96,11 +96,11 @@ func TestProcessKill(t *testing.T) {
 	require.Contains(t, r.err, "Kill it? \x1b[1m[y/N]\x1b[0m \x1b[38;5;75m•\x1b[0m Aborted.\n")
 
 	r = call(m, "process_kill", nil, nil, "", "-f", "nope")
-	require.Equal(t, result{"", "Error: No process found with exact name 'nope'. Use process_find (pf) to inspect candidates.\n", 1}, r)
+	require.Equal(t, result{"", "Error: No process found with exact name 'nope'. Use gash system ps (pf) to inspect candidates.\n", 1}, r)
 	r = call(m, "process_kill", nil, nil, "", "--bogus", "x")
 	require.Equal(t, result{"", "Error: Unknown option: --bogus\n", 1}, r)
 	r = call(m, "process_kill", nil, nil, "", "-y")
-	require.Equal(t, result{"", "Error: Missing process name. Usage: process_kill [-y] <process_name>\n", 1}, r)
+	require.Equal(t, result{"", "Error: Missing process name. Usage: gash system kill [-y] <process_name>\n", 1}, r)
 }
 
 // SYS-01: NAME is a name, not a pattern (3.0: SYS-01 fixed): every ERE
@@ -114,7 +114,7 @@ func TestLedger_SYS01(t *testing.T) {
 		runner.Expect{Argv: []string{"pgrep", "-ix", "--", "webpack-dev-ser"}, Stdout: "700\n701\n702\n"},
 	))
 	r := call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", ".*")
-	require.Equal(t, result{"", "Error: No process found with exact name '.*'. Use process_find (pf) to inspect candidates.\n", 1}, r)
+	require.Equal(t, result{"", "Error: No process found with exact name '.*'. Use gash system ps (pf) to inspect candidates.\n", 1}, r)
 	r = call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", "node|npm")
 	require.Equal(t, 1, r.rc)
 	require.Empty(t, k.sent)
@@ -202,7 +202,7 @@ func TestPortKill(t *testing.T) {
 	r = call(m, "port_kill", env, nil, "", "70000")
 	require.Equal(t, "Error: Invalid port: 70000 (expected 1-65535).\n", r.err)
 	r = call(m, "port_kill", env, nil, "", "-y")
-	require.Equal(t, "Error: Missing port. Usage: port_kill [-y] <port>\n", r.err)
+	require.Equal(t, "Error: Missing port. Usage: gash system port-kill [-y] <port>\n", r.err)
 	r = call(m, "port_kill", map[string]string{"PATH": t.TempDir()}, nil, "", "80")
 	require.Equal(t, result{"", "Error: This function requires 'lsof', which is not available.\n", 1}, r)
 }

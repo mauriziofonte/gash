@@ -87,7 +87,8 @@ func TestNeedsFallbackAndArgs(t *testing.T) {
 }
 
 // all_colors -h: the registered page when the caller's shell had the
-// registry, the fallback (with "256 colors") when it had not.
+// registry, the fallback (with "256 colors") when it had not, naming the
+// command as the page does.
 func TestNeedsOfRegistryState(t *testing.T) {
 	c, out := call(nil, false, "all_colors")
 	require.True(t, NeedsOf(c, "-h"))
@@ -95,7 +96,7 @@ func TestNeedsOfRegistryState(t *testing.T) {
 
 	c, out = call(map[string]string{"GASH__HELP": "0"}, false, "all_colors")
 	require.True(t, NeedsOf(c, "-h"))
-	require.Equal(t, "all_colors\nUsage: all_colors\nDisplays all available terminal colors (256 colors).\n", out.String())
+	require.Equal(t, "gash shell colors\nUsage: gash shell colors\nDisplays all available terminal colors (256 colors).\n", out.String())
 }
 
 // LEDGER SELF-11: the card and help lists sort names by bytes, the order
@@ -121,4 +122,31 @@ func TestLedger_SELF11(t *testing.T) {
 	out, err := cmd.Output()
 	require.NoError(t, err)
 	require.Equal(t, string(out), strings.Join(names, "\n")+"\n")
+}
+
+// Every help page names what a 4.x shell defines: a former flat name only
+// where the page says it is one (the FORMER NAME line, the notes about
+// GASH_LEGACY_NAMES), as a word of a gash command (gash help
+// files_largest), and in the 2.x route of gash migrate.
+func TestPagesCallNoLegacyName(t *testing.T) {
+	route := map[string]bool{"gash_migrate": true, "gash_upgrade": true}
+	for _, f := range registry.Functions() {
+		if !f.HasHelp {
+			continue
+		}
+		var page bytes.Buffer
+		require.True(t, Display(&page, false, &f), f.Name)
+		var lines []string
+		for _, l := range strings.Split(page.String(), "\n") {
+			if !strings.Contains(l, registry.LegacyVar) {
+				lines = append(lines, l)
+			}
+		}
+		for _, h := range registry.ScanLegacy(strings.Join(lines, "\n")) {
+			if f.Name == "gash_migrate" && route[h.Name] {
+				continue
+			}
+			t.Errorf("the page of %s calls %s (line %d): use %s", f.Name, h.Name, h.Line, h.Command)
+		}
+	}
 }

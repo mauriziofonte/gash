@@ -165,9 +165,9 @@ $ GASH_HEADLESS=1 gash win fix flush-dns
 ## Open Explorer or Task Manager
 
 ```bash
-wex                # Explorer in the current directory (alias of wsl_explorer)
+wex                # Explorer in the current directory (gash win explorer)
 wex /mnt/c/Users   # Explorer in another directory
-wtm                # Task Manager (alias of wsl_taskmanager)
+wtm                # Task Manager (gash win taskmgr)
 ```
 
 [`gash win explorer`](reference.md#gash-win-explorer) translates the directory to its
@@ -242,7 +242,7 @@ code:
 | `windows_not_found` | The Windows program, file or key does not exist, or a Windows program could not start. |
 | `invalid_windows_argument` | An argument failed the check before anything ran: a registry key must start with `HKLM\`, `HKCU\`, `HKCR\`, `HKU\` or `HKCC\`; a fix needs a valid IP address, host name or service name. |
 | `Error: This command requires WSL (Windows Subsystem for Linux).` | A `wsl_*` function ran outside WSL. |
-| `Error: wsl_compact needs root: pass -y to run it unattended.` | `gash wsl compact` in headless mode: add `-y`; `sudo` must then work without a password. |
+| `Error: gash wsl compact needs root: pass -y to run it unattended.` | `gash wsl compact` in headless mode: add `-y`; `sudo` must then work without a password. |
 | `Error: Windows interop still fails. Last resort, from Windows: wsl --shutdown` | Compacting did not free a large enough block: restart WSL from Windows. |
 
 `gash wsl doctor` prints a `remedy:` line under each failed check, which is

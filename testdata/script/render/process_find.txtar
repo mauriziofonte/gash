@@ -25,7 +25,7 @@ stderr 'Error: No process found with name .zzz.\.'
 
 # --- :185 missing-arg
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_find'
-stderr 'Error: Missing process name\. Usage: process_find <process_name>'
+stderr 'Error: Missing process name\. Usage: gash system ps <process_name>'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; process_find'

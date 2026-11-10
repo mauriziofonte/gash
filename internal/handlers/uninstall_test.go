@@ -136,7 +136,7 @@ func TestUninstallMatches2x(t *testing.T) {
 				if tc.name == "extra arguments" {
 					// 3.0: SELF-15 fixed: the argument is refused before
 					// anything is removed (2.x ignored it and uninstalled).
-					require.Contains(t, o, "Unknown option: --bogus (usage: gash_uninstall)", tc.name)
+					require.Contains(t, o, "Unknown option: --bogus (usage: gash uninstall)", tc.name)
 					require.Equal(t, 2, rc, tc.name)
 					require.DirExists(t, d+"/home/.gash", tc.name)
 					continue

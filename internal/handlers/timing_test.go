@@ -105,7 +105,7 @@ func TestDoctorTimingNeedsBash5(t *testing.T) {
 	env := map[string]string{"HOME": d, "BASH": fake, "BASH_VERSION": "4.4.23(1)-release", "FAKE_LOG": d + "/log"}
 	out, rc := runMerged(t, "gash_doctor", env, false, "--timing")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "Error: gash_doctor --timing needs Bash 5.0 or newer ($EPOCHREALTIME); this is 4.4.23(1)-release.\n", out)
+	require.Equal(t, "Error: gash doctor --timing needs Bash 5.0 or newer ($EPOCHREALTIME); this is 4.4.23(1)-release.\n", out)
 	_, err := os.Stat(d + "/log")
 	require.True(t, os.IsNotExist(err))
 }

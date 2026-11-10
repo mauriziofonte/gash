@@ -17,7 +17,7 @@ stdout '/a/b$'
 
 # --- :180 missing-arg
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; mkdir_cd'
-stderr 'Error: Missing directory\. Usage: mkdir_cd <directory>'
+stderr 'Error: Missing directory\. Usage: gash shell mkcd <directory>'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; mkdir_cd'

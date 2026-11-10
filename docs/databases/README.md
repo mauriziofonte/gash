@@ -212,7 +212,7 @@ Gash sets no time limit on the MySQL, MariaDB and SQLite queries of
 | `Warning: Line N of ~/.gash_env: duplicate DB:NAME, ignored (first is at line M)` | Two lines share a name; the first one is used. |
 | `Error: Connection 'NAME' has an invalid URL` | The `Hint:` line says why: an IPv6 host without its closing `]`, or a password holding `%00`. Fix the line. |
 | `Error: Connection failed` and a `Hint:` | The driver's message: `connection refused` (no server on that host and port), `Access denied` or `password authentication failed` (user or password; check the percent-encoding), `no such file or directory` for `localhost` (no MySQL socket: try `127.0.0.1`). |
-| `Error: gash_db_test tests mysql, mariadb and pgsql connections from this machine; 'NAME' is a mysql+ssh connection` | `gash db test` cannot test a `sqlite`, `+ssh` or `+docker` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
+| `Error: gash db test tests mysql, mariadb and pgsql connections from this machine; 'NAME' is a mysql+ssh connection` | `gash db test` cannot test a `sqlite`, `+ssh` or `+docker` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
 | `{"error":"no_db_config",...}` | An `llm_db_*` call named a connection (or `default`) that is not in the file. |
 | `{"error":"no_database",...}` | The connection has no database: add it to the URL, pass `-d NAME`, or write it in `.target-database`. |
 | `{"error":"write_operation_blocked",...}`, `multiple_statements_blocked` and the other `_blocked` codes | The SQL guard refused the statement. Send one read-only statement per call. |

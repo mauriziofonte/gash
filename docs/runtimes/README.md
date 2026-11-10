@@ -246,7 +246,7 @@ and point Playwright's `executablePath` (Puppeteer: `executablePath` with
 | `Error: nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh first.` | `gash runtime upgrade node` and `gash runtime prune node` need `nvm`: set `GASH_NVM=lazy` and open a new shell. |
 | `Error: Unable to read the remote index (network?). Nothing changed.` | `gash runtime upgrade node` could not reach nodejs.org. |
 | `Error: Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (...)` | There is no build for this system. |
-| `Error: chrome_headless_update needs 'unzip'.` | Install [unzip](../requirements.md#tool-unzip). |
+| `Error: gash runtime upgrade chrome needs unzip, which is not installed.` | Install [unzip](../requirements.md#tool-unzip). |
 | `Error: Missing shared libraries: ...` | The next line names the `apt-get install` command that adds them; run it, then `chri` again. |
 | `Error: sudo needs a password: run interactively or configure NOPASSWD.` | An unattended run (`-y` without a terminal) cannot type a sudo password. Run `chri` in a terminal, or make the install directory writable. |
 | `Error: No terminal to ask for confirmation: pass -y to go ahead.` | `chri` or `nvmc` ran without a terminal: add `-y` once you have read the plan (`--dry-run`). |

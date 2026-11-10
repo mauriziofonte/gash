@@ -168,16 +168,39 @@ func CanonicalHelp(f *Function) Help {
 		out = append(out, line)
 	}
 	h.Body = strings.Join(out, "\n")
+	h.SeeAlso = strings.Join(SeeAlso(f), "\n")
+	helpMemo.Store(f.Name, h)
+	return h
+}
+
+// SeeAlso are the names of the see-also line of f's page, each former
+// flat name, shortcut or agent function by its canonical command: the
+// same line for the page of a command and of a function with none (the
+// card gash, a script helper, gash_migrate).
+func SeeAlso(f *Function) []string {
 	var see []string
-	for _, s := range strings.Fields(h.SeeAlso) {
+	for _, s := range strings.Fields(f.Help.SeeAlso) {
 		if c, ok := Canonical(s); ok {
 			s = c
 		}
 		see = append(see, s)
 	}
-	h.SeeAlso = strings.Join(see, "\n")
-	helpMemo.Store(f.Name, h)
-	return h
+	return see
+}
+
+// PageName is the title of f's page: its canonical command (gash files
+// largest), the command of a legacy name with none (gash migrate for
+// gash_migrate), else its own name (a script helper, the card gash).
+func PageName(f *Function) string {
+	if c, ok := CommandOf(f.Name); ok {
+		return c.Name()
+	}
+	if Legacy(f.Name) {
+		if cmd, _ := LegacyReplacement(f.Name); cmd != "" {
+			return cmd
+		}
+	}
+	return f.Name
 }
 
 // pipelineRest rewrites the commands after a pipe on a USAGE line

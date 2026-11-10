@@ -47,7 +47,7 @@ func dbList(c *invoke.Call) int {
 	p := s.Printer(c.Stderr)
 	if len(f.DB) == 0 {
 		p.Info("No database connections configured in " + f.Shown)
-		p.Info("Run 'gash_env_init' to create a template configuration")
+		p.Info("Run 'gash config init' to create a template configuration")
 		return 0
 	}
 	p.Info("Available database connections:")

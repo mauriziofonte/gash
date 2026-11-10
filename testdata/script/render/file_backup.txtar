@@ -17,7 +17,7 @@ stdout 'notes.txt_backup_[0-9]+'
 
 # --- :127 missing-arg
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; file_backup'
-stderr 'Error: Missing file\. Usage: file_backup <file>'
+stderr 'Error: Missing file\. Usage: gash files backup <file>'
 
 # --- :128 missing-file
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; file_backup nope.txt'

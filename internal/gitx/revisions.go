@@ -32,7 +32,7 @@ func (m *Module) dumpRevisions(c *invoke.Call) int {
 	}
 	x := m.begin(c)
 	file := c.Arg(0)
-	if !x.requireArg(file, "filename", "git_dump_revisions <filename>") {
+	if !x.requireArg(file, "filename", "gash git revisions <filename>") {
 		return 1
 	}
 	if !x.requireRepo() {

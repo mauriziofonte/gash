@@ -73,13 +73,13 @@ func TestDoctorPrereqs(t *testing.T) {
 	require.Contains(t, out, "  Remote hosts and SSH\n")
 	require.NotContains(t, out, "Windows", "not WSL")
 	require.Contains(t, errs, "OK:     git (/usr/bin/git)\n")
-	require.Contains(t, errs, "Error:     tar — not installed: unpacks the Gash release archive (needed by archive_extract (tar archives))\n"+
+	require.Contains(t, errs, "Error:     tar — not installed: unpacks the Gash release archive (needed by gash files extract (tar archives))\n"+
 		"          Install tar: sudo dnf install -y tar\n")
-	require.Contains(t, errs, "Warning:     rsync — not installed: syncs directories with remote hosts (needed by remote_sync_pull and remote_sync_push)\n"+
+	require.Contains(t, errs, "Warning:     rsync — not installed: syncs directories with remote hosts (needed by gash remote sync pull and gash remote sync push)\n"+
 		"          Install rsync: sudo dnf install -y rsync\n")
-	require.Contains(t, errs, "Info:     fzf — not installed: picks an entry from a list (needed by hgrep (--pick)) (optional)\n"+
+	require.Contains(t, errs, "Info:     fzf — not installed: picks an entry from a list (needed by gash shell history-smart (--pick)) (optional)\n"+
 		"          Install fzf: sudo dnf install -y epel-release && sudo dnf install -y fzf\n")
-	require.Contains(t, errs, "Hint: gash_doctor --install installs the missing tools")
+	require.Contains(t, errs, "Hint: gash doctor --install installs the missing tools")
 
 	defer prereq.SetSystem(rockySystem(allBut("rsync")))()
 	_, _, rc = doctorCall(t, &Module{}, nil, nil, "--prereqs")
@@ -92,7 +92,7 @@ func TestDoctorJSON(t *testing.T) {
 	require.Equal(t, 0, rc)
 	require.Empty(t, errs)
 	require.True(t, strings.HasPrefix(out, `{"system":{"name":"Rocky Linux 9.4 (Blue Onyx)","id":"rocky","version":"9.4","manager":"dnf","root":false,"sudo":true,"wsl":false},"tools":[{"name":"bash","level":"required","area":"core","found":true,"path":"/usr/bin/bash"},`), out)
-	require.Contains(t, out, `{"name":"rsync","level":"feature","area":"remote","found":false,"needed_by":["remote_sync_pull","remote_sync_push"],"package":"rsync","install":"sudo dnf install -y rsync","advice":"Install rsync: sudo dnf install -y rsync"}`)
+	require.Contains(t, out, `{"name":"rsync","level":"feature","area":"remote","found":false,"needed_by":["gash remote sync pull","gash remote sync push"],"package":"rsync","install":"sudo dnf install -y rsync","advice":"Install rsync: sudo dnf install -y rsync"}`)
 	require.True(t, strings.HasSuffix(out, `],"missing":1,"missing_required":0}`+"\n"), out)
 }
 
@@ -101,7 +101,7 @@ func TestDoctorInstall(t *testing.T) {
 		defer prereq.SetSystem(rockySystem(allBut("rsync")))()
 		_, errs, rc := doctorCall(t, &Module{run: runner.NewFake(t)}, nil, map[string]string{"GASH_HEADLESS": "1"}, "--install", "--yes")
 		require.Equal(t, 1, rc)
-		require.Equal(t, `{"error":"install_needs_confirmation","details":"gash_doctor installs packages only for a person at a terminal","action":"STOP","recoverable":true,"hint":"Ask the user to run: sudo dnf install -y rsync","install":"sudo dnf install -y rsync"}`+"\n", errs)
+		require.Equal(t, `{"error":"install_needs_confirmation","details":"gash doctor installs packages only for a person at a terminal","action":"STOP","recoverable":true,"hint":"Ask the user to run: sudo dnf install -y rsync","install":"sudo dnf install -y rsync"}`+"\n", errs)
 	})
 	t.Run("no terminal, no --yes", func(t *testing.T) {
 		defer prereq.SetSystem(rockySystem(allBut("rsync")))()

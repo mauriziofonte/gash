@@ -32,20 +32,20 @@ func TestRemoteMissingClients(t *testing.T) {
 		return "Error: " + need + " needs " + tool + ", which is not installed.\n" +
 			"  " + tool + " " + purpose + " (package openssh-client on Debian GNU/Linux 12).\n" +
 			"  Install it:  sudo apt-get install -y openssh-client\n" +
-			"  Or run:      gash_doctor --install " + tool + "\n"
+			"  Or run:      gash doctor --install " + tool + "\n"
 	}
 	for _, tc := range []struct {
 		missing, fn string
 		args        []string
 		want        string
 	}{
-		{"ssh", "remote_exec", []string{"box", "uptime"}, report("remote_exec", "ssh", "connects to remote hosts")},
-		{"scp", "remote_push", []string{"box", "f", "/tmp/f"}, report("remote_push", "scp", "copies files to and from remote hosts")},
-		{"ssh", "remote_pull", []string{"box", "/tmp/f", "f"}, report("remote_pull", "ssh", "connects to remote hosts")},
-		{"rsync", "remote_sync_push", []string{"box", "d", "/tmp/d"}, "Error: remote_sync_push needs rsync, which is not installed.\n" +
+		{"ssh", "remote_exec", []string{"box", "uptime"}, report("gash remote exec", "ssh", "connects to remote hosts")},
+		{"scp", "remote_push", []string{"box", "f", "/tmp/f"}, report("gash remote push", "scp", "copies files to and from remote hosts")},
+		{"ssh", "remote_pull", []string{"box", "/tmp/f", "f"}, report("gash remote pull", "ssh", "connects to remote hosts")},
+		{"rsync", "remote_sync_push", []string{"box", "d", "/tmp/d"}, "Error: gash remote sync push needs rsync, which is not installed.\n" +
 			"  rsync syncs directories with remote hosts (package rsync on Debian GNU/Linux 12).\n" +
-			"  Install it:  sudo apt-get install -y rsync\n  Or run:      gash_doctor --install rsync\n"},
-		{"ssh", "remote_sync_pull", []string{"box", "/tmp/d", "d"}, report("remote_sync_pull", "ssh", "connects to remote hosts")},
+			"  Install it:  sudo apt-get install -y rsync\n  Or run:      gash doctor --install rsync\n"},
+		{"ssh", "remote_sync_pull", []string{"box", "/tmp/d", "d"}, report("gash remote sync pull", "ssh", "connects to remote hosts")},
 	} {
 		t.Run(tc.fn+" without "+tc.missing, func(t *testing.T) {
 			defer prereq.SetSystem(debian(tc.missing))()
@@ -62,7 +62,7 @@ func TestRemoteMissingClients(t *testing.T) {
 		defer prereq.SetSystem(debian("ssh"))()
 		r := newGoScene(t, boxEnv).runGo(headless, "remote_exec", nil, "box", "uptime")
 		require.Equal(t, 1, r.RC)
-		require.Equal(t, `{"error":"prerequisite_missing","details":"remote_exec needs ssh, which is not installed","action":"STOP","recoverable":true,`+
+		require.Equal(t, `{"error":"prerequisite_missing","details":"gash remote exec needs ssh, which is not installed","action":"STOP","recoverable":true,`+
 			`"hint":"Install openssh-client: sudo apt-get install -y openssh-client","missing":"ssh","install":"sudo apt-get install -y openssh-client"}`+"\n", r.Err)
 	})
 	t.Run("usage errors first", func(t *testing.T) {

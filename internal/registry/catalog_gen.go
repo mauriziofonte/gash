@@ -1344,10 +1344,13 @@ var baseFunctions = []Function{
 				"  the same figures in its __GASH_LOAD_TIMES array.\n" +
 				"\n" +
 				"  --legacy reads text, not Bash: a name in a string counts, a\n" +
-				"  comment line does not. It returns 1 when it finds a name or\n" +
-				"  cannot read a FILE. Gash 4 defines the former names only with\n" +
-				"  GASH_LEGACY_NAMES=1; an interactive shell whose startup files\n" +
-				"  call one says so on stderr, at most once a day.",
+				"  comment line does not, nor a name the line defines for a command\n" +
+				"  of your own (alias hgrep=..., hgrep() { ... }, function hgrep),\n" +
+				"  nor a word of a gash command (gash ai sysinfo, gash help hgrep).\n" +
+				"  It returns 1 when it finds a name or cannot read a FILE. Gash 4\n" +
+				"  defines the former names only with GASH_LEGACY_NAMES=1; an\n" +
+				"  interactive shell whose startup files call one says so on\n" +
+				"  stderr, at most once a day.",
 		},
 		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]]", Description: "Run health checks on your Gash installation and its prerequisites (--install: install the missing tools)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
@@ -1519,14 +1522,13 @@ var baseFunctions = []Function{
 			SeeAlso: "gash gash_doctor gash_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_migrate\n" +
-				"  (also: gash migrate)\n" +
+				"  gash migrate\n" +
 				"\n" +
-				"  Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints\n" +
+				"  Gash 3 does not migrate a Gash 1.x configuration. gash migrate prints\n" +
 				"  one line on stderr with the route and returns 1: check out v2.1.0 in\n" +
 				"  your Gash directory, open a new terminal, run gash_migrate there (the\n" +
-				"  2.x guided review, with a diff preview and backups), then gash_upgrade.\n" +
-				"  It writes nothing.\n" +
+				"  2.x guided review, with a diff preview and backups), then gash_upgrade:\n" +
+				"  2.x has those names only. It writes nothing.\n" +
 				"\n" +
 				"  While ~/.gashrc is still the 1.x loader, an interactive shell prints a\n" +
 				"  one-line reminder on stderr, at most once a day. Headless shells print\n" +
@@ -1542,7 +1544,7 @@ var baseFunctions = []Function{
 				"  # Show the route\n" +
 				"  gash migrate",
 		},
-		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate", Description: "Point a Gash 1.x configuration to the 2.x migration route: Gash 3 does not migrate it. Also: gash migrate"},
+		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate", Description: "Point a Gash 1.x configuration to the 2.x migration route: Gash 3 does not migrate it."},
 		Settings:  []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME", "TERM", "TMPDIR", "XDG_STATE_HOME"},
@@ -2171,7 +2173,7 @@ var baseFunctions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N       Show only the N most recent matches (0: all)\n" +
-				"  -a, --all           Include hgrep/history_grep commands in results\n" +
+				"  -a, --all           Include the history searches themselves in results\n" +
 				"  -r, --reverse       Newest first (default: oldest first)\n" +
 				"  -j, --json          Output as JSON array\n" +
 				"  -H, --no-highlight  Disable highlighting / force plain output\n" +
@@ -2266,7 +2268,7 @@ var baseFunctions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Simple and fast. For advanced features (timestamps,\n" +
-				"  deduplication, JSON output), use hgrep instead.\n" +
+				"  deduplication, JSON output), use gash shell history-smart instead.\n" +
 				"  The words are joined with spaces into one pattern (a GNU grep basic\n" +
 				"  regex, case-insensitive) matched against each command. Column 2 is a\n" +
 				"  command's first two words, column 3 the rest; duplicates and the\n" +

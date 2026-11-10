@@ -45,7 +45,7 @@ func (m *Module) dbTest(c *invoke.Call) int {
 	default:
 		// sqlite and the +ssh and +docker forms run a client somewhere
 		// else: a query is the test.
-		p.Error("gash_db_test tests mysql, mariadb and pgsql connections from this machine; '" + name + "' is a " + u.Driver + " connection")
+		p.Error("gash db test tests mysql, mariadb and pgsql connections from this machine; '" + name + "' is a " + u.Driver + " connection")
 		p.Hint("Test it with a query: llm_db_query \"SELECT 1\" -c " + name + " --scalar")
 		return 1
 	}

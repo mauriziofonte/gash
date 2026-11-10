@@ -52,7 +52,7 @@ func (m *Module) nodeUpgrade(c *invoke.Call) int {
 		switch a {
 		case "-y", "--yes", "--force", "--dry-run":
 		default:
-			printer(c).Error("Unknown option: " + a + " (usage: node_upgrade [-y] [--dry-run])")
+			printer(c).Error("Unknown option: " + a + " (usage: gash runtime upgrade node [-y] [--dry-run])")
 			return 1
 		}
 	}

@@ -156,10 +156,10 @@ func TestNoSSHAdd(t *testing.T) {
 	defer pinSystem()()
 	fx := newFixture(t, "SSH:~/.ssh/key1=pw\n")
 	m, h := tm(runner.NewFake(t))
-	require.Equal(t, result{"Error: gash_ssh_auto_unlock needs ssh-add, which is not installed.\n" +
+	require.Equal(t, result{"Error: gash remote unlock-keys needs ssh-add, which is not installed.\n" +
 		"  ssh-add loads SSH keys into the agent (package openssh-client on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y openssh-client\n" +
-		"  Or run:      gash_doctor --install ssh-add\n", 1}, fx.call(m, nil))
+		"  Or run:      gash doctor --install ssh-add\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 	require.True(t, h.closed)
 }
@@ -272,10 +272,10 @@ func TestAgentFails(t *testing.T) {
 	defer pinSystem()()
 	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add")
 	m, h = tm(runner.NewFake(t, list(refused, 2), list(refused, 2)))
-	require.Equal(t, result{"Error: gash_ssh_auto_unlock needs ssh-agent, which is not installed.\n" +
+	require.Equal(t, result{"Error: gash remote unlock-keys needs ssh-agent, which is not installed.\n" +
 		"  ssh-agent holds the unlocked SSH keys (package openssh-client on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y openssh-client\n" +
-		"  Or run:      gash_doctor --install ssh-agent\n", 1}, fx.call(m, nil))
+		"  Or run:      gash doctor --install ssh-agent\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 
 	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add", "ssh-agent")

@@ -38,7 +38,7 @@ stderr 'Repo repaired and verified clean\.'
 
 # --- :284 git_repair:bad_option
 ! exec bash -c 'cd $WORK; mkdir r5; cd r5; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_repair --bogus'
-stderr 'Error: Unknown option: --bogus \(usage: git_repair'
+stderr 'Error: Unknown option: --bogus \(usage: gash git repair'
 
 # --- R6: plain mode, no ESC on the plan output
 exec bash -c 'cd $WORK; mkdir r6; cd r6; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; mkdir -p .git/objects/ab && : >.git/objects/ab/cdef0123456789abcdef0123456789abcdef01; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; git_repair --dry-run'

@@ -275,5 +275,5 @@ func TestLedger_SELF06(t *testing.T) {
 
 	out, rc = runMerged(t, "gash_doctor", env, false, "--bogus")
 	require.Equal(t, 2, rc)
-	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]])\n", out)
+	require.Equal(t, "Error: Unknown option: --bogus (usage: gash doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]] [--legacy [FILE...]])\n", out)
 }

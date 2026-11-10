@@ -253,7 +253,7 @@ func (x *call) report(results []result, file string, updates, current, pinned, e
 	}
 	if updates > 0 {
 		put("\n")
-		s.Print(w, "bold", "Run 'docker_compose_upgrade' to update services with mutable tags.")
+		s.Print(w, "bold", "Run 'gash docker compose upgrade' to update services with mutable tags.")
 	}
 }
 

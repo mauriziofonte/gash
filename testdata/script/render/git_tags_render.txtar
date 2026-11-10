@@ -43,7 +43,7 @@ stderr 'Error: Tag .v2.0. already exists\.'
 
 # --- :271 git_add_tag:missing_name
 ! exec bash -c 'cd $WORK; mkdir t5; cd t5; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag'
-stderr 'Error: Missing tag name\. Usage: git_add_tag'
+stderr 'Error: Missing tag name\. Usage: gash git tag add'
 
 # --- :272 git_delete_tag:deleted
 # 3.0: GIT-01 fixed: headless, a tag deletion needs --yes.

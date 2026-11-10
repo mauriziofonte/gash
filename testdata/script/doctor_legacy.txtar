@@ -27,7 +27,7 @@ stdout '^\{"files":\[\{"path":"clean.sh","names":\[\]\},\{"path":".*/home/.bash_
 stderr '^Error: Cannot read nosuch.sh: no such file or directory$'
 
 ! exec gash doctor --legacy --install
-stderr 'usage: gash_doctor'
+stderr 'usage: gash doctor'
 
 # The reminder: once, then not again the same day; never with the setting.
 exec bash --norc --noprofile -i load.sh

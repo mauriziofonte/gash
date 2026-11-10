@@ -157,7 +157,7 @@ $ gash db list
 Warning: Line 2 of ~/.gash_env: unknown GASH_ setting, skipping
 Warning: Line 3 of ~/.gash_env: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)
 Info: No database connections configured in ~/.gash_env
-Info: Run 'gash_env_init' to create a template configuration
+Info: Run 'gash config init' to create a template configuration
 ```
 
 The warnings appear once per shell: the first time a function reads the

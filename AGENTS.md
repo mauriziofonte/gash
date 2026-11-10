@@ -159,7 +159,7 @@ except the `--top` rows, relative unless `--absolute`. `--count` prints
 `llm_find --count` counts the paths its listing prints without `-n`;
 `llm_tree --count` the entries below PATH at any depth (to `--depth N` when
 given); `llm_grep --count` matching lines (matches with `--only-matching`,
-`-o`; files with `--files-only`, `-l`). `--by ext` keys are tree_stats'
+`-o`; files with `--files-only`, `-l`). `--by ext` keys are `gash files stats`'
 extensions (`(no ext)`), `--by dir` the first directory below PATH (`.` for
 entries directly in it), `--by type` the letters `f`, `d`, `l` (every type
 unless `--type`), `--by file` the file. `llm_find --sort mtime|size` puts the
@@ -872,7 +872,7 @@ same in words, or links the official instructions for tools Gash never
 installs (Docker, nvm, cosign):
 
 ```json
-{"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo dnf install -y rsync","missing":"rsync","install":"sudo dnf install -y rsync"}
+{"error":"prerequisite_missing","details":"gash remote sync push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo dnf install -y rsync","missing":"rsync","install":"sudo dnf install -y rsync"}
 ```
 
 A tool missing on a remote host carries `host` (and `container` inside

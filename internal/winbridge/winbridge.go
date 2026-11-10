@@ -138,7 +138,7 @@ func (b *Bridge) errFrom(what string, res runner.Result, err error) *Error {
 	}
 	if res.TimedOut {
 		return &Error{Code: CodeTimeout, Details: what + " did not answer within " + b.timeout.String(),
-			Hint: "the Windows side may be slow or wedged; try wsl_compact or gash wsl doctor"}
+			Hint: "the Windows side may be slow or wedged; try gash wsl compact or gash wsl doctor"}
 	}
 	if err != nil {
 		return &Error{Code: CodeUnavailable, Details: what + ": " + err.Error(), Hint: "check that interop works (gash wsl doctor)"}

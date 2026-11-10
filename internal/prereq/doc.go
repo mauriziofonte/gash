@@ -5,8 +5,6 @@ package prereq
 import (
 	"slices"
 	"strings"
-
-	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // managerTitles are the columns of the package tables, in Managers order.
@@ -36,7 +34,7 @@ func RequirementsDoc() string {
 		"Gash is one static binary plus the Bash that loads it. The binary does",
 		"its work in process (search, hashing, JSON, databases, HTTP), so most of",
 		"Gash needs nothing else. What it does need is listed here, from the same",
-		"catalog that `install.sh` and `gash_doctor` read.",
+		"catalog that `install.sh` and `gash doctor` read.",
 		"",
 		"- **Required** tools are needed to install Gash and to load it: Bash 4.4",
 		"  or newer, git, curl or wget, tar, gzip, sha256sum or shasum, grep and",
@@ -47,17 +45,17 @@ func RequirementsDoc() string {
 		"  the command that installs it on your system.",
 		"- **Optional** tools add something to a function that works without them.",
 		"",
-		"`gash_doctor --prereqs` shows what this system has and lacks, with the",
-		"install command of each missing tool. `gash_doctor --install` installs",
+		"`gash doctor --prereqs` shows what this system has and lacks, with the",
+		"install command of each missing tool. `gash doctor --install` installs",
 		"the missing required and feature tools after asking (`--all` adds the",
-		"optional ones, or name the tools: `gash_doctor --install rsync zstd`).",
+		"optional ones, or name the tools: `gash doctor --install rsync zstd`).",
 		"It never installs anything for an AI agent (`GASH_HEADLESS=1`): agents get",
 		"the `prerequisite_missing` envelope described in [AGENTS.md](../AGENTS.md)",
-		"and ask the user. `gash_doctor --json` gives the same report as JSON.",
+		"and ask the user. `gash doctor --json` gives the same report as JSON.",
 		"",
 		"In the tables, a dash means the system has no package for the tool (see",
 		"its notes), \"built in\" means macOS ships it, and \"(EPEL)\" means RHEL,",
-		"Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor",
+		"Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash doctor",
 		"--install` enables first. Amazon Linux has no EPEL.",
 	)
 	for _, area := range Areas {
@@ -152,9 +150,8 @@ func osTitles(list []string) []string {
 	return out
 }
 
-// joinUsers is "`a`, `b` and `c`", each function in code by its
-// canonical command, once; a qualifier in
-// parentheses stays outside the code span.
+// joinUsers is "`a`, `b` and `c`" of Users, each command in code, once; a
+// qualifier in parentheses stays outside the code span.
 func joinUsers(u []string) string {
 	var parts []string
 	for _, x := range u {
@@ -162,18 +159,10 @@ func joinUsers(u []string) string {
 			parts = append(parts, strings.Replace(x, "--host", "`--host`", 1))
 			continue
 		}
-		name, rest, _ := strings.Cut(x, " ")
-		if name == "gash" {
-			// A "gash WORD" command.
-			word, more, _ := strings.Cut(rest, " ")
-			name, rest = "gash "+word, more
-		}
-		if c, ok := registry.CommandOf(name); ok && len(c.FormerNames()) > 0 {
-			name = c.Name()
-		}
+		name, rest, _ := strings.Cut(x, " (")
 		part := "`" + name + "`"
 		if rest != "" {
-			part += " " + rest
+			part += " (" + rest
 		}
 		if !slices.Contains(parts, part) {
 			parts = append(parts, part)

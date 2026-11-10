@@ -46,7 +46,7 @@ stderr 'Error: Unknown option: --bogus'
 
 # --- :194 missing-arg
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill'
-stderr 'Error: Missing process name\. Usage: process_kill'
+stderr 'Error: Missing process name\. Usage: gash system kill'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; process_kill'

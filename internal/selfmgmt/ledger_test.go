@@ -28,10 +28,10 @@ func TestLedger_SELF15(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/.gash_env.template"), []byte("T\n"), 0o644))
 	env := map[string]string{"HOME": home, "GASH_DIR": home + "/.gash"}
 	for _, tc := range []struct{ name, usage string }{
-		{"gash_env_init", "gash_env_init [--force]"},
+		{"gash_env_init", "gash config init [--force]"},
 		{"gash_username", "gash_username"},
-		{"gash_upgrade", "gash_upgrade"},
-		{"gash_uninstall", "gash_uninstall"},
+		{"gash_upgrade", "gash update"},
+		{"gash_uninstall", "gash uninstall"},
 		{"gash_doctor", doctorUsage},
 	} {
 		for arg, what := range map[string]string{"--bogus": "Unknown option", "word": "Unexpected argument"} {
@@ -332,8 +332,8 @@ func TestLedger_SELF10(t *testing.T) {
 // unknown option (3.0: SELF-13 fixed; 2.x called both an unknown option).
 func TestLedger_SELF13(t *testing.T) {
 	for a, want := range map[string]string{
-		"foo":     "Error: Unexpected argument: foo (usage: gash_inspiring_quote [--source])\n",
-		"--bogus": "Error: Unknown option: --bogus (usage: gash_inspiring_quote [--source])\n",
+		"foo":     "Error: Unexpected argument: foo (usage: gash shell quote [--source])\n",
+		"--bogus": "Error: Unknown option: --bogus (usage: gash shell quote [--source])\n",
 	} {
 		out, errOut, rc := call(t, "gash_inspiring_quote", nil, a)
 		require.Empty(t, out)

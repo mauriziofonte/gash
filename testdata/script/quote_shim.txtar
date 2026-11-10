@@ -14,11 +14,11 @@ cmp stdout want.txt
 
 ! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote foo'
 ! stdout .
-stderr '^Error: Unexpected argument: foo \(usage: gash_inspiring_quote \[--source\]\)$'
+stderr '^Error: Unexpected argument: foo \(usage: gash shell quote \[--source\]\)$'
 
 ! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote --bogus'
 ! stdout .
-stderr '^Error: Unknown option: --bogus \(usage: gash_inspiring_quote \[--source\]\)$'
+stderr '^Error: Unknown option: --bogus \(usage: gash shell quote \[--source\]\)$'
 
 -- quotes/list.txt --
 # A talk, 2001, https://example.test/talk

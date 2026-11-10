@@ -58,11 +58,11 @@ func TestDiskUsage(t *testing.T) {
 
 	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", "", 1), df("-Pk", "", 1)))
 	r = call(m, "disk_usage", nil, nil, "")
-	require.Equal(t, result{"", "Error: disk_usage: df failed\n", 1}, r)
+	require.Equal(t, result{"", "Error: gash system disks: df failed\n", 1}, r)
 
 	m, _, _ = tm(t, runner.NewFake(t))
 	r = call(m, "disk_usage", nil, nil, "", "--no-color", "-x")
-	require.Equal(t, result{"", "Error: disk_usage: unknown option '-x'\n", 1}, r)
+	require.Equal(t, result{"", "Error: gash system disks: unknown option '-x'\n", 1}, r)
 	r = call(m, "disk_usage", nil, nil, "", "-h")
 	require.Equal(t, 0, r.rc)
 	require.Contains(t, r.out, "disk_usage")
@@ -110,7 +110,7 @@ func TestLedger_SYS14(t *testing.T) {
 
 	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", "", 1), df("-Pk", header, 1)))
 	r = call(m, "disk_usage", nil, nil, "")
-	require.Equal(t, result{"", "Error: disk_usage: df failed\n", 1}, r)
+	require.Equal(t, result{"", "Error: gash system disks: df failed\n", 1}, r)
 }
 
 func TestAwkNumber(t *testing.T) {
@@ -260,7 +260,7 @@ func TestServicesStop(t *testing.T) {
 	r = call(m, "services_stop", svcEnv(t, true), nil, "")
 	require.Equal(t, result{"", "Error: No service manager found (systemd or service).\n", 1}, r)
 	r = call(m, "services_stop", nil, nil, "", "-x")
-	require.Equal(t, result{"", "Error: Unknown option: -x (usage: services_stop [-y] [--dry-run])\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unknown option: -x (usage: gash system stop-services [-y] [--dry-run])\n", 1}, r)
 }
 
 // 3.0: SYS-25 fixed: an unattended -y (headless, or no controlling
@@ -299,7 +299,7 @@ func TestLedger_SYS25(t *testing.T) {
 	m, _, _ = tm(t, f)
 	env["GASH_HEADLESS"] = "1"
 	r = call(m, "services_stop", env, nil, "", "-y")
-	require.Equal(t, result{"", "Info: Running: redis\n" + `{"error":"prerequisite_missing","details":"services_stop needs sudo, which is not installed",` +
+	require.Equal(t, result{"", "Info: Running: redis\n" + `{"error":"prerequisite_missing","details":"gash system stop-services needs sudo, which is not installed",` +
 		`"action":"STOP","recoverable":true,"hint":"Install sudo: apt-get install -y sudo","missing":"sudo","install":"apt-get install -y sudo"}` + "\n", 1}, r)
 }
 
@@ -322,7 +322,7 @@ func TestSudoLast(t *testing.T) {
 	m, _, h = tm(t, runner.NewFake(t))
 	r = call(m, "sudo_last", nil, ttyTerm(nil, "y\n"), "ls /root")
 	require.Equal(t, 1, r.rc)
-	require.Contains(t, r.err, "sudo_last runs the previous command of the calling shell: use it from a Gash shell.\n")
+	require.Contains(t, r.err, "gash shell sudo-last runs the previous command of the calling shell: use it from a Gash shell.\n")
 	require.Empty(t, h.String())
 
 	r = call(m, "sudo_last", nil, nil, "", "--help")
@@ -359,7 +359,7 @@ func TestMkdirCD(t *testing.T) {
 	r = call(m, "mkdir_cd", nil, nil, "", "-p")
 	require.Equal(t, result{"", "mkdir: missing operand\n", 1}, r)
 	r = call(m, "mkdir_cd", nil, nil, "")
-	require.Equal(t, result{"", "Error: Missing directory. Usage: mkdir_cd <directory>\n", 1}, r)
+	require.Equal(t, result{"", "Error: Missing directory. Usage: gash shell mkcd <directory>\n", 1}, r)
 }
 
 // 3.0: SYS-49 fixed: every flag ip_public and disk_usage accept is in the

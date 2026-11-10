@@ -311,7 +311,7 @@ func TestMissingLibraries(t *testing.T) {
 	r, rc := fx.call(t, nil, "-y")
 	require.Equal(t, 1, rc)
 	require.Equal(t, tasks+located+fetchedNote+"Error: Missing shared libraries: libasound.so.2 libgbm.so.1 libnss3.so \n"+
-		"Info: Install them, then run chrome_headless_update again:  sudo apt-get install libasound2 libgbm1 libnss3\n", r.err)
+		"Info: Install them, then run gash runtime upgrade chrome again:  sudo apt-get install libasound2 libgbm1 libnss3\n", r.err)
 	require.Empty(t, fx.tree(t))
 	require.Empty(t, fx.sudo(t))
 }
@@ -436,13 +436,13 @@ func TestOptionsAndTools(t *testing.T) {
 	fx := newFixture(t)
 	r, rc := fx.call(t, nil, "-y", "--bogus")
 	require.Equal(t, 1, rc)
-	require.Equal(t, result{"", "Error: Unknown option: --bogus (usage: chrome_headless_update [-y] [--dry-run])\n"}, r)
+	require.Equal(t, result{"", "Error: Unknown option: --bogus (usage: gash runtime upgrade chrome [-y] [--dry-run])\n"}, r)
 
 	r, rc = fx.call(t, nil, "--help")
 	require.Equal(t, 0, rc)
 	require.Contains(t, r.out, "gash runtime upgrade chrome [-y] [--dry-run]")
 
-	// 3.4: the prerequisite report ("chrome_headless_update needs 'ldd'."
+	// 3.4: the prerequisite report ("gash runtime upgrade chrome needs 'ldd'."
 	// before).
 	defer prereq.SetSystem(&prereq.System{OS: platform.OS{GOOS: "linux", ID: "debian", Name: "Debian GNU/Linux 12 (bookworm)"},
 		Manager: prereq.Apt, Root: true})()
@@ -450,10 +450,10 @@ func TestOptionsAndTools(t *testing.T) {
 	fx.env["PATH"] = fx.bin
 	r, rc = fx.call(t, nil)
 	require.Equal(t, 1, rc)
-	require.Equal(t, result{"", "Error: chrome_headless_update needs ldd, which is not installed.\n" +
+	require.Equal(t, result{"", "Error: gash runtime upgrade chrome needs ldd, which is not installed.\n" +
 		"  ldd lists the shared libraries chrome-headless-shell needs (package libc-bin on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y libc-bin\n" +
-		"  Or run:      gash_doctor --install ldd\n"}, r)
+		"  Or run:      gash doctor --install ldd\n"}, r)
 	require.Empty(t, fx.srv.seen)
 }
 

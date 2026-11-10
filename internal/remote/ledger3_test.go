@@ -349,8 +349,8 @@ func TestLedger_REM09(t *testing.T) {
 	for _, sp := range []transfer{pushSpec, pullSpec, syncPushSpec, syncPullSpec} {
 		f, ok := registry.Lookup(sp.name)
 		require.True(t, ok, sp.name)
-		require.Equal(t, sp.usage, f.Fallback.Usage, sp.name)
-		require.True(t, strings.HasPrefix(f.Help.Body, "USAGE\n  "+sp.usage+"\n"), sp.name)
+		require.Equal(t, sp.usage, registry.CanonicalCall(f.Fallback.Usage), sp.name)
+		require.True(t, strings.HasPrefix(registry.CanonicalHelp(f).Body, "USAGE\n  "+sp.usage+"\n"), sp.name)
 		require.Contains(t, f.Help.Body, "An unknown option or a fourth", sp.name)
 		require.Contains(t, f.Help.Body, "GASH_ENV_FILE", sp.name)
 	}
@@ -365,7 +365,7 @@ func TestLedger_REM09(t *testing.T) {
 	ref, err := os.ReadFile(filepath.Join(absRoot, "docs/remote/reference.md"))
 	require.NoError(t, err)
 	// The reference names the command: gash remote sync pull.
-	require.Contains(t, string(ref), "gash remote sync pull"+strings.TrimPrefix(syncPullSpec.usage, "remote_sync_pull"))
+	require.Contains(t, string(ref), syncPullSpec.usage)
 }
 
 // TestFollowup_F08: with openrsync (macOS /usr/bin/rsync), which has no -s,

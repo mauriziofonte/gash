@@ -52,7 +52,7 @@ func (m *Module) aiSysinfo(c *invoke.Call) int {
 			provider = a
 		default:
 			p.Error("Unknown argument: " + a)
-			p.Usage("ai_sysinfo [claude|gemini] [--raw] [--no-color]")
+			p.Usage("gash ai sysinfo [claude|gemini] [--raw] [--no-color]")
 			return 1
 		}
 	}

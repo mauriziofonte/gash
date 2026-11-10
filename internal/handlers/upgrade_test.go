@@ -180,7 +180,7 @@ func TestUpgradeMatches2x(t *testing.T) {
 					if tc.name == "extra arguments" {
 						// 3.0: SELF-15 fixed: the argument is refused before
 						// any git command (2.x ignored it and upgraded).
-						require.Contains(t, o, "Unknown option: --bogus (usage: gash_upgrade)", tc.name)
+						require.Contains(t, o, "Unknown option: --bogus (usage: gash update)", tc.name)
 						require.Equal(t, 2, rc, tc.name)
 					} else if want, ok := upgradeSELF10[tc.name]; ok {
 						// 3.0: SELF-10 fixed: no "signed, but could not be

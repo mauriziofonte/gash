@@ -110,8 +110,8 @@ func TestLedger_DEV20_fix(t *testing.T) {
 		fn, arg, want string
 	}{
 		{"node_detect_version", "--bogus", "Error: Unknown option: --bogus\n"},
-		{"node_upgrade", "--bogus", "Error: Unknown option: --bogus (usage: node_upgrade [-y] [--dry-run])\n"},
-		{"nvm_prune_versions", "--bogus", "Error: Unknown option: --bogus (usage: nvm_prune_versions [-y|--yes|--force])\n"},
+		{"node_upgrade", "--bogus", "Error: Unknown option: --bogus (usage: gash runtime upgrade node [-y] [--dry-run])\n"},
+		{"nvm_prune_versions", "--bogus", "Error: Unknown option: --bogus (usage: gash runtime prune node [-y|--yes|--force])\n"},
 		{"node_upgrade", "-y", "Error: " + nvmMissing + "\n"},
 		{"nvm_prune_versions", "-y", "Error: " + nvmMissing + "\n"},
 		{"nvm_prune_versions", "--yes", "Error: " + nvmMissing + "\n"},

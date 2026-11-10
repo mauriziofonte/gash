@@ -11,6 +11,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -57,10 +58,10 @@ func TestMissingGit(t *testing.T) {
 		}
 		errOut, rc := runGit(t, nil, fn, args...)
 		require.Equal(t, 1, rc, fn)
-		require.Equal(t, "Error: "+fn+" needs git, which is not installed.\n"+
+		require.Equal(t, "Error: "+registry.CanonicalCall(fn)+" needs git, which is not installed.\n"+
 			"  git installs and updates Gash, and runs the git functions (package git on Debian GNU/Linux 12).\n"+
 			"  Install it:  sudo apt-get install -y git\n"+
-			"  Or run:      gash_doctor --install git\n"+
+			"  Or run:      gash doctor --install git\n"+
 			"  On macOS git comes with the Command Line Tools: xcode-select --install.\n", errOut, fn)
 	}
 	errOut, rc := runGit(t, nil, "glf", "main.go")
@@ -68,7 +69,7 @@ func TestMissingGit(t *testing.T) {
 	require.Contains(t, errOut, "Error: glf needs git, which is not installed.\n")
 	errOut, rc = runGit(t, map[string]string{"GASH_HEADLESS": "1"}, "git_sync")
 	require.Equal(t, 1, rc)
-	require.Equal(t, `{"error":"git_not_found","details":"git_sync needs git, which is not installed","action":"CONTINUE","recoverable":true,`+
+	require.Equal(t, `{"error":"git_not_found","details":"gash git sync needs git, which is not installed","action":"CONTINUE","recoverable":true,`+
 		`"hint":"Install git: sudo apt-get install -y git. On macOS git comes with the Command Line Tools: xcode-select --install","missing":"git","install":"sudo apt-get install -y git"}`+"\n", errOut)
 	restore()
 
@@ -78,6 +79,6 @@ func TestMissingGit(t *testing.T) {
 	require.Equal(t, "Error: gl needs git, which is not installed.\n"+
 		"  git installs and updates Gash, and runs the git functions (package git on macOS 15.1).\n"+
 		"  Install it:  brew install git\n"+
-		"  Or run:      gash_doctor --install git\n"+
+		"  Or run:      gash doctor --install git\n"+
 		"  On macOS git comes with the Command Line Tools: xcode-select --install.\n", errOut)
 }

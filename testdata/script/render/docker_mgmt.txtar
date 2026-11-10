@@ -62,7 +62,7 @@ stderr '\[6/6\] Cleaning Docker environment\.\.\.'
 
 # --- :240 docker_prune_all:bad-option
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_prune_all --bogus'
-stderr 'Error: Unknown option: --bogus \(usage: docker_prune_all'
+stderr 'Error: Unknown option: --bogus \(usage: gash docker prune-all'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; docker_prune_all --bogus'

@@ -171,7 +171,7 @@ echo "deploy from $(myip --raw)"
 | Message | Meaning and what to do |
 |---|---|
 | `Error: No process found with name 'NAME'.` | `gash system ps` found no command line containing NAME. Status 1 |
-| `Error: No process found with exact name 'NAME'. Use process_find (pf) to inspect candidates.` | `gash system kill` matches the exact program name. `pf NAME` shows the candidates and their real names |
+| `Error: No process found with exact name 'NAME'. Use gash system ps (pf) to inspect candidates.` | `gash system kill` matches the exact program name. `pf NAME` shows the candidates and their real names |
 | `Error: N process(es) match 'NAME' (PID ...). Refusing to kill without a terminal to confirm; pass -y.` | `gash system kill` ran without a terminal. Add `-y` once you have checked the list |
 | `Error: Nothing is listening on port PORT.` | No TCP listener or UDP socket is bound to that port. A process of another user may be invisible to `lsof`: try `sudo lsof -i :PORT` |
 | `Error: Invalid port: VALUE (expected 1-65535).` | Give the port as a number |

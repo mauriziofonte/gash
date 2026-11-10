@@ -20,15 +20,15 @@ import (
 // command of each `NUM  CMD` line of the piped history, never a file named
 // by a word (SYS-08). Commands are deduplicated on CMD, the first one
 // kept; column 2 is its first two words and column 3 the rest of it by
-// position; a command whose first word is history_grep or hg is left out
-// (SYS-09).
+// position; a command whose first word is history_grep or hg, or that is
+// gash shell history (its canonical name since 3.5), is left out (SYS-09).
 func (m *Module) historyGrep(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
 	p := ui.NewPrinter(c.Stderr, c.Term, false)
 	if c.Arg(0) == "" {
-		p.Error("Missing pattern. Usage: history_grep <pattern>")
+		p.Error("Missing pattern. Usage: gash shell history <pattern>")
 		return 1
 	}
 	pattern := strings.Join(c.Args, " ")
@@ -56,7 +56,7 @@ func (m *Module) historyGrep(c *invoke.Call) int {
 			continue
 		}
 		f := awkFields(cmd)
-		if f[0] == "history_grep" || f[0] == "hg" || seen[cmd] {
+		if f[0] == "history_grep" || f[0] == "hg" || isHistoryCommand(f) || seen[cmd] {
 			continue
 		}
 		seen[cmd] = true
@@ -96,6 +96,12 @@ func historyCommand(l string) string {
 		return ""
 	}
 	return strings.TrimRight(t, " \t\r")
+}
+
+// isHistoryCommand reports the fields of gash shell history: the search
+// itself, by its canonical name.
+func isHistoryCommand(f []string) bool {
+	return len(f) >= 3 && f[0] == "gash" && f[1] == "shell" && f[2] == "history"
 }
 
 // awkFields splits a line as awk's default FS does: runs of spaces, tabs

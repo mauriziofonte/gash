@@ -39,7 +39,7 @@ stderr 'Error: This function requires .lsof., which is not available\.'
 
 # --- :202 missing-arg
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill'
-stderr 'Error: Missing port\. Usage: port_kill'
+stderr 'Error: Missing port\. Usage: gash system port-kill'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; port_kill 70000'

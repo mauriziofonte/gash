@@ -22,7 +22,7 @@ func (m *Module) migrate(c *invoke.Call) int {
 
 // MigratePointer is the line gash_migrate prints for the install in dir.
 func MigratePointer(dir string) string {
-	return "gash_migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in " +
+	return "gash migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in " +
 		dir + ", open a new terminal, run gash_migrate there, then gash_upgrade"
 }
 

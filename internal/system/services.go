@@ -35,7 +35,7 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		case "--dry-run":
 			dryRun = true
 		default:
-			p.Error("Unknown option: " + a + " (usage: services_stop [-y] [--dry-run])")
+			p.Error("Unknown option: " + a + " (usage: gash system stop-services [-y] [--dry-run])")
 			return 1
 		}
 	}
@@ -82,7 +82,7 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		p.Info("Aborted.")
 		return 1
 	}
-	if !m.sudoReady(c, p, "services_stop") {
+	if !m.sudoReady(c, p, "gash system stop-services") {
 		return 1
 	}
 	rc := 0
@@ -97,7 +97,7 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		switch se := (*runner.StartError)(nil); {
 		case notInstalled(err):
 			// No sudo: the report once, not one failure per service.
-			return prereq.Fail(c, "sudo", "services_stop", false)
+			return prereq.Fail(c, "sudo", "gash system stop-services", false)
 		case errors.As(err, &se):
 			write(c.Stderr, "bash: "+se.Error()+"\n")
 			rc = 1

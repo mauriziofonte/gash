@@ -39,15 +39,15 @@ func TestProcessToolsMissing(t *testing.T) {
 		runner.Expect{Argv: []string{"pgrep", "-ix", "--", "nginx"}, Err: notFound("pgrep")},
 	))
 	r := call(m, "process_find", nil, nil, "", "nginx")
-	require.Equal(t, result{"", "Error: process_find needs ps, which is not installed.\n" +
+	require.Equal(t, result{"", "Error: gash system ps needs ps, which is not installed.\n" +
 		"  ps lists the running processes (package procps on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y procps\n" +
-		"  Or run:      gash_doctor --install ps\n", 1}, r)
+		"  Or run:      gash doctor --install ps\n", 1}, r)
 	r = call(m, "process_kill", nil, nil, "", "-y", "nginx")
-	require.Equal(t, result{"", "Error: process_kill needs pgrep, which is not installed.\n" +
+	require.Equal(t, result{"", "Error: gash system kill needs pgrep, which is not installed.\n" +
 		"  pgrep finds processes by name (package procps on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y procps\n" +
-		"  Or run:      gash_doctor --install pgrep\n", 1}, r)
+		"  Or run:      gash doctor --install pgrep\n", 1}, r)
 }
 
 // On a terminal sudo is not probed first: the first stop that finds no
@@ -60,10 +60,10 @@ func TestServicesStopWithoutSudo(t *testing.T) {
 	m, _, _ := tm(t, f)
 	r := call(m, "services_stop", svcEnv(t, true, "systemctl"), ctty(), "", "-y")
 	require.Equal(t, result{"", "Info: Running: nginx redis\nInfo: Stopping nginx...\n" +
-		"Error: services_stop needs sudo, which is not installed.\n" +
+		"Error: gash system stop-services needs sudo, which is not installed.\n" +
 		"  sudo runs the privileged steps of some functions (package sudo on Debian GNU/Linux 12).\n" +
 		"  Install it:  apt-get install -y sudo\n" +
-		"  Or run:      gash_doctor --install sudo\n", 1}, r)
+		"  Or run:      gash doctor --install sudo\n", 1}, r)
 }
 
 // wsl_compact: a missing dmesg is said as such (3.4: "dmesg not
@@ -81,10 +81,10 @@ func TestWSLCompactMissingTools(t *testing.T) {
 	r := call(m, "wsl_compact", nil, ctty(), "")
 	require.Equal(t, result{"order-7 allocation failures since the VM started: unknown (dmesg is not installed)\n",
 		"Info: Dropping the page cache and slab, then compacting memory (sudo)...\n" +
-			"Error: wsl_compact needs sudo, which is not installed.\n" +
+			"Error: gash wsl compact needs sudo, which is not installed.\n" +
 			"  sudo runs the privileged steps of some functions (package sudo on Debian GNU/Linux 12).\n" +
 			"  Install it:  apt-get install -y sudo\n" +
-			"  Or run:      gash_doctor --install sudo\n", 1}, r)
+			"  Or run:      gash doctor --install sudo\n", 1}, r)
 }
 
 // wsl_explorer translates the path itself when wslpath is missing, says
@@ -107,7 +107,7 @@ func TestWSLExplorerFailures(t *testing.T) {
 	require.Equal(t, result{"", "Error: Cannot open " + d + " in Explorer: wslpath failed (wslpath: " + d +
 		": Invalid argument), and the distribution name is unknown (WSL_DISTRO_NAME is not set).\n", 1}, r)
 	r = call(m, "wsl_explorer", nil, nil, "", d)
-	require.Equal(t, result{"", "Error: wsl_explorer needs explorer.exe, which is not installed.\n" +
+	require.Equal(t, result{"", "Error: gash win explorer needs explorer.exe, which is not installed.\n" +
 		"  explorer.exe opens Windows Explorer from WSL.\n" +
 		"  It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).\n", 1}, r)
 }

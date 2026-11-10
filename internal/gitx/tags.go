@@ -42,8 +42,8 @@ func (m *Module) listTags(c *invoke.Call) int {
 }
 
 const (
-	addTagUsage    = "git_add_tag <tag_name> [message] [-y|--yes] [--dry-run]"
-	deleteTagUsage = "git_delete_tag <tag_name> [-y|--yes] [--dry-run]"
+	addTagUsage    = "gash git tag add <tag_name> [message] [-y|--yes] [--dry-run]"
+	deleteTagUsage = "gash git tag delete <tag_name> [-y|--yes] [--dry-run]"
 )
 
 // remoteTagLines is `awk '{print $2}' | sed 's|refs/tags/||'`: one line

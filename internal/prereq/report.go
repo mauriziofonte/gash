@@ -12,6 +12,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -24,7 +25,8 @@ const CodeMissing = "prerequisite_missing"
 type Report struct {
 	Tool *Tool
 	// Need is the function, or function and flag, that needs it
-	// ("process_find", "llm_procs --port"); empty for a doctor line.
+	// ("gash system ps", "llm_procs --port"): a former flat name is
+	// given as its command (registry.CanonicalCall); empty for a doctor line.
 	Need   string
 	System *System
 }
@@ -36,7 +38,7 @@ func (s *System) Report(name, need string) Report {
 	if !ok {
 		t = &Tool{Name: name, Level: Feature}
 	}
-	return Report{Tool: t, Need: need, System: s}
+	return Report{Tool: t, Need: registry.CanonicalCall(need), System: s}
 }
 
 // InstallArgv is the command that installs the tool here (EPEL first on
@@ -169,7 +171,7 @@ func (r Report) Print(p ui.Printer) {
 	if cmd := r.Install(); cmd != "" {
 		writeln(w, "  Install it:  "+cmd)
 		if !r.System.NeedsRoot() {
-			writeln(w, "  Or run:      gash_doctor --install "+r.Tool.Name)
+			writeln(w, "  Or run:      gash doctor --install "+r.Tool.Name)
 		}
 		if r.Tool.NonFree {
 			writeln(w, "  The package is in the "+nonFreeRepo(r.System.Manager)+" repository.")

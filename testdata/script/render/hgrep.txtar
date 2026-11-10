@@ -71,7 +71,7 @@ stderr 'Error: --pick requires an interactive terminal'
 # --- :167 missing-pattern
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; hgrep'
 stderr 'Error: Missing required argument: pattern'
-stderr 'Usage: hgrep <pattern>'
+stderr 'Usage: gash shell history-smart <pattern>'
 
 # --- :168 bad-option
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; hgrep git --bogus'

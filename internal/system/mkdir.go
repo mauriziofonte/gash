@@ -18,7 +18,7 @@ func (m *Module) mkdirCD(c *invoke.Call) int {
 	}
 	dir := c.Arg(0)
 	if dir == "" {
-		ui.NewPrinter(c.Stderr, c.Term, false).Error("Missing directory. Usage: mkdir_cd <directory>")
+		ui.NewPrinter(c.Stderr, c.Term, false).Error("Missing directory. Usage: gash shell mkcd <directory>")
 		return 1
 	}
 	if len(c.Args) > 1 {

@@ -52,7 +52,7 @@ func TestCleanRootTools(t *testing.T) {
 	require.Equal(t, "Error: gash logs clean --sudo needs sudo, which is not installed.\n"+
 		"  sudo runs the privileged steps of some functions (package sudo on Debian GNU/Linux 12).\n"+
 		"  Install it:  apt-get install -y sudo\n"+
-		"  Or run:      gash_doctor --install sudo\n", errOut)
+		"  Or run:      gash doctor --install sudo\n", errOut)
 	// Nothing root-owned: no sudo needed.
 	ok, _, errOut = rootRun(false, []op{mine})
 	require.True(t, ok)

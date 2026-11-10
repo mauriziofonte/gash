@@ -10,7 +10,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
-const applyPatchUsage = "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]"
+const applyPatchUsage = "gash git patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]"
 
 // applyPatch is git_apply_patch MAIN FEATURE COMMIT [-y|--yes]
 // [--dry-run]: after the confirmation (LEDGER GIT-01), check out and pull

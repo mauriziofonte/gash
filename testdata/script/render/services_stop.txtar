@@ -34,7 +34,7 @@ stderr 'None of the known services is running\.'
 
 # --- :209 bad-option
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; services_stop --bogus'
-stderr 'Error: Unknown option: --bogus \(usage: services_stop'
+stderr 'Error: Unknown option: --bogus \(usage: gash system stop-services'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; services_stop --bogus'

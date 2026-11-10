@@ -12,7 +12,7 @@
   #   --assume-yes  install without asking; when a tool Gash needs is
   #                 missing, install it with the package manager too (only
   #                 those: the tools single functions use are left to
-  #                 gash_doctor --install)
+  #                 gash doctor --install)
   #   --check       check what Gash needs (Bash 4.4+, git, curl or wget, tar,
   #                 gzip, sha256sum or shasum, grep, sed), print the command
   #                 that installs what is missing, and change nothing (status

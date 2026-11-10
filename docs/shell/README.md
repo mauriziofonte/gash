@@ -364,7 +364,7 @@ alias or function.
 | `Error: Cannot read history file: PATH` | `gash shell history-smart` reads `HISTFILE` (default `~/.bash_history`), which does not exist yet or is not readable. It exists once a command has run with `GASH_HISTORY=1` |
 | `gash shell history-smart` finds nothing that `hg` finds | Those commands have no timestamp in the history file (see [Search your history](#search-your-history)) |
 | `Error: Invalid regex: PATTERN` | The `-E` pattern is not a valid regular expression. Without `-E` the pattern is plain text |
-| `Error: hgrep (--pick) needs fzf, which is not installed.` | Run the install command printed below it, or drop `--pick` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
+| `Error: gash shell history-smart (--pick) needs fzf, which is not installed.` | Run the install command printed below it, or drop `--pick` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
 | `Error: Unexpected argument: NAME` from `mkcd` | `gash shell mkcd` takes one directory; quote a name that contains spaces |
 | `{"error":"unknown_command",...}` or `Error: Unknown command: gash NAME` | `gash` takes a namespace, a command or `all`; the hint names the closest command when there is one |
 | `Error: No help found for 'NAME'.` | No command, shortcut or former name has that name; the hint suggests the closest one, or `gash help --search NAME` |

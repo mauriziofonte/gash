@@ -38,3 +38,43 @@ func TestScanLegacy(t *testing.T) {
 		{Line: 4, Name: "sysinfo", Command: "gash system info", Shortcut: "si"},
 	}, ScanLegacy(text))
 }
+
+func TestCanonicalCall(t *testing.T) {
+	for in, want := range map[string]string{
+		"process_find":                   "gash system ps",
+		"archive_extract (tar archives)": "gash files extract (tar archives)",
+		"hgrep (--pick)":                 "gash shell history-smart (--pick)",
+		"gash_migrate":                   "gash migrate",
+		"llm_procs --port":               "llm_procs --port",
+		"gash_username":                  "gash_username",
+		"gash files largest":             "gash files largest",
+		"":                               "",
+	} {
+		require.Equal(t, want, CanonicalCall(in), in)
+	}
+}
+
+// A user's own command under a former name is a definition, not a call;
+// what the definition runs is still read. A word of a gash command is
+// not a call either.
+func TestScanLegacyDefinitions(t *testing.T) {
+	text := "alias hgrep='gash shell history-smart'\n" +
+		"alias hgrep=\"gash shell history-smart\" mkdir_cd='mkdir -p'\n" +
+		"hgrep() { gash shell history-smart \"$@\"; }\n" +
+		"sysinfo () { inxi -F; }\n" +
+		"function git_sync { git pull; }\n" +
+		"function  git_repair() { :; }\n" +
+		"files_largest=1\n" +
+		"alias big='files_largest ~'\n" +
+		"myfunction git_sync\n" +
+		"hgrep == x\n" +
+		"alias si2='gash ai sysinfo'; gash llm sysinfo && gash help hgrep\n" +
+		"x=$(gash system info); sysinfo | less\n" +
+		"echo first, gash ai sysinfo asks\n"
+	require.Equal(t, []LegacyHit{
+		{Line: 8, Name: "files_largest", Command: "gash files largest", Shortcut: "flf"},
+		{Line: 9, Name: "git_sync", Command: "gash git sync", Shortcut: "gsync"},
+		{Line: 10, Name: "hgrep", Command: "gash shell history-smart"},
+		{Line: 12, Name: "sysinfo", Command: "gash system info", Shortcut: "si"},
+	}, ScanLegacy(text))
+}

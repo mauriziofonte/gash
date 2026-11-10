@@ -131,12 +131,7 @@ to the official instructions instead. A tool in a non-free repository
 When you are not root and `sudo` is missing, Gash cannot run the command:
 it prints it, marked `(as root)`, for you to run as root.
 
-An agent gets the same information as one JSON line on stderr: the error
-code (`prerequisite_missing`, or a code of the tool such as `git_not_found`
-or `docker_not_found`), the action `STOP`, and the members `missing` (the
-tool) and `install` (the command, when there is one). `gash_doctor
---install` never installs anything for an agent: with `GASH_HEADLESS=1` it
-fails with `install_needs_confirmation` and the command to show you.
+An agent gets the same information as one JSON line on stderr: the error code (`prerequisite_missing`, or a code of the tool such as `git_not_found` or `docker_not_found`), the action `STOP`, and the members `missing` (the tool) and `install` (the command, when there is one). `gash doctor --install` never installs anything for an agent: with `GASH_HEADLESS=1` it fails with `install_needs_confirmation` and the command to show you.
 
 ## Settings
 
@@ -156,7 +151,7 @@ the load order are in [configuration.md](../configuration.md).
 ## Update Gash
 
 ```bash
-gash update               # or gash_upgrade: move to the newest release
+gash update               # move to the newest release
 gash update --rollback    # back to the version the last update replaced
 ```
 
@@ -266,16 +261,14 @@ afterwards.
 
 ## Coming from Gash 1.x
 
-Gash 3 does not migrate a Gash 1.x configuration. While `~/.gashrc` is
-still the 1.x loader, an interactive shell reminds you at most once a day.
-`gash migrate` (or `gash_migrate`) prints the route and changes nothing:
+Gash 3 does not migrate a Gash 1.x configuration. While `~/.gashrc` is still the 1.x loader, an interactive shell reminds you at most once a day. `gash migrate` (`gash_migrate` with `GASH_LEGACY_NAMES=1`) prints the route and changes nothing; `gash_migrate` and `gash_upgrade` in the route are the commands of Gash 2.1.0:
 
 <!-- example
 mask: v2\.1\.0 in [^ ]+, open
 -->
 ```console
 $ gash migrate
-Error: gash_migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in ~/.gash, open a new terminal, run gash_migrate there, then gash_upgrade
+Error: gash migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in ~/.gash, open a new terminal, run gash_migrate there, then gash_upgrade
 ```
 
 [The 2.1.0 migration guide](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md)
@@ -286,7 +279,7 @@ has the steps.
 | Message | Meaning and fix |
 |---|---|
 | `NEED needs TOOL, which is not installed` | A function needs a program this system lacks. Run the install command the message shows, or `gash doctor --install TOOL`. |
-| `Unknown tool: NAME (gash_doctor --prereqs lists them)` | `gash doctor --install` takes the names of the Prerequisites list (`ssh`, `7z`, `gnu-sed`), not package names. |
+| `Unknown tool: NAME (gash doctor --prereqs lists them)` | `gash doctor --install` takes the names of the Prerequisites list (`ssh`, `7z`, `gnu-sed`), not package names. |
 | `Installing packages needs root, and sudo is not installed` | Run the command it prints as root. |
 | `Working tree at DIR has local modifications` | `gash update` never overwrites your edits. `git -C ~/.gash stash` keeps them, `git -C ~/.gash checkout -- .` discards them. |
 | `GASH_REQUIRE_SIGNED=1 is set; not upgrading to TAG` | No signature of the release could be verified. Install `cosign` (or the key of a signed tag), or update without `GASH_REQUIRE_SIGNED=1`. |

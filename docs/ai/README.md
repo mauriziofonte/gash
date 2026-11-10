@@ -153,7 +153,7 @@ is not recognized, so read what you pipe. The API key itself is sent only in
 the request header; it never appears on a command line.
 
 To see exactly what goes out, `gash ai sysinfo --raw` prints the report, and
-`GASH_AI_DEBUG=1 ai_query "..."` prints each request body and the raw
+`GASH_AI_DEBUG=1 gash ai query "..."` prints each request body and the raw
 response on stderr.
 
 ## Consent: GASH_AI_CONFIRM
@@ -194,7 +194,7 @@ retried up to three times, after the delay the API asks for.
 | `Error: No token configured for 'gemini' in ~/.gash_env` | You named a provider that has no line. |
 | `Warning: Line N of ~/.gash_env: unknown AI provider (supported: claude, gemini), skipping` | The name before `=` must be `claude` or `gemini`. |
 | `Error: No query provided` | `gash ai query claude` alone: the provider is not a question. |
-| `Error: ai_ask needs a terminal: use ai_query "question" ...` | `gash ai ask` ran from a script or in headless mode. |
+| `Error: gash ai ask needs a terminal: use gash ai query "question" ...` | `gash ai ask` ran from a script or in headless mode. |
 | `Warning: stdin is open but sent nothing within 2s: ignored ...` | Nothing was piped although standard input was open; add `</dev/null` to skip the wait. |
 | `Error: Not sending ... to claude: no terminal to confirm on. Set GASH_AI_CONFIRM=0 in ~/.gash_env to allow it` | The request needs consent and there is no terminal. |
 | `Warning: GASH_AI_CONFIRM=off is not 0, 1 or auto: asking before every request` | Use one of the three values. |

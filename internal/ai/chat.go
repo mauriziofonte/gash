@@ -100,7 +100,7 @@ func (m *Module) aiAsk(c *invoke.Call) int {
 	// LEDGER AI-04: ai_ask reads its question from a terminal; without one
 	// (or headless) nothing is read or sent.
 	if c.Term.Headless() || !m.ttyOpens() {
-		p.Error("ai_ask needs a terminal: use ai_query \"question\" (stdin is read as piped input)")
+		p.Error("gash ai ask needs a terminal: use gash ai query \"question\" (stdin is read as piped input)")
 		return 1
 	}
 

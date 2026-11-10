@@ -64,17 +64,10 @@ nothing else.
 
 ## A function says a program is not installed
 
-The message starts `Error: NAME needs TOOL, which is not installed.`, where
-NAME is the function and TOOL the program it runs.
+The message starts `Error: NAME needs TOOL, which is not installed.`, where NAME is the command (`gash files extract`) or the agent function (`llm_procs`) and TOOL the program it runs.
 
 **Cause:** the function runs an external program that this system lacks.
-**Fix:** the lines after the error give the package and the command that
-installs it on this system; run it, or `gash doctor --install TOOL`. A few
-functions print the shorter `Error: Command 'TOOL' is not installed or not
-in PATH.`: install the tool the same way. `gash_doctor --prereqs` lists
-every tool and what needs it, and [requirements.md](requirements.md) the
-package on each system. The [Gash guide](gash/README.md#install-a-missing-tool)
-explains the message and `gash doctor --install`.
+**Fix:** the lines after the error give the package and the command that installs it on this system; run it, or `gash doctor --install TOOL`. A few functions print the shorter `Error: Command 'TOOL' is not installed or not in PATH.`: install the tool the same way. `gash doctor --prereqs` lists every tool and what needs it, and [requirements.md](requirements.md) the package on each system. The [Gash guide](gash/README.md#install-a-missing-tool) explains the message and `gash doctor --install`.
 
 ## "Gash requires Bash 4.4 or newer"
 
@@ -219,7 +212,7 @@ PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin:$PATH"
   Without them they print `Error: TYPE: DETAILS` and `Hint: ...`.
 * Other functions print plain `Info:`, `OK:`, `Warning:`, `Error:` lines.
 
-## Load errors and gash_doctor
+## Load errors and gash doctor
 
 `gash doctor` reports the Bash version and the binary, then
 `failed to load FILE: exit N` (or `FILE: missing`) for every file that did

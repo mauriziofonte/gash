@@ -16,7 +16,7 @@ env LC_ALL=C.UTF-8
 # --- :82 empty - color run: glyph-prefixed hint on stderr
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_db_list'
 stderr '• No database connections configured in ~/\.gash_env'
-stderr 'Run .gash_env_init. to create a template'
+stderr 'Run .gash config init. to create a template'
 # --- :82 empty - plain run: word prefix, no ESC
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_db_list'
 stderr '^Info: No database connections configured'

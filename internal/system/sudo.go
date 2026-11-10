@@ -41,7 +41,7 @@ func (m *Module) sudoLast(c *invoke.Call) int {
 	}
 	if !ch.Active() {
 		// Only the caller's shell can run its own last command.
-		p.Error("sudo_last runs the previous command of the calling shell: use it from a Gash shell.")
+		p.Error("gash shell sudo-last runs the previous command of the calling shell: use it from a Gash shell.")
 		return 1
 	}
 	ch.Send(handoff.Go)

@@ -33,7 +33,7 @@ func (m *Module) quote(c *invoke.Call) int {
 		if !strings.HasPrefix(a, "-") {
 			what = "Unexpected argument: "
 		}
-		s.Printer(c.Stderr).Error(what + a + " (usage: gash_inspiring_quote [--source])")
+		s.Printer(c.Stderr).Error(what + a + " (usage: gash shell quote [--source])")
 		return 1
 	}
 

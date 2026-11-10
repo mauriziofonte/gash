@@ -688,7 +688,7 @@ func TestLedger_DOCK20(t *testing.T) {
 	for _, fn := range []string{"docker_stop_all", "docker_start_all"} {
 		r := s.runGo(fn, nil, "--bogus")
 		require.Equal(t, 1, r.RC)
-		require.Equal(t, "Error: Unknown option: --bogus (usage: "+fn+" [-y])\n", r.Err)
+		require.Equal(t, "Error: Unknown option: --bogus (usage: "+registry.CanonicalCall(fn)+" [-y])\n", r.Err)
 		require.Empty(t, r.Docker)
 	}
 }

@@ -41,7 +41,7 @@ func TestTarDecompressorMissing(t *testing.T) {
 		"a.tar.gz":  gzipReport(".tar.gz"),
 		"a.tgz":     gzipReport(".tgz"),
 		"a.tar.bz2": report(".tar.bz2", "bzip2", "extracts .bz2 archives", "bzip2"),
-		"a.tar.xz": report(".tar.xz", "xz", "extracts .xz archives, and lets archive_extract check a .tar.xz before extracting it",
+		"a.tar.xz": report(".tar.xz", "xz", "extracts .xz archives, and lets gash files extract check a .tar.xz before extracting it",
 			"xz-utils"),
 	} {
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": path}, nil, "archive_extract", archive, "out")
@@ -74,10 +74,10 @@ func TestTarXzRefusedWithoutXz(t *testing.T) {
 		t.Errorf("a.tbz2 with bsdtar: rc=%d err=%q", rc, errb)
 	}
 	_, errb, rc := runIn(t, d, map[string]string{"PATH": path}, nil, "archive_extract", "a.tar.xz", "o")
-	want := "Error: archive_extract (.tar.xz) needs xz, which is not installed.\n" +
-		"  xz extracts .xz archives, and lets archive_extract check a .tar.xz before extracting it (package xz on macOS 15.1).\n" +
+	want := "Error: gash files extract (.tar.xz) needs xz, which is not installed.\n" +
+		"  xz extracts .xz archives, and lets gash files extract check a .tar.xz before extracting it (package xz on macOS 15.1).\n" +
 		"  Install it:  brew install xz\n" +
-		"  Or run:      gash_doctor --install xz\n"
+		"  Or run:      gash doctor --install xz\n"
 	if rc != 1 || errb != want {
 		t.Errorf("a.tar.xz: rc=%d err=%q", rc, errb)
 	}
@@ -119,7 +119,7 @@ func TestFileBackupWithoutDateOrCp(t *testing.T) {
 		t.Errorf("no date: rc=%d out=%q err=%q", rc, out, errb)
 	}
 	_, errb, rc = runIn(t, d, nil, nil, "file_backup", "a")
-	if rc != 1 || errb != "Error: file_backup needs cp, which is not on PATH.\n" {
+	if rc != 1 || errb != "Error: gash files backup needs cp, which is not on PATH.\n" {
 		t.Errorf("no cp: rc=%d err=%q", rc, errb)
 	}
 	if _, err := os.Lstat(filepath.Join(d, "a_backup_20240101000000")); err == nil {

@@ -70,7 +70,7 @@ gash shell history "ssh "
 
 ```text
 Simple and fast. For advanced features (timestamps,
-deduplication, JSON output), use hgrep instead.
+deduplication, JSON output), use gash shell history-smart instead.
 The words are joined with spaces into one pattern (a GNU grep basic
 regex, case-insensitive) matched against each command. Column 2 is a
 command's first two words, column 3 the rest; duplicates and the
@@ -95,7 +95,7 @@ gash shell history-smart PATTERN [OPTIONS]
 
 ```text
 -n, --limit N       Show only the N most recent matches (0: all)
--a, --all           Include hgrep/gash shell history commands in results
+-a, --all           Include the history searches themselves in results
 -r, --reverse       Newest first (default: oldest first)
 -j, --json          Output as JSON array
 -H, --no-highlight  Disable highlighting / force plain output

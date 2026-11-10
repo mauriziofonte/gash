@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -604,8 +605,11 @@ func shellWord(w string) string {
 	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 }
 
-// Users are the functions and commands that need the named tool, with the
-// case that needs it: "llm_procs (--port)", sorted.
+// Users are the commands and functions that need the named tool, with the
+// case that needs it: "llm_procs (--port)", "gash files extract (tar
+// archives)". A former flat name is given as its canonical command, which
+// every 4.x shell defines; each user once, in the order of the registry
+// names.
 func Users(tool string) []string {
 	var out []string
 	host := false
@@ -618,9 +622,13 @@ func Users(tool string) []string {
 				host = true
 				break
 			}
+			if c, ok := registry.CommandOf(name); ok && len(c.FormerNames()) > 0 {
+				name = c.Name()
+			}
 			if n.When != "" {
-				out = append(out, name+" ("+n.When+")")
-			} else {
+				name += " (" + n.When + ")"
+			}
+			if !slices.Contains(out, name) {
 				out = append(out, name)
 			}
 			break

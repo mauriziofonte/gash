@@ -306,8 +306,9 @@ of its origin, verified before anything changes:
      again, its binary still installed.
 
 The previous version and its binary are kept: "gash update --rollback"
-returns to it (and a second rollback comes back). gash_upgrade runs the same
-steps. GASH_RELEASE_URL replaces the release download URL (file:// works).
+returns to it (and a second rollback comes back). gash_upgrade, its 3.x
+name (GASH_LEGACY_NAMES=1), runs the same steps. GASH_RELEASE_URL replaces
+the release download URL (file:// works).
 
 Exit status: 0 updated or nothing to do, 1 refused or failed (nothing
 changed, or the previous version restored), 2 a bad argument.`

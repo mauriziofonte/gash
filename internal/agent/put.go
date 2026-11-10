@@ -173,7 +173,7 @@ func (m *Module) put(c *invoke.Call) int {
 // llm_* read rails (never a secret file), at most maxPutBytes.
 func (m *Module) putSource(c *invoke.Call, from string) ([]byte, bool) {
 	tooLarge := func(what string) ([]byte, bool) {
-		fail(c, "file_too_large", what+" is over "+strconv.Itoa(maxPutBytes>>20)+" MiB", "agent_put uploads files up to 64 MiB; use remote_push for larger ones")
+		fail(c, "file_too_large", what+" is over "+strconv.Itoa(maxPutBytes>>20)+" MiB", "agent_put uploads files up to 64 MiB; use gash remote push for larger ones")
 		return nil, false
 	}
 	if from == "-" {

@@ -6,6 +6,15 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [Unreleased]
+
+### Fixed
+
+- Messages name the commands a Gash 4 shell defines (`gash files extract`, `gash doctor --install`), not the former flat names (`archive_extract`, `gash_doctor`) that it defines only with `GASH_LEGACY_NAMES=1`: the usage lines of a missing argument or an unknown option, `NAME needs TOOL, which is not installed` (also in the `details` of the `prerequisite_missing` envelope), the `needed_by` lists of `gash doctor --prereqs` and `--json`, the hints of `gash doctor`, `gash remote`, `gash win` and `gash wsl`, the fallback help, `install.sh --help` and the comments of `.gash_env.template`.
+- `gash shell history-smart` leaves out the searches typed by their commands (`gash shell history-smart X`, `gash shell history X`), as it did for `hgrep` and `history_grep`, and `gash shell history` leaves out `gash shell history X`, as its help says.
+- `gash doctor --legacy`, and the daily notice of an interactive shell, no longer report a name your files define for a command of your own (`alias hgrep='gash shell history-smart'`, `hgrep() { ... }`, `function hgrep`), nor a word of a `gash` command (`gash ai sysinfo`, `gash help hgrep`).
+- The help pages and the reference: `gash migrate` has its page under its command, with `gash_migrate` as its former name; the see-also lines of pages without a command name the commands; `gash shell history` points to `gash shell history-smart`, not `hgrep`.
+
 ## [4.1.0] - 2026-11-09
 
 `gash localweb` drops the hte name everywhere: its files, its system files, the markers of the hosts block and its error code now say localweb, and an install of Gash 4.0 moves to them on its own. `gash hte` is deprecated. `gash win net` works again under Windows PowerShell 5.1.

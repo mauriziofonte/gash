@@ -30,7 +30,7 @@ func (m *Module) processFind(c *invoke.Call) int {
 	p := ui.NewPrinter(c.Stderr, c.Term, false)
 	name := c.Arg(0)
 	if name == "" {
-		p.Error("Missing process name. Usage: process_find <process_name>")
+		p.Error("Missing process name. Usage: gash system ps <process_name>")
 		return 1
 	}
 	if len(c.Args) > 1 {
@@ -41,7 +41,7 @@ func (m *Module) processFind(c *invoke.Call) int {
 		Options: runner.Options{Env: c.Env.Child(), Stderr: c.Stderr}})
 	if notInstalled(err) {
 		// 3.4: no longer "No process found" for a missing ps.
-		return prereq.Fail(c, "ps", "process_find", false)
+		return prereq.Fail(c, "ps", "gash system ps", false)
 	}
 	ps := strings.ReplaceAll(string(res.Stdout), "\x00", "")
 	needle := strings.ToLower(name)
@@ -110,17 +110,17 @@ func (m *Module) processKill(c *invoke.Call) int {
 		return 1
 	}
 	if name == "" {
-		p.Error("Missing process name. Usage: process_kill [-y] <process_name>")
+		p.Error("Missing process name. Usage: gash system kill [-y] <process_name>")
 		return 1
 	}
 	found, ok := m.pgrepName(c, name)
 	if !ok {
 		// 3.4: no longer "No process found" for a missing pgrep.
-		return prereq.Fail(c, "pgrep", "process_kill", false)
+		return prereq.Fail(c, "pgrep", "gash system kill", false)
 	}
 	pids := m.dropSelf(found)
 	if len(pids) == 0 {
-		p.Error("No process found with exact name '" + name + "'. Use process_find (pf) to inspect candidates.")
+		p.Error("No process found with exact name '" + name + "'. Use gash system ps (pf) to inspect candidates.")
 		return 1
 	}
 	count := len(pids)
@@ -345,7 +345,7 @@ func (m *Module) portKill(c *invoke.Call) int {
 		return 1
 	}
 	if port == "" {
-		p.Error("Missing port. Usage: port_kill [-y] <port>")
+		p.Error("Missing port. Usage: gash system port-kill [-y] <port>")
 		return 1
 	}
 	// Digits as a decimal number without wraparound (SYS-33).

@@ -9,7 +9,7 @@
 
 env GASH_HEADLESS=1
 ! exec bash -c 'source "$GASH_SH"; process_kill ".*"'
-stderr '^Error: No process found with exact name .\.\*.\. Use process_find'
+stderr '^Error: No process found with exact name .\.\*.\. Use gash system ps'
 ! stderr 'process\(es\) match'
 
 exec bash victim.sh

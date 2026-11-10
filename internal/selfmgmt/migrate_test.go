@@ -42,7 +42,7 @@ func TestSelfmgmt_MigratePointer(t *testing.T) {
 	home := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(home, ".gashrc"), []byte("# 1.x\n"), 0o644))
 	env := map[string]string{"HOME": home, "XDG_STATE_HOME": filepath.Join(home, "state"), "TMPDIR": filepath.Join(home, "tmp")}
-	want := "Error: gash_migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in " +
+	want := "Error: gash migrate: Gash 3 does not migrate a Gash 1.x configuration; check out v2.1.0 in " +
 		home + "/.gash, open a new terminal, run gash_migrate there, then gash_upgrade\n"
 	for _, args := range [][]string{{}, {"--yes"}, {"-y"}, {"--plain"}, {"--rollback"}, {"--rollback", "--yes"}, {"--status"}, {"--auto"}, {"--bogus"}, {"word"}} {
 		out, errOut, rc := call(t, "gash_migrate", env, args...)
@@ -69,6 +69,6 @@ func TestSelfmgmt_MigratePointer(t *testing.T) {
 		out, errOut, rc := call(t, "gash_migrate", env, h)
 		require.Equal(t, 0, rc)
 		require.Empty(t, errOut)
-		require.Contains(t, out, "\n  gash_migrate\n")
+		require.Contains(t, out, "\n  gash migrate\n")
 	}
 }

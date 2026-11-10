@@ -67,9 +67,9 @@ func TestWSLStopVM(t *testing.T) {
 	m, _, h := tm(t, runner.NewFake(t))
 	wslRoot(t, m, true, false)
 	r := call(m, "wsl_restart", nil, nil, "", "-y", "now")
-	require.Equal(t, result{"", "Error: Unknown option: now (usage: wsl_restart [-y])\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unknown option: now (usage: gash wsl restart [-y])\n", 1}, r)
 	r = call(m, "wsl_shutdown", nil, nil, "", "--force")
-	require.Equal(t, result{"", "Error: Unknown option: --force (usage: wsl_shutdown [-y])\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unknown option: --force (usage: gash wsl shutdown [-y])\n", 1}, r)
 
 	// Headless without -y: the refused question.
 	r = call(m, "wsl_restart", map[string]string{"GASH_HEADLESS": "1", "GASH__HANDOFF": "3"}, nil, "")
@@ -138,7 +138,7 @@ func TestWSLTaskmanager(t *testing.T) {
 	// status 1 (it was "bash: cmd.exe: command not found" and status 0).
 	defer prereq.SetSystem(debian("cmd.exe"))()
 	r = call(m, "wsl_taskmanager", nil, nil, "")
-	require.Equal(t, result{"", "Error: wsl_taskmanager needs cmd.exe, which is not installed.\n" +
+	require.Equal(t, result{"", "Error: gash win taskmgr needs cmd.exe, which is not installed.\n" +
 		"  cmd.exe restarts and shuts down WSL from inside it, and starts the Task Manager.\n" +
 		"  It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).\n", 1}, r)
 }
@@ -187,7 +187,7 @@ func TestWSLCompact(t *testing.T) {
 			"Error: drop_caches/compact_memory failed.\n", 1}, r)
 
 	r = call(m, "wsl_compact", nil, nil, "", "--x")
-	require.Equal(t, result{"", "Error: Unknown option: --x (usage: wsl_compact [--status] [-y])\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unknown option: --x (usage: gash wsl compact [--status] [-y])\n", 1}, r)
 }
 
 // The interop check runs Windows' cmd.exe with a 20 s limit when it is
@@ -222,7 +222,7 @@ func TestLedger_SYS45(t *testing.T) {
 	m, _, _ := tm(t, f)
 	wslRoot(t, m, true, false)
 	r := call(m, "wsl_compact", headless, nil, "")
-	require.Equal(t, result{"", "Error: wsl_compact needs root: pass -y to run it unattended.\n", 1}, r)
+	require.Equal(t, result{"", "Error: gash wsl compact needs root: pass -y to run it unattended.\n", 1}, r)
 	require.Empty(t, f.Calls())
 
 	m, _, _ = tm(t, runner.NewFake(t, append(dmesg("", "", 1), runner.Expect{Argv: []string{"sudo", "-n", "true"}}, compact(0))...))

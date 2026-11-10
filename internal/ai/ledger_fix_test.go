@@ -165,7 +165,7 @@ func TestLedger_AI04_fix(t *testing.T) {
 	f := newFakeAPI(t)
 	m := testModule(f) // openTTY fails: no controlling terminal
 	home := gashEnvHome(t, "AI:claude=t")
-	want := "Error: ai_ask needs a terminal: use ai_query \"question\" (stdin is read as piped input)\n"
+	want := "Error: gash ai ask needs a terminal: use gash ai query \"question\" (stdin is read as piped input)\n"
 	c, _, errb := newCall(map[string]string{"HOME": home}, strings.NewReader("how to list files\n"), false, "claude")
 	if rc := m.aiAsk(c); rc != 1 || errb.String() != want {
 		t.Fatalf("no tty: rc %d, err %q", rc, errb.String())

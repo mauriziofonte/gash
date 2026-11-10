@@ -38,15 +38,15 @@ stderr 'No disk-backed filesystems found'
 
 # --- :149 df-failed - df exits non-zero
 ! exec bash -c 'mkdir -p bin && printf "#!/bin/sh\nexit 1\n" >bin/df && chmod +x bin/df; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage'
-stderr 'Error: disk_usage: df failed'
+stderr 'Error: gash system disks: df failed'
 
 # --- :150 bad-option
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage --bogus'
-stderr 'Error: disk_usage: unknown option .--bogus.'
+stderr 'Error: gash system disks: unknown option .--bogus.'
 
 # --- R6: plain mode, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; disk_usage --bogus'
-stderr '^Error: disk_usage: unknown option'
+stderr '^Error: gash system disks: unknown option'
 ! stderr '\x1b'
 
 -- dfmock --

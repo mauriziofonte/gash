@@ -5,7 +5,7 @@
 Gash is one static binary plus the Bash that loads it. The binary does
 its work in process (search, hashing, JSON, databases, HTTP), so most of
 Gash needs nothing else. What it does need is listed here, from the same
-catalog that `install.sh` and `gash_doctor` read.
+catalog that `install.sh` and `gash doctor` read.
 
 - **Required** tools are needed to install Gash and to load it: Bash 4.4
   or newer, git, curl or wget, tar, gzip, sha256sum or shasum, grep and
@@ -16,17 +16,17 @@ catalog that `install.sh` and `gash_doctor` read.
   the command that installs it on your system.
 - **Optional** tools add something to a function that works without them.
 
-`gash_doctor --prereqs` shows what this system has and lacks, with the
-install command of each missing tool. `gash_doctor --install` installs
+`gash doctor --prereqs` shows what this system has and lacks, with the
+install command of each missing tool. `gash doctor --install` installs
 the missing required and feature tools after asking (`--all` adds the
-optional ones, or name the tools: `gash_doctor --install rsync zstd`).
+optional ones, or name the tools: `gash doctor --install rsync zstd`).
 It never installs anything for an AI agent (`GASH_HEADLESS=1`): agents get
 the `prerequisite_missing` envelope described in [AGENTS.md](../AGENTS.md)
-and ask the user. `gash_doctor --json` gives the same report as JSON.
+and ask the user. `gash doctor --json` gives the same report as JSON.
 
 In the tables, a dash means the system has no package for the tool (see
 its notes), "built in" means macOS ships it, and "(EPEL)" means RHEL,
-Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
+Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash doctor
 --install` enables first. Amazon Linux has no EPEL.
 
 ## Install and update
@@ -38,7 +38,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-sha256sum"></a>**sha256sum** (required) verifies the downloaded binary against its pinned hash. Any of: `sha256sum`, `shasum`.
 - <a id="tool-git"></a>**git** (required) installs and updates Gash, and runs the git functions. Needed by `agent_git_commit`, `gash update`, `gash git tag add`, `gash git patch`, `gash git tag delete`, `gash git revisions`, `gash git tag list`, `gash git repair`, `gash git sync`, `gl`, `gla`, `glf`, `glg`, `glo`, `gls`, `llm_find` (--tracked), `llm_git_diff`, `llm_git_log`, `llm_git_overview`, `llm_git_show` and `llm_git_status`. On macOS git comes with the Command Line Tools: xcode-select --install.
 - <a id="tool-grep"></a>**grep** (required) is used by the installer.
-- <a id="tool-sed"></a>**sed** (required) is used by the installer and gash_uninstall. Needed by `gash uninstall`.
+- <a id="tool-sed"></a>**sed** (required) is used by the installer and gash uninstall. Needed by `gash uninstall`.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -92,7 +92,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 
 - <a id="tool-unzip"></a>**unzip** (feature) extracts .zip archives. Needed by `gash files extract` (.zip) and `gash runtime upgrade chrome`.
 - <a id="tool-bzip2"></a>**bzip2** (feature) extracts .bz2 archives. Any of: `bzip2`, `bunzip2`. Needed by `gash files extract` (.bz2).
-- <a id="tool-xz"></a>**xz** (feature) extracts .xz archives, and lets archive_extract check a .tar.xz before extracting it. Needed by `gash files extract` (.xz).
+- <a id="tool-xz"></a>**xz** (feature) extracts .xz archives, and lets gash files extract check a .tar.xz before extracting it. Needed by `gash files extract` (.xz).
 - <a id="tool-zstd"></a>**zstd** (feature) extracts .zst archives. Needed by `gash files extract` (.zst).
 - <a id="tool-7z"></a>**7z** (feature) extracts .7z archives. Any of: `7z`, `7zz`. Needed by `gash files extract` (.7z).
 - <a id="tool-unrar"></a>**unrar** (feature) extracts .rar archives. Needed by `gash files extract` (.rar). Where no package exists: <https://www.rarlab.com/download.htm>. Its package is in the non-free repositories (Debian non-free, Ubuntu multiverse, openSUSE non-oss).

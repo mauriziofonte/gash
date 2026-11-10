@@ -12,11 +12,11 @@ Help, the doctor, prerequisites, settings, updates and removal. The guide is [RE
 | [`gash config init`](#gash-config-init) |  | Create ~/.gash_env configuration template |
 | [`gash doctor`](#gash-doctor) | `gdoctor` | Run health checks on the Gash installation |
 | [`gash help`](#gash-help) |  | The page of a command, a namespace or a topic; search every page |
+| [`gash migrate`](#gash-migrate) |  | Shows how to migrate a Gash 1.x configuration |
 | [`gash shell username`](#gash-shell-username) |  | Print the current user name |
 | [`gash uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
 | [`gash update`](#gash-update) |  | Upgrade Gash to the latest version |
-| [`gash_migrate`](#gash_migrate) |  | Shows how to migrate a Gash 1.x configuration |
 
 ### gash
 
@@ -63,7 +63,7 @@ gash all --no-color > gash-pages.txt
 gash files largest --limit 5
 ```
 
-See also: [`gash_help`](../gash/reference.md#gash-help), [`gash_doctor`](../gash/reference.md#gash-doctor)
+See also: [`gash help`](../gash/reference.md#gash-help), [`gash doctor`](../gash/reference.md#gash-doctor)
 
 ### gash config init
 
@@ -175,13 +175,16 @@ Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
 the same figures in its __GASH_LOAD_TIMES array.
 
 --legacy reads text, not Bash: a name in a string counts, a
-comment line does not. It returns 1 when it finds a name or
-cannot read a FILE. Gash 4 defines the former names only with
-GASH_LEGACY_NAMES=1; an interactive shell whose startup files
-call one says so on stderr, at most once a day.
+comment line does not, nor a name the line defines for a command
+of your own (alias hgrep=..., hgrep() { ... }, function hgrep),
+nor a word of a gash command (gash ai sysinfo, gash help hgrep).
+It returns 1 when it finds a name or cannot read a FILE. Gash 4
+defines the former names only with GASH_LEGACY_NAMES=1; an
+interactive shell whose startup files call one says so on
+stderr, at most once a day.
 ```
 
-See also: `gash update`, [`gash`](../gash/reference.md#gash)
+See also: [`gash update`](../gash/reference.md#gash-update), [`gash`](../gash/reference.md#gash)
 
 ### gash help
 
@@ -226,6 +229,46 @@ gash help --bash cd
 ```
 
 See also: [`gash`](../gash/reference.md#gash)
+
+### gash migrate
+
+Shows how to migrate a Gash 1.x configuration.
+
+Former name: `gash_migrate` (with `GASH_LEGACY_NAMES=1`).
+
+#### Usage
+
+```text
+gash migrate
+
+Gash 3 does not migrate a Gash 1.x configuration. gash migrate prints
+one line on stderr with the route and returns 1: check out v2.1.0 in
+your Gash directory, open a new terminal, run gash_migrate there (the
+2.x guided review, with a diff preview and backups), then gash_upgrade:
+2.x has those names only. It writes nothing.
+
+While ~/.gashrc is still the 1.x loader, an interactive shell prints a
+one-line reminder on stderr, at most once a day. Headless shells print
+nothing.
+```
+
+#### Files
+
+```text
+~/.local/state/gash/schema     configuration schema version (2 or more:
+                               no reminder)
+~/.local/state/gash/notice     time of the last reminder
+(under $XDG_STATE_HOME/gash when that is set)
+```
+
+#### Examples
+
+```bash
+# Show the route
+gash migrate
+```
+
+See also: [`gash`](../gash/reference.md#gash), [`gash doctor`](../gash/reference.md#gash-doctor), [`gash update`](../gash/reference.md#gash-update)
 
 ### gash shell username
 
@@ -282,7 +325,7 @@ before the edit, and a ~/.gashrc that holds your own lines.
 Restart your terminal after uninstalling.
 ```
 
-See also: `gash update`, [`gash unload`](../gash/reference.md#gash-unload)
+See also: [`gash update`](../gash/reference.md#gash-update), [`gash unload`](../gash/reference.md#gash-unload)
 
 ### gash unload
 
@@ -358,45 +401,6 @@ binary are kept), or git -C ~/.gash checkout vX.Y.Z
 
 See also: [`gash doctor`](../gash/reference.md#gash-doctor), [`gash uninstall`](../gash/reference.md#gash-uninstall)
 
-### gash_migrate
-
-Shows how to migrate a Gash 1.x configuration.
-
-#### Usage
-
-```text
-gash_migrate
-(also: gash migrate)
-
-Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints
-one line on stderr with the route and returns 1: check out v2.1.0 in
-your Gash directory, open a new terminal, run gash_migrate there (the
-2.x guided review, with a diff preview and backups), then gash_upgrade.
-It writes nothing.
-
-While ~/.gashrc is still the 1.x loader, an interactive shell prints a
-one-line reminder on stderr, at most once a day. Headless shells print
-nothing.
-```
-
-#### Files
-
-```text
-~/.local/state/gash/schema     configuration schema version (2 or more:
-                               no reminder)
-~/.local/state/gash/notice     time of the last reminder
-(under $XDG_STATE_HOME/gash when that is set)
-```
-
-#### Examples
-
-```bash
-# Show the route
-gash migrate
-```
-
-See also: `gash gash_doctor gash_upgrade`
-
 ## Command trees
 
 ### gash version
@@ -446,8 +450,9 @@ of its origin, verified before anything changes:
      again, its binary still installed.
 
 The previous version and its binary are kept: "gash update --rollback"
-returns to it (and a second rollback comes back). gash_upgrade runs the same
-steps. GASH_RELEASE_URL replaces the release download URL (file:// works).
+returns to it (and a second rollback comes back). gash_upgrade, its 3.x
+name (GASH_LEGACY_NAMES=1), runs the same steps. GASH_RELEASE_URL replaces
+the release download URL (file:// works).
 
 Exit status: 0 updated or nothing to do, 1 refused or failed (nothing
 changed, or the previous version restored), 2 a bad argument.

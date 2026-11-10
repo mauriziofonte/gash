@@ -7,7 +7,7 @@
 #   chmod 600 ~/.gash_env
 #   nano ~/.gash_env
 #
-# Or use: gash_env_init
+# Or use: gash config init
 
 # ============================================
 # SSH Keys
@@ -43,8 +43,8 @@
 # DB:analytics=pgsql://pguser:secret@localhost:5432/analytics
 # DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 #
-# To test a connection: gash_db_test [connection_name]
-# To list connections:  gash_db_list
+# To test a connection: gash db test [connection_name]
+# To list connections:  gash db list
 
 # ============================================
 # AI Providers
@@ -64,8 +64,8 @@
 # Usage:
 #   ask                  # Interactive chat (uses first provider)
 #   ask claude           # Interactive chat with Claude
-#   ai_query "question"  # Non-interactive query
-#   gash_ai_list         # List configured providers
+#   gash ai query "question"  # Non-interactive query
+#   gash ai providers         # List configured providers
 
 # ============================================
 # Remote Hosts
@@ -76,8 +76,8 @@
 # . - or an IPv6 address in brackets. No port: put it in a Host entry of
 # ~/.ssh/config and use that name as host.
 #
-# Named shortcuts for remote_exec/remote_push/remote_pull/remote_sync_push/
-# remote_sync_pull. Interactively you can also target any user@host directly
+# Named shortcuts for gash remote exec, push, pull and sync. Interactively
+# you can also target any user@host directly
 # without registering it here; a registered alias is required when Gash runs
 # headless (GASH_HEADLESS=1, e.g. driven by an agent).
 #
@@ -85,7 +85,7 @@
 # HOST:web=root@web.example.com
 # HOST:db=deploy@10.0.0.5
 #
-# To list configured hosts: remote_hosts
+# To list configured hosts: gash remote hosts
 
 # ============================================
 # Protected Paths

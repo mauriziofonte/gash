@@ -32,7 +32,7 @@ stdout '^rc=0$'
 
 # Without nvm: the bad option is reported first, a good one meets the nvm check.
 ! exec bash -c 'source "$GASH_SH"; nvm_prune_versions --bogus'
-stderr '^Error: Unknown option: --bogus \(usage: nvm_prune_versions \[-y\|--yes\|--force\]\)$'
+stderr '^Error: Unknown option: --bogus \(usage: gash runtime prune node \[-y\|--yes\|--force\]\)$'
 ! stderr 'nvm is not loaded'
 ! exec bash -c 'source "$GASH_SH"; nvm_prune_versions -y'
 stderr 'nvm is not loaded'

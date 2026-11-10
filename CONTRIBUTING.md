@@ -13,7 +13,7 @@ git clone https://github.com/mauriziofonte/gash.git
 cd gash
 go test ./...                                  # unit tests and the testscript suite
 go build -o "$HOME/gash-dev" ./cmd/gash        # a binary of this working copy
-GASH_BIN="$HOME/gash-dev" GASH_HEADLESS=1 bash -c 'source ./gash.sh; files_largest --json .'
+GASH_BIN="$HOME/gash-dev" GASH_HEADLESS=1 bash -c 'source ./gash.sh; gash files largest --json .'
 ```
 
 `gash.sh` calls the binary named by `GASH_BIN`; without it, the release
@@ -98,7 +98,7 @@ CI runs the same commands on Linux and macOS, as a non-root user.
 
 ## Quotes
 
-`quotes/list.txt` feeds `gash_inspiring_quote` and the banner. Every quote
+`quotes/list.txt` feeds `gash shell quote` and the banner. Every quote
 needs a source a reader can check: a book, essay, talk, interview or mailing
 list post where the person said or wrote it, not a quote site. Put the source
 on the `# ` comment line right above the quote, with a URL when there is one:

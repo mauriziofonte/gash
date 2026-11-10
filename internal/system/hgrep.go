@@ -122,7 +122,7 @@ func parseHgrep(c *invoke.Call, p ui.Printer) (hgrepOpts, bool) {
 	}
 	if o.pattern == "" {
 		p.Error("Missing required argument: pattern")
-		p.Usage("hgrep <pattern> [options]. Use -h for help.")
+		p.Usage("gash shell history-smart <pattern> [options]. Use -h for help.")
 		return o, false
 	}
 	return o, true
@@ -237,7 +237,7 @@ func (m *Module) hgrepPick(c *invoke.Call, p ui.Printer, o hgrepOpts, recs []his
 		p.Error("--pick requires an interactive terminal")
 		return 1
 	}
-	if _, ok := prereq.Require(c, "fzf", "hgrep (--pick)", false); !ok {
+	if _, ok := prereq.Require(c, "fzf", "gash shell history-smart (--pick)", false); !ok {
 		return 1
 	}
 	var in strings.Builder
@@ -245,7 +245,7 @@ func (m *Module) hgrepPick(c *invoke.Call, p ui.Printer, o hgrepOpts, recs []his
 		in.WriteString("[" + stamp(rc.epoch, m.loc, "2006-01-02 15:04:05") + "] " + rc.cmd + "\n")
 	}
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "fzf",
-		Args:    []string{"--height=40%", "--reverse", "--no-sort", "--prompt=hgrep> ", "--tiebreak=index"},
+		Args:    []string{"--height=40%", "--reverse", "--no-sort", "--prompt=history> ", "--tiebreak=index"},
 		Options: runner.Options{Env: c.Env.Child(), Stdin: strings.NewReader(in.String()), Stderr: c.Stderr}})
 	if err != nil || res.ExitCode != 0 {
 		return 0
@@ -387,11 +387,13 @@ func isEpochLine(l string) bool {
 }
 
 // hgrepRecords is the data plane: every #EPOCH line takes the next line as
-// its command (spaces and tabs trimmed, empty ones skipped, the hgrep and
-// history_grep ones too unless -a), matched commands are deduplicated with
-// the last execution winning and a count kept, then ordered by that
-// execution's epoch; equal epochs keep the order of the last executions
-// in the file (SYS-31). One trailing CR of both lines is dropped (SYS-06).
+// its command (spaces and tabs trimmed, empty ones skipped, the searches
+// themselves too unless -a: hgrep, history_grep and their canonical gash
+// shell history and gash shell history-smart), matched commands are
+// deduplicated with the last execution winning and a count kept, then
+// ordered by that execution's epoch; equal epochs keep the order of the
+// last executions in the file (SYS-31). One trailing CR of both lines is
+// dropped (SYS-06).
 func hgrepRecords(data string, mt *histMatcher, includeSelf bool) []histRecord {
 	lines := strings.Split(data, "\n")
 	if n := len(lines); n > 0 && lines[n-1] == "" {
@@ -417,7 +419,8 @@ func hgrepRecords(data string, mt *histMatcher, includeSelf bool) []histRecord {
 		if cmd == "" {
 			continue
 		}
-		if !includeSelf && (strings.Contains(cmd, "hgrep") || strings.Contains(cmd, "history_grep")) {
+		if !includeSelf && (strings.Contains(cmd, "hgrep") || strings.Contains(cmd, "history_grep") ||
+			strings.Contains(cmd, "gash shell history")) {
 			continue
 		}
 		if !mt.match(cmd) {

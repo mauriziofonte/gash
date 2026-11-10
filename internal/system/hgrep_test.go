@@ -59,6 +59,13 @@ func TestHgrepPlain(t *testing.T) {
 	require.Equal(t, "[2023-11-14 22:21:40] hgrep git\n", r.out)
 	r = hgrep(t, histFixture, nil, "hgrep")
 	require.Empty(t, r.out)
+
+	// The searches typed by their canonical names are left out too.
+	canon := "#1700000000\ngash shell history-smart git\n#1700000100\ngash shell history git\n#1700000200\ngit log\n"
+	r = hgrep(t, canon, nil, "git")
+	require.Equal(t, "[2023-11-14 22:16:40] git log\n", r.out)
+	r = hgrep(t, canon, nil, "-a", "git", "-c")
+	require.Equal(t, "3\n", r.out)
 }
 
 func TestHgrepJSONCountEmpty(t *testing.T) {
@@ -81,7 +88,7 @@ func TestHgrepJSONCountEmpty(t *testing.T) {
 func TestHgrepArguments(t *testing.T) {
 	r := hgrep(t, histFixture, nil)
 	require.Equal(t, 1, r.rc)
-	require.Equal(t, "Error: Missing required argument: pattern\nUsage: hgrep <pattern> [options]. Use -h for help.\n", r.err)
+	require.Equal(t, "Error: Missing required argument: pattern\nUsage: gash shell history-smart <pattern> [options]. Use -h for help.\n", r.err)
 	r = hgrep(t, histFixture, nil, "a", "b")
 	require.Equal(t, "Error: Multiple patterns not supported: b\n", r.err)
 	r = hgrep(t, histFixture, nil, "a", "-x")
@@ -156,11 +163,11 @@ func TestHgrepInteractive(t *testing.T) {
 func TestHgrepPick(t *testing.T) {
 	bin := binDir(t, "fzf")
 	f := runner.NewFake(t, runner.Expect{
-		Argv:   []string{"fzf", "--height=40%", "--reverse", "--no-sort", "--prompt=hgrep> ", "--tiebreak=index"},
+		Argv:   []string{"fzf", "--height=40%", "--reverse", "--no-sort", "--prompt=history> ", "--tiebreak=index"},
 		Stdin:  runner.Text("[2023-11-14 22:28:20] cd /x && git log\n[2023-11-14 22:30:00] cd /x || ls git\n"),
 		Stdout: "[2023-11-14 22:30:00] cd /x || ls git\n",
 	}, runner.Expect{
-		Argv:   []string{"fzf", "--height=40%", "--reverse", "--no-sort", "--prompt=hgrep> ", "--tiebreak=index"},
+		Argv:   []string{"fzf", "--height=40%", "--reverse", "--no-sort", "--prompt=history> ", "--tiebreak=index"},
 		Status: 130,
 	})
 	m, _, _ := tm(t, f)
@@ -180,7 +187,7 @@ func TestHgrepPick(t *testing.T) {
 	r = call(m, "hgrep", env, ttyTerm(env, ""), "", "cd", "--pick")
 	// 3.4: the prerequisite report.
 	require.Equal(t, 1, r.rc)
-	require.Contains(t, r.err, "hgrep (--pick) needs fzf, which is not installed")
+	require.Contains(t, r.err, "gash shell history-smart (--pick) needs fzf, which is not installed")
 	// No match: nothing to pick, status 0 before any check.
 	r = call(m, "hgrep", env, nil, "", "zz", "--pick")
 	require.Equal(t, result{"", "", 0}, r)

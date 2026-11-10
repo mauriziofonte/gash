@@ -164,7 +164,7 @@ func (m *Module) doctor(c *invoke.Call) int {
 			issues++
 		}
 	} else {
-		p.Info("  " + envFile + " — not found (optional, run gash_env_init to create)")
+		p.Info("  " + envFile + " — not found (optional, run gash config init to create)")
 	}
 	for _, kv := range shellSettings(c) {
 		s.KV(out, "--indent", "4", "--width", "0", "--sep", "=", kv[0], kv[1])

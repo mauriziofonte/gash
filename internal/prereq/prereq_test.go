@@ -166,7 +166,7 @@ func TestEnvelope(t *testing.T) {
 			`"hint":"Install procps-ng: sudo dnf install -y procps-ng","missing":"ps","install":"sudo dnf install -y procps-ng"}`,
 		s.Report("ps", "llm_procs").Envelope().String())
 	require.Equal(t,
-		`{"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,`+
+		`{"error":"prerequisite_missing","details":"gash remote sync push needs rsync, which is not installed","action":"STOP","recoverable":true,`+
 			`"hint":"Install rsync: sudo dnf install -y rsync","missing":"rsync","install":"sudo dnf install -y rsync"}`,
 		s.Report("rsync", "remote_sync_push").Envelope().String())
 	require.Equal(t,
@@ -179,14 +179,14 @@ func TestPrint(t *testing.T) {
 	s := fakeSystem(t, "linux", rocky9, false, "dnf", "sudo")
 	var b bytes.Buffer
 	s.Report("ps", "process_find").Print(ui.Printer{W: &b})
-	require.Equal(t, "Error: process_find needs ps, which is not installed.\n"+
+	require.Equal(t, "Error: gash system ps needs ps, which is not installed.\n"+
 		"  ps lists the running processes (package procps-ng on Rocky Linux 9.4).\n"+
 		"  Install it:  sudo dnf install -y procps-ng\n"+
-		"  Or run:      gash_doctor --install ps\n", b.String())
+		"  Or run:      gash doctor --install ps\n", b.String())
 
 	b.Reset()
 	s.Report("docker", "docker_stop_all").Print(ui.Printer{W: &b})
-	require.Equal(t, "Error: docker_stop_all needs docker, which is not installed.\n"+
+	require.Equal(t, "Error: gash docker stop-all needs docker, which is not installed.\n"+
 		"  docker runs and inspects containers.\n"+
 		"  Install docker: https://docs.docker.com/engine/install/.\n", b.String())
 
@@ -312,7 +312,7 @@ func TestNeeds(t *testing.T) {
 			require.True(t, used[tool.Name], "no function needs %s", tool.Name)
 		}
 	}
-	require.Equal(t, []string{"llm_procs (--port)", "port_kill"}, Users("lsof"))
+	require.Equal(t, []string{"llm_procs (--port)", "gash system port-kill"}, Users("lsof"))
 }
 
 // TestBrewFormulas asks Homebrew for every formula the catalog names: on
@@ -357,14 +357,14 @@ func TestRequire(t *testing.T) {
 	c, errb := call(map[string]string{"PATH": bin})
 	_, ok = Require(c, "rsync", "remote_sync_push", true)
 	require.False(t, ok)
-	require.Equal(t, `{"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo apt-get install -y rsync","missing":"rsync","install":"sudo apt-get install -y rsync"}`+"\n", errb.String())
+	require.Equal(t, `{"error":"prerequisite_missing","details":"gash remote sync push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo apt-get install -y rsync","missing":"rsync","install":"sudo apt-get install -y rsync"}`+"\n", errb.String())
 	c, errb = call(map[string]string{"PATH": bin})
 	_, ok = Require(c, "rsync", "remote_sync_push", false)
 	require.False(t, ok)
-	require.Equal(t, "Error: remote_sync_push needs rsync, which is not installed.\n"+
+	require.Equal(t, "Error: gash remote sync push needs rsync, which is not installed.\n"+
 		"  rsync syncs directories with remote hosts (package rsync on Debian GNU/Linux 12).\n"+
 		"  Install it:  sudo apt-get install -y rsync\n"+
-		"  Or run:      gash_doctor --install rsync\n", errb.String())
+		"  Or run:      gash doctor --install rsync\n", errb.String())
 	p, ok = Require(c, "zstd", "archive_extract", true)
 	require.True(t, ok)
 	require.Equal(t, "/usr/bin/zstd", p, "the pinned system answers")

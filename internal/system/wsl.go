@@ -16,6 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -78,7 +79,7 @@ func (m *Module) wslStopVM(c *invoke.Call) int {
 	assumeYes := false
 	for _, a := range c.Args {
 		if a != "-y" && a != "--yes" {
-			p.Error("Unknown option: " + a + " (usage: " + c.Name + " [-y])")
+			p.Error("Unknown option: " + a + " (usage: " + registry.CanonicalCall(c.Name) + " [-y])")
 			return 1
 		}
 		assumeYes = true
@@ -148,7 +149,7 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		if se.Status == 127 {
-			return prereq.Fail(c, "explorer.exe", "wsl_explorer", false)
+			return prereq.Fail(c, "explorer.exe", "gash win explorer", false)
 		}
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 		return se.Status
@@ -203,7 +204,7 @@ func (m *Module) wslTaskmanager(c *invoke.Call) int {
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdout: osFile(c.Stdout), Stderr: osFile(c.Stderr)}}
 	if se := (*runner.StartError)(nil); errors.As(m.run.Start(ctx(c), cmd), &se) {
 		if se.Status == 127 {
-			return prereq.Fail(c, "cmd.exe", "wsl_taskmanager", false)
+			return prereq.Fail(c, "cmd.exe", "gash win taskmgr", false)
 		}
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 		return se.Status
@@ -269,7 +270,7 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		case "-y", "--yes":
 			yes = true
 		default:
-			p.Error("Unknown option: " + a + " (usage: wsl_compact [--status] [-y])")
+			p.Error("Unknown option: " + a + " (usage: gash wsl compact [--status] [-y])")
 			return 1
 		}
 	}
@@ -277,7 +278,7 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		return 1
 	}
 	if !statusOnly && !yes && c.Term.Headless() {
-		p.Error("wsl_compact needs root: pass -y to run it unattended.")
+		p.Error("gash wsl compact needs root: pass -y to run it unattended.")
 		return 1
 	}
 	s := ui.StyleOf(c.Term, false)
@@ -319,14 +320,14 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		s.KV(c.Stdout, "--width", "22", "MemFree", before[0], "SReclaimable (slab)", before[1], "free >=512KiB blocks", before[2])
 		return 0
 	}
-	if !m.sudoReady(c, p, "wsl_compact") {
+	if !m.sudoReady(c, p, "gash wsl compact") {
 		return 1
 	}
 	p.Info("Dropping the page cache and slab, then compacting memory (sudo)...")
 	res, err := m.run.RunScript(ctx(c), runner.Script{Name: runner.ScriptWSLCompact,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
 	if notInstalled(err) {
-		return prereq.Fail(c, "sudo", "wsl_compact", false)
+		return prereq.Fail(c, "sudo", "gash wsl compact", false)
 	}
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
