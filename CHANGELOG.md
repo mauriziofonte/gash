@@ -6,6 +6,15 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [4.1.2] - 2026-11-10
+
+`gash localweb`, `gash logs` and the command groups of `gash runtime` print their pages, as every other namespace does.
+
+### Fixed
+
+- `gash localweb` and `gash logs`, with or without `--help`, print the namespace page (their commands in a table, the link to the guide), as `gash help localweb`, `gash all` and every other namespace already did; they printed the root help of their own command tree. A command of that tree keeps its own `--help` (`gash localweb site --help`).
+- `gash runtime detect`, `gash runtime upgrade` and `gash runtime prune` print the page of their group, with or without `--help` and through `gash help`; `gash runtime detect` answered `unknown_runtime`, and the help showed the usage of `gash runtime php`, in the reference too.
+
 ## [4.1.1] - 2026-11-10
 
 Gash 4 stops suggesting the names it no longer defines: messages, usages, hints and help name the commands (`gash shell history-smart`, not `hgrep`). `gash doctor --legacy` no longer reports a command of your own under a former name, and the history searches leave themselves out again.
@@ -1296,6 +1305,7 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[4.1.2]: https://github.com/mauriziofonte/gash/compare/v4.1.1...v4.1.2
 [4.1.1]: https://github.com/mauriziofonte/gash/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/mauriziofonte/gash/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/mauriziofonte/gash/compare/v3.5.0...v4.0.0
