@@ -6,12 +6,18 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [Unreleased]
+## [4.1.3] - 2026-11-23
+
+An alias of your shell no longer changes what Gash's shell functions run, and `gash runtime upgrade node` (`nvmc`) no longer removes Node.js versions after a bad read.
 
 ### Fixed
 
 - An alias of your shell no longer reaches the commands that Gash's shell functions run inside `$(...)` and `<(...)`. Bash 5.2 parses a substitution again each time it runs, with the aliases of that moment, so with `GASH_REPLACE_TOOLS=1` (`tail` is `multitail`) `gash runtime upgrade node` (`nvmc`) read multitail's usage as the newest patch of every Node.js major, installed nothing and removed every old patch. The generated Bash now quotes the command names of its substitutions (`\tail`), which skips the alias and still runs the function, builtin or program of that name.
 - `gash runtime upgrade node` stops before installing or removing anything when the newest patch it reads for a major is not a version (`Nothing changed.`, status 1).
+
+### Security
+
+- The binary is built with Go 1.27.4, which fixes GO-2026-6859 in the standard library's `net/http` (reported by govulncheck on 4.1.2's Go 1.27.3).
 
 ## [4.1.2] - 2026-11-10
 
