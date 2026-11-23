@@ -484,6 +484,14 @@ node_upgrade() {
             __gash_warning "v${major}: no release in the remote index, left as it is."
             continue
         fi
+        # A tool of the pipeline that misbehaves must never reach nvm
+        # install and the removals: a version that is not one stops the
+        # whole run (4.1.2 removed every major after reading multitail's
+        # usage here).
+        if [[ ! "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            __gash_error "v${major}: the newest patch read from the remote index is not a version. Nothing changed."
+            return 1
+        fi
         if grep -qx "$target" <<<"$installed"; then
             keeps+=("$target")
         else

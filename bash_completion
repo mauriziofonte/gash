@@ -202,7 +202,7 @@ declare -gA __GASH_COMPLETE_WORDS=(
 # replace is cut from the candidates again. Two or more candidates are
 # listed with their descriptions; one is inserted alone.
 # shellcheck disable=SC2120
-__gash_complete() { __gash_cold __gash_complete bf98824a && "${FUNCNAME[0]}" "$@"; }
+__gash_complete() { __gash_cold __gash_complete 79dc4786 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Enable Completion

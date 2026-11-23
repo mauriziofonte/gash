@@ -410,7 +410,7 @@ declare -g __GASH_SPINNER_TRAP_SET=""
 
 # Usage: __gash_spinner_start "Loading..."
 # shellcheck disable=SC2120
-__gash_spinner_start() { __gash_cold __gash_spinner_start 8d4b68b6 && "${FUNCNAME[0]}" "$@"; }
+__gash_spinner_start() { __gash_cold __gash_spinner_start 31978ae4 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_spinner_stop [success|error|warning|none]
 # shellcheck disable=SC2120
@@ -557,7 +557,7 @@ __gash_bar() { __gash_cold __gash_bar 04525631 && "${FUNCNAME[0]}" "$@"; }
 # with a two-space hanging indent.
 # Usage: __gash_wrap VAR WIDTH TEXT
 # shellcheck disable=SC2120
-__gash_wrap() { __gash_cold __gash_wrap 6b22d8a1 && "${FUNCNAME[0]}" "$@"; }
+__gash_wrap() { __gash_cold __gash_wrap b9677c84 && "${FUNCNAME[0]}" "$@"; }
 
 # Let the user pick one of OPTIONS. On a terminal: the numbered options,
 # then a selection line that arrow keys (or j/k, or the option's number)
@@ -567,7 +567,7 @@ __gash_wrap() { __gash_cold __gash_wrap 6b22d8a1 && "${FUNCNAME[0]}" "$@"; }
 # Usage: __gash_choose VAR DEFAULT OPTION...   (VAR gets the 1-based index)
 # Returns 1 on cancel or end of input.
 # shellcheck disable=SC2120
-__gash_choose() { __gash_cold __gash_choose d17d7489 && "${FUNCNAME[0]}" "$@"; }
+__gash_choose() { __gash_cold __gash_choose 3de49106 && "${FUNCNAME[0]}" "$@"; }
 
 # Draw a rounded box around lines (stdout), sized to the longest line and
 # capped at the terminal width. Lines may carry color codes. The border
@@ -589,7 +589,7 @@ __gash_table_into() {
     shift
     local __gti_color=0
     __gash_use_color && __gti_color=1
-    mapfile -t __gti_out < <(__GASH_TABLE_COLOR=$__gti_color __gash_table "$@")
+    mapfile -t __gti_out < <(__GASH_TABLE_COLOR=$__gti_color \__gash_table "$@")
 }
 
 # Split LINE on every tab into the array named ARRAY, keeping empty fields

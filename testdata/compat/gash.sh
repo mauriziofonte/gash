@@ -35,7 +35,7 @@
 # error.
 __gash_require_bash_message() {
     echo "Gash requires Bash 4.4 or newer (this is ${BASH_VERSION:-not Bash})." >&2
-    echo "On macOS: brew install bash, then use $(brew --prefix 2>/dev/null || echo /opt/homebrew)/bin/bash." >&2
+    echo "On macOS: brew install bash, then use $(\brew --prefix 2>/dev/null || \echo /opt/homebrew)/bin/bash." >&2
 }
 if [ -z "${BASH_VERSINFO-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
     { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
@@ -109,7 +109,7 @@ __gash_self="${BASH_SOURCE[0]}"
 [[ "$__gash_self" == */* ]] || __gash_self="./$__gash_self"
 for ((__gash_i = 0; __gash_i < 40; __gash_i++)); do
     [[ -L "$__gash_self" ]] || break
-    __gash_link="$(readlink -- "$__gash_self")" || break
+    __gash_link="$(\readlink -- "$__gash_self")" || break
     [[ "$__gash_link" == /* ]] || __gash_link="${__gash_self%/*}/$__gash_link"
     __gash_self="$__gash_link"
 done
@@ -185,11 +185,11 @@ __gash_source() {
 __gash_symbols_now() {
     if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
         printf -v "$1" '%s' "$(
-            compgen -A function -X '_*' || true
-            printf '\001\n'
-            compgen -A function -X '!_*' || true
-            printf '\001\n'
-            compgen -a || true
+            \compgen -A function -X '_*' || \true
+            \printf '\001\n'
+            \compgen -A function -X '!_*' || \true
+            \printf '\001\n'
+            \compgen -a || \true
         )"
     else
         printf -v "$1" '\001\n\001'
@@ -320,7 +320,7 @@ __gash_fn_gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 # shellcheck disable=SC2120
 __gash_fn_gash_uninstall() { __gash_cold __gash_fn_gash_uninstall 3837923a && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-__gash_fn_gash_unload() { __gash_cold __gash_fn_gash_unload 23253f28 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_unload() { __gash_cold __gash_fn_gash_unload 588892ba && "${FUNCNAME[0]}" "$@"; }
 __gash_fn_gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
@@ -455,19 +455,19 @@ __node_latest_installed() {
 }
 
 # shellcheck disable=SC2120
-__node_parse_version_to_major() { __gash_cold __node_parse_version_to_major bfef144f && "${FUNCNAME[0]}" "$@"; }
+__node_parse_version_to_major() { __gash_cold __node_parse_version_to_major 3f348e9b && "${FUNCNAME[0]}" "$@"; }
 
 __node_read_remote_index() {
     local -n __nrri_out="$1"
-    __nrri_out="$(nvm ls-remote --no-colors 2>/dev/null)"
+    __nrri_out="$(\nvm ls-remote --no-colors 2>/dev/null)"
     [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
 # shellcheck disable=SC2120
-__gash_fn_node_upgrade() { __gash_cold __gash_fn_node_upgrade ffb99546 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_node_upgrade() { __gash_cold __gash_fn_node_upgrade 03d6faf8 && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 # shellcheck disable=SC2120
-__gash_fn_nvm_prune_versions() { __gash_cold __gash_fn_nvm_prune_versions 6f3d2e83 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_nvm_prune_versions() { __gash_cold __gash_fn_nvm_prune_versions 0fa62c1b && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php
@@ -506,7 +506,7 @@ __gash_fn_remote_sync_push() {
 # ssh
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 # shellcheck disable=SC2120
-__gash_fn_gash_ssh_auto_unlock() { __gash_cold __gash_fn_gash_ssh_auto_unlock 500cc434 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_gash_ssh_auto_unlock() { __gash_cold __gash_fn_gash_ssh_auto_unlock c14499ed && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
 # sysinfo
@@ -520,7 +520,7 @@ __gash_fn_disk_usage() { __gash_call disk_usage "$@"; }
 __gash_fn_hgrep() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true
@@ -545,13 +545,13 @@ __gash_fn_process_find() { __gash_call process_find "$@"; }
 __gash_fn_process_kill() { __gash_call process_kill "$@"; }
 __gash_fn_services_stop() { __gash_call services_stop "$@"; }
 # shellcheck disable=SC2120
-__gash_fn_sudo_last() { __gash_cold __gash_fn_sudo_last 99bff139 && "${FUNCNAME[0]}" "$@"; }
+__gash_fn_sudo_last() { __gash_cold __gash_fn_sudo_last 7351d78d && "${FUNCNAME[0]}" "$@"; }
 __gash_fn_wsl_compact() { __gash_call wsl_compact "$@"; }
 __gash_fn_wsl_explorer() { __gash_call wsl_explorer "$@"; }
 __gash_fn_wsl_restart() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true
@@ -560,7 +560,7 @@ __gash_fn_wsl_restart() {
 __gash_fn_wsl_shutdown() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true
@@ -685,7 +685,7 @@ fi
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 if __gash_bin_resolve || __gash_auto_fetch loud; then
     if declare -F __gash_stdout_tty >/dev/null && __gash_stdout_tty; then __gash_tty_out=1; else __gash_tty_out=0; fi
-    if __gash_init="$(__gash_export_state __init && GASH__TTY_OUT=$__gash_tty_out "$__GASH_BIN" init bash)"; then
+    if __gash_init="$(\__gash_export_state __init && GASH__TTY_OUT=$__gash_tty_out "$__GASH_BIN" init bash)"; then
         __gash_aliases_on=0
         shopt -q expand_aliases && __gash_aliases_on=1
         shopt -u expand_aliases

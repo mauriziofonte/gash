@@ -41,7 +41,7 @@ gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 # shellcheck disable=SC2120
 gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-gash_unload() { __gash_cold gash_unload f53daea0 && "${FUNCNAME[0]}" "$@"; }
+gash_unload() { __gash_cold gash_unload 7319559d && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 

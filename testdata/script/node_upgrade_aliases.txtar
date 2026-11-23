@@ -1,0 +1,58 @@
+# Gash 4.1. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (4.1 fix proof)
+#
+# 4.1.2 regression: in a shell with aliases on and tail aliased (as
+# GASH_REPLACE_TOOLS=1 makes it multitail), node_upgrade read the alias'
+# output as the newest patch of every major, installed nothing and removed
+# every old patch. Bash parses a command substitution again when it runs,
+# with the aliases of that moment: the generated $(...) quote their command
+# names, so the alias never reaches them. And a tool that misbehaves on its
+# own (a broken tail on PATH) stops the run before any install or removal.
+
+env GASH_HEADLESS=1
+env NVM_DIR=$WORK/nvm
+env T=$WORK
+
+# An alias of the shell: the upgrade runs as if it were not there.
+exec bash -c 'shopt -s expand_aliases; alias tail="echo multitail [-cs|-Cs] usage"; source "$GASH_SH"; source "$T/nvmfake.sh"; node_upgrade -y; echo "rc=$?"'
+stdout '^rc=0$'
+! stderr 'Unmatched'
+grep '^install v20\.2\.0 --reinstall-packages-from=v20\.1\.0$' calls
+grep '^install v22\.3\.0 --reinstall-packages-from=v22\.1\.0$' calls
+grep '^uninstall v20\.1\.0$' calls
+grep '^uninstall v22\.1\.0$' calls
+
+# A tail on PATH that prints its usage: nothing installed, nothing removed.
+rm calls
+chmod 0755 stub/tail
+env PATH=$WORK/stub${:}$PATH
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; node_upgrade -y; echo "rc=$?"'
+stdout '^rc=1$'
+stderr 'is not a version\. Nothing changed\.'
+! grep '^install' calls
+! grep '^uninstall' calls
+
+-- stub/tail --
+#!/bin/sh
+echo "multitail [-cs|-Cs] usage"
+-- nvmfake.sh --
+# A faked nvm: logs its calls and reads the remote index from a file.
+__fake_current=v22.1.0
+nvm() {
+    printf '%s\n' "$*" >>"$T/calls"
+    case "$1" in
+    ls-remote) cat "$T/remote.txt" ;;
+    current) echo "$__fake_current" ;;
+    use) __fake_current="$2" ;;
+    install) __fake_current="$2" ;;
+    uninstall) return 0 ;;
+    esac
+}
+-- remote.txt --
+       v20.1.0   (LTS: Iron)
+       v20.2.0   (Latest LTS: Iron)
+       v22.1.0
+       v22.3.0
+-- nvm/versions/node/v20.1.0/bin/node --
+-- nvm/versions/node/v22.1.0/bin/node --

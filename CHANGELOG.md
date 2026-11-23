@@ -6,6 +6,13 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [Unreleased]
+
+### Fixed
+
+- An alias of your shell no longer reaches the commands that Gash's shell functions run inside `$(...)` and `<(...)`. Bash 5.2 parses a substitution again each time it runs, with the aliases of that moment, so with `GASH_REPLACE_TOOLS=1` (`tail` is `multitail`) `gash runtime upgrade node` (`nvmc`) read multitail's usage as the newest patch of every Node.js major, installed nothing and removed every old patch. The generated Bash now quotes the command names of its substitutions (`\tail`), which skips the alias and still runs the function, builtin or program of that name.
+- `gash runtime upgrade node` stops before installing or removing anything when the newest patch it reads for a major is not a version (`Nothing changed.`, status 1).
+
 ## [4.1.2] - 2026-11-10
 
 `gash localweb`, `gash logs` and the command groups of `gash runtime` print their pages, as every other namespace does.

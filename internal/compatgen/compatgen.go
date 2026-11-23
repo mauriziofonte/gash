@@ -95,7 +95,11 @@ func generate(fsys fs.FS, stage bool) ([]File, error) {
 		if !lazyFile(files[i].Path) {
 			continue
 		}
-		b, err := lazify(files[i].Path, files[i].Data, cold)
+		b, err := unalias(files[i].Path, files[i].Data)
+		if err != nil {
+			return nil, err
+		}
+		b, err = lazify(files[i].Path, b, cold)
 		if err != nil {
 			return nil, err
 		}

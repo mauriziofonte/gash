@@ -49,19 +49,19 @@ __node_latest_installed() {
 }
 
 # shellcheck disable=SC2120
-__node_parse_version_to_major() { __gash_cold __node_parse_version_to_major bfef144f && "${FUNCNAME[0]}" "$@"; }
+__node_parse_version_to_major() { __gash_cold __node_parse_version_to_major 3f348e9b && "${FUNCNAME[0]}" "$@"; }
 
 __node_read_remote_index() {
     local -n __nrri_out="$1"
-    __nrri_out="$(nvm ls-remote --no-colors 2>/dev/null)"
+    __nrri_out="$(\nvm ls-remote --no-colors 2>/dev/null)"
     [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
 # shellcheck disable=SC2120
-node_upgrade() { __gash_cold node_upgrade 16985517 && "${FUNCNAME[0]}" "$@"; }
+node_upgrade() { __gash_cold node_upgrade 4c616119 && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 # shellcheck disable=SC2120
-nvm_prune_versions() { __gash_cold nvm_prune_versions dda5a23d && "${FUNCNAME[0]}" "$@"; }
+nvm_prune_versions() { __gash_cold nvm_prune_versions de348892 && "${FUNCNAME[0]}" "$@"; }
 
 alias nvmp='gash runtime prune node'
 alias nvmc='gash runtime upgrade node'

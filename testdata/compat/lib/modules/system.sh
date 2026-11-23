@@ -24,7 +24,7 @@ disk_usage() { __gash_call disk_usage "$@"; }
 hgrep() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true
@@ -49,13 +49,13 @@ process_find() { __gash_call process_find "$@"; }
 process_kill() { __gash_call process_kill "$@"; }
 services_stop() { __gash_call services_stop "$@"; }
 # shellcheck disable=SC2120
-sudo_last() { __gash_cold sudo_last 5d76cf71 && "${FUNCNAME[0]}" "$@"; }
+sudo_last() { __gash_cold sudo_last b11859e6 && "${FUNCNAME[0]}" "$@"; }
 wsl_compact() { __gash_call wsl_compact "$@"; }
 wsl_explorer() { __gash_call wsl_explorer "$@"; }
 wsl_restart() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true
@@ -64,7 +64,7 @@ wsl_restart() {
 wsl_shutdown() {
     local __gash_go="" __gash_rc=0
     {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+        __gash_go="$(GASH__HANDOFF=3 \__gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
     } 4>&1
     [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
     history -a 2>/dev/null || true

@@ -80,7 +80,7 @@ __gash_path_of() { __gash_cold __gash_path_of b3272557 && "${FUNCNAME[0]}" "$@";
 # Usage: width=$(__gash_tty_width)
 # Returns: Terminal width in columns (default 80)
 # shellcheck disable=SC2120
-__gash_tty_width() { __gash_cold __gash_tty_width 57814884 && "${FUNCNAME[0]}" "$@"; }
+__gash_tty_width() { __gash_cold __gash_tty_width 15f1516b && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # String Utilities
@@ -120,20 +120,20 @@ __gash_json_escape() {
 # details and hint are omitted when empty. Always returns 1.
 # Usage: __gash_json_error TYPE [DETAILS] [ACTION] [HINT]
 # shellcheck disable=SC2120
-__gash_json_error() { __gash_cold __gash_json_error 17a50914 && "${FUNCNAME[0]}" "$@"; }
+__gash_json_error() { __gash_cold __gash_json_error 31f623dd && "${FUNCNAME[0]}" "$@"; }
 
 # Print a machine warning to stderr, one JSON line in the shape of the
 # error contract: {"warning":TYPE,KEY:NUMBER...,"hint":..}. Always returns 0.
 # Usage: __gash_json_warning TYPE HINT [KEY NUMBER]...
 __gash_json_warning() {
     local json hint="${2-}"
-    json="{\"warning\":\"$(__gash_json_escape "${1-}")\""
+    json="{\"warning\":\"$(\__gash_json_escape "${1-}")\""
     shift 2 || shift $#
     while (($# >= 2)); do
-        [[ "$2" =~ ^-?[0-9]+$ ]] && json+=",\"$(__gash_json_escape "$1")\":$2"
+        [[ "$2" =~ ^-?[0-9]+$ ]] && json+=",\"$(\__gash_json_escape "$1")\":$2"
         shift 2
     done
-    [[ -n "$hint" ]] && json+=",\"hint\":\"$(__gash_json_escape "$hint")\""
+    [[ -n "$hint" ]] && json+=",\"hint\":\"$(\__gash_json_escape "$hint")\""
     printf '%s}\n' "$json" >&2
     return 0
 }
@@ -169,7 +169,7 @@ __gash_json_arr() { __gash_cold __gash_json_arr 8a36f5a5 && "${FUNCNAME[0]}" "$@
 __gash_curl_auth() {
     local hdr="${1-}"
     shift
-    curl --config <(printf 'header = "%s"\n' "$hdr") "$@"
+    curl --config <(\printf 'header = "%s"\n' "$hdr") "$@"
 }
 
 # Execute a command with shell history temporarily disabled.
@@ -229,7 +229,7 @@ __gash_path_prepend() { __gash_cold __gash_path_prepend 9b0caafa && "${FUNCNAME[
 # keeps its place.
 # Usage: path_add [--append] DIR...
 # shellcheck disable=SC2120
-path_add() { __gash_cold path_add 70f2cba7 && "${FUNCNAME[0]}" "$@"; }
+path_add() { __gash_cold path_add 1c00b8c2 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Plans, steps and downloads (apt-style)
