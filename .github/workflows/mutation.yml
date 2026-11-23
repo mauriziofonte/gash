@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.3"
+  GO_VERSION: "1.27.4"
   GO_MUTESTING_VERSION: v0.0.0-20261002081621-9ce5f731e321
 
 jobs:
